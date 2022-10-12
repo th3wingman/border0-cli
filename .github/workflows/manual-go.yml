@@ -1,6 +1,6 @@
 name: Manual Build and release
 
-on: 
+on:
   workflow_dispatch:
 
 permissions:
@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENV: "prod"
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
 
     steps:
       - uses: actions/checkout@v2
@@ -31,22 +32,31 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v1
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-boto3
+
       - name: Print Versions
         run: |
            go version
+
       - name: where am i?
         run: |
           pwd
           ls
+
       - name: Run Make release
         run: |
           make all
           make release
           make release-border0
+
+      - name: Invalidate CloudFront cache for download.border0.com
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
+
       - name: See dist bin directory
         run: |
           ls -la bin
