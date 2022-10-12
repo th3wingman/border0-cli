@@ -10,9 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/mitchellh/mapstructure"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/connector/config"
 )
 
 type Ec2Discover struct {

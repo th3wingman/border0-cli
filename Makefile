@@ -9,7 +9,7 @@ BUCKET=pub-mysocketctl-bin
 
 DATE := $(shell git log -1 --format=%cd --date=format:"%Y%m%d")
 VERSION := $(shell git describe --long --dirty --tags)
-FLAGS := -ldflags "-X github.com/mysocketio/mysocketctl-go/cmd.version=$(VERSION) -X github.com/mysocketio/mysocketctl-go/cmd.date=$(DATE)"
+FLAGS := -ldflags "-X github.com/borderzero/border0-cli/cmd.version=$(VERSION) -X github.com/borderzero/border0-cli/cmd.date=$(DATE)"
 
 all: lint moddownload test build
 

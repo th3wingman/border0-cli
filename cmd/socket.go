@@ -24,10 +24,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/http"
-	"github.com/mysocketio/mysocketctl-go/internal/ssh"
 	"github.com/spf13/cobra"
 )
 
@@ -178,14 +178,20 @@ var socketCreateCmd = &cobra.Command{
 
 // socketDeleteCmd represents the socket delete command
 var socketDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete a socket",
-	Run: func(cmd *cobra.Command, args []string) {
-		if socketID == "" {
-			log.Fatalf("error: invalid socketid")
+	Use:               "delete [socket]",
+	Short:             "Delete a socket",
+	ValidArgsFunction: AutocompleteSocket,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if socketID == "" && (len(args) == 0) {
+			return fmt.Errorf("error: no socket provided")
+		}
+
+		if len(args) > 0 {
+			socketID = args[0]
 		}
 
 		client, err := http.NewClient()
+
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -196,16 +202,22 @@ var socketDeleteCmd = &cobra.Command{
 		}
 
 		fmt.Println("Socket deleted")
+		return nil
 	},
 }
 
 // socketShowCmd represents the socket delete command
 var socketShowCmd = &cobra.Command{
-	Use:   "show",
-	Short: "Show socket details",
-	Run: func(cmd *cobra.Command, args []string) {
-		if socketID == "" {
-			log.Fatalf("error: invalid socketid")
+	Use:               "show [socket]",
+	Short:             "Show socket details",
+	ValidArgsFunction: AutocompleteSocket,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if socketID == "" && (len(args) == 0) {
+			return fmt.Errorf("error: no socket provided")
+		}
+
+		if len(args) > 0 {
+			socketID = args[0]
 		}
 
 		client, err := http.NewClient()
@@ -218,38 +230,21 @@ var socketShowCmd = &cobra.Command{
 			log.Fatalf(fmt.Sprintf("Error: %v", err))
 		}
 		fmt.Print(print_socket(socket))
+		return nil
 	},
 }
 
-func getSockets(toComplete string) []string {
-	var socketIDs []string
-
-	client, err := http.NewClient()
-	if err != nil {
-		log.Fatalf("Error: %v", err)
-	}
-
-	sockets := []models.Socket{}
-	err = client.Request("GET", "socket", &sockets, nil)
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("Error: %v", err))
-	}
-
-	for _, s := range sockets {
-		if strings.HasPrefix(s.SocketID, toComplete) {
-			socketIDs = append(socketIDs, s.SocketID)
-		}
-	}
-
-	return socketIDs
-}
-
 var socketConnectCmd = &cobra.Command{
-	Use:   "connect",
-	Short: "Connect a socket",
-	Run: func(cmd *cobra.Command, args []string) {
-		if socketID == "" {
-			log.Fatalf("error: invalid socket_id")
+	Use:               "connect [socket]",
+	Short:             "Connect a socket",
+	ValidArgsFunction: AutocompleteSocket,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if socketID == "" && (len(args) == 0) {
+			return fmt.Errorf("error: no socket provided")
+		}
+
+		if len(args) > 0 {
+			socketID = args[0]
 		}
 
 		client, err := http.NewClient()
@@ -260,23 +255,20 @@ var socketConnectCmd = &cobra.Command{
 		socket := models.Socket{}
 		err = client.Request("GET", "socket/"+socketID, &socket, nil)
 		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
+			log.Fatalf("error: %v", err)
 		}
 
 		if port < 1 {
 			if socket.SocketType == "http" {
 				if !httpserver {
-					cmd.Help()
-					log.Fatalf("error: port not specified")
+					return fmt.Errorf("error: port not specified")
 				}
 			} else if socket.SocketType == "ssh" {
 				if !localssh {
-					cmd.Help()
-					log.Fatalf("error: port not specified")
+					return fmt.Errorf("error: port not specified")
 				}
 			} else {
-				cmd.Help()
-				log.Fatalf("error: port not specified")
+				return fmt.Errorf("error: port not specified")
 			}
 		}
 
@@ -318,7 +310,55 @@ var socketConnectCmd = &cobra.Command{
 		if err != nil {
 			fmt.Println(err)
 		}
+
+		return nil
 	},
+}
+
+func getSockets(toComplete string) []string {
+	var socketIDs []string
+
+	client, err := http.NewClient()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	sockets := []models.Socket{}
+	err = client.Request("GET", "socket", &sockets, nil)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
+
+	for _, s := range sockets {
+		if strings.HasPrefix(s.SocketID, toComplete) {
+			socketIDs = append(socketIDs, s.SocketID)
+		}
+	}
+
+	return socketIDs
+}
+
+func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	var socketNames []string
+
+	client, err := http.NewClient()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	sockets := []models.Socket{}
+	err = client.Request("GET", "socket", &sockets, nil)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
+
+	for _, s := range sockets {
+		if strings.HasPrefix(s.Name, toComplete) {
+			socketNames = append(socketNames, s.Name)
+		}
+	}
+
+	return socketNames, cobra.ShellCompDirectiveNoFileComp
 }
 
 func init() {
@@ -344,13 +384,11 @@ func init() {
 	socketCreateCmd.MarkFlagRequired("name")
 
 	socketDeleteCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
-	socketDeleteCmd.MarkFlagRequired("socket_id")
 	socketDeleteCmd.RegisterFlagCompletionFunc("socket_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
 
 	socketShowCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
-	socketShowCmd.MarkFlagRequired("socket_id")
 	socketShowCmd.RegisterFlagCompletionFunc("socket_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
@@ -365,7 +403,6 @@ func init() {
 	socketConnectCmd.Flags().StringVarP(&proxyHost, "proxy", "", "", "Proxy host used for connection to border0.com")
 	socketConnectCmd.Flags().BoolVarP(&localssh, "localssh", "", false, "Start a local SSH server to accept SSH sessions on this host")
 	socketConnectCmd.Flags().BoolVarP(&localssh, "sshserver", "l", false, "Start a local SSH server to accept SSH sessions on this host")
-	socketConnectCmd.MarkFlagRequired("socket_id")
 	socketConnectCmd.Flags().MarkDeprecated("localssh", "use --sshserver instead")
 	socketConnectCmd.Flags().BoolVarP(&httpserver, "httpserver", "", false, "Start a local http server to accept http connections on this host")
 	socketConnectCmd.Flags().StringVarP(&httpserver_dir, "httpserver_dir", "", "", "Directory to serve http connections on this host")

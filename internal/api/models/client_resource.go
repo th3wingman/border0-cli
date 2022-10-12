@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mysocketio/mysocketctl-go/internal/enum"
+	"github.com/borderzero/border0-cli/internal/enum"
 )
 
 type ClientResource struct {

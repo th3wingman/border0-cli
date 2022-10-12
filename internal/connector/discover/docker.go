@@ -9,12 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/mitchellh/mapstructure"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/connector/config"
 	"k8s.io/utils/strings/slices"
 )
 

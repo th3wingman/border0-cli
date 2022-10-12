@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/borderzero/border0-cli/client/preference"
+	"github.com/borderzero/border0-cli/internal/client"
+	"github.com/borderzero/border0-cli/internal/enum"
+	mysocketSSH "github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/moby/term"
-	"github.com/mysocketio/mysocketctl-go/client/preference"
-	"github.com/mysocketio/mysocketctl-go/internal/client"
-	"github.com/mysocketio/mysocketctl-go/internal/enum"
-	mysocketSSH "github.com/mysocketio/mysocketctl-go/internal/ssh"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 )

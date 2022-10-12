@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	models "github.com/mysocketio/mysocketctl-go/internal/api/models"
+	models "github.com/borderzero/border0-cli/internal/api/models"
 	mock "github.com/stretchr/testify/mock"
 )
 

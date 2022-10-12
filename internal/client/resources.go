@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/enum"
 	"github.com/fatih/color"
 	jwt "github.com/golang-jwt/jwt"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/enum"
 	"github.com/spf13/cobra"
 )
 

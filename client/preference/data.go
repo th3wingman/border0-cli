@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/mysocketio/mysocketctl-go/internal/enum"
+	"github.com/borderzero/border0-cli/internal/enum"
 )
 
 type Data struct {

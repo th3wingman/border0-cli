@@ -12,10 +12,10 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/borderzero/border0-cli/internal/api"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	mysocketctlhttp "github.com/borderzero/border0-cli/internal/http"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/mysocketio/mysocketctl-go/internal/api"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	mysocketctlhttp "github.com/mysocketio/mysocketctl-go/internal/http"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/proxy"
