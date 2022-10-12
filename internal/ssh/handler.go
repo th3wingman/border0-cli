@@ -22,9 +22,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	"github.com/mysocketio/mysocketctl-go/internal/api"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	mysocketctlhttp "github.com/mysocketio/mysocketctl-go/internal/http"
+	"github.com/borderzero/border0-cli/internal/api"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	mysocketctlhttp "github.com/borderzero/border0-cli/internal/http"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/net/proxy"

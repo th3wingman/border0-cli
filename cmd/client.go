@@ -31,11 +31,11 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/txn2/txeh"
 
-	"github.com/mysocketio/mysocketctl-go/client/preference"
-	"github.com/mysocketio/mysocketctl-go/cmd/client/db"
-	"github.com/mysocketio/mysocketctl-go/cmd/client/hosts"
-	"github.com/mysocketio/mysocketctl-go/cmd/client/ssh"
-	"github.com/mysocketio/mysocketctl-go/internal/client"
+	"github.com/borderzero/border0-cli/client/preference"
+	"github.com/borderzero/border0-cli/cmd/client/db"
+	"github.com/borderzero/border0-cli/cmd/client/hosts"
+	"github.com/borderzero/border0-cli/cmd/client/ssh"
+	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/spf13/cobra"
 	"github.com/takama/daemon"
 )

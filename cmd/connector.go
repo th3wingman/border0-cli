@@ -3,9 +3,9 @@ package cmd
 import (
 	"path/filepath"
 
-	"github.com/mysocketio/mysocketctl-go/internal/connector"
-	"github.com/mysocketio/mysocketctl-go/internal/connector/config"
-	"github.com/mysocketio/mysocketctl-go/internal/logging"
+	"github.com/borderzero/border0-cli/internal/connector"
+	"github.com/borderzero/border0-cli/internal/connector/config"
+	"github.com/borderzero/border0-cli/internal/logging"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )

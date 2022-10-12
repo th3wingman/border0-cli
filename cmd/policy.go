@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/TylerBrock/colorjson"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/http"
 	jwt "github.com/golang-jwt/jwt"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/http"
 
 	"github.com/spf13/cobra"
 	"k8s.io/kubectl/pkg/util/term"

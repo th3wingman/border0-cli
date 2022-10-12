@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mysocketio/mysocketctl-go/internal/client"
+	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/spf13/cobra"
 )
 

@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
 	jwt "github.com/golang-jwt/jwt"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
 )
 
 const (
@@ -134,6 +134,10 @@ func (c *Client) Request(method string, url string, target interface{}, data int
 
 	if resp.StatusCode == 401 {
 		return errors.New("no valid token, Please login")
+	}
+
+	if resp.StatusCode == 404 {
+		return errors.New("not found")
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 204 {

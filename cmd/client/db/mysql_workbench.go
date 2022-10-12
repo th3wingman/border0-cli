@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/mysocketio/mysocketctl-go/client/preference"
-	"github.com/mysocketio/mysocketctl-go/internal/client"
-	"github.com/mysocketio/mysocketctl-go/internal/client/mysqlworkbench"
-	"github.com/mysocketio/mysocketctl-go/internal/enum"
+	"github.com/borderzero/border0-cli/client/preference"
+	"github.com/borderzero/border0-cli/internal/client"
+	"github.com/borderzero/border0-cli/internal/client/mysqlworkbench"
+	"github.com/borderzero/border0-cli/internal/enum"
 	"github.com/spf13/cobra"
 )
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/http"
 	"github.com/spf13/cobra"
 )
 

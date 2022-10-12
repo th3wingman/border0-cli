@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	mysocketctlhttp "github.com/mysocketio/mysocketctl-go/internal/http"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	mysocketctlhttp "github.com/borderzero/border0-cli/internal/http"
 )
 
 const APIUrl = "https://api.border0.com/api/v1"

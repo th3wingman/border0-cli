@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/bluele/factory-go/factory"
+	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/brianvoe/gofakeit"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
 )
 
 var SocketFactory = factory.NewFactory(

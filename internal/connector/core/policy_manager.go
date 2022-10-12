@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/mysocketio/mysocketctl-go/internal/api"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/api"
+	"github.com/borderzero/border0-cli/internal/api/models"
 	"go.uber.org/zap"
 )
 

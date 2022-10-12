@@ -25,9 +25,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/http"
-	"github.com/mysocketio/mysocketctl-go/internal/ssh"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/spf13/cobra"
 )
 

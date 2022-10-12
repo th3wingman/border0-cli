@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/mysocketio/mysocketctl-go/cmd"
+	"github.com/borderzero/border0-cli/cmd"
 )
 
 func main() {

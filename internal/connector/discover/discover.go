@@ -3,8 +3,8 @@ package discover
 import (
 	"context"
 
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/connector/config"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/connector/config"
 )
 
 type DiscoverState struct {

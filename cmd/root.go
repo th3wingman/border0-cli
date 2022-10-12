@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
 
 	"github.com/spf13/cobra"
 )
@@ -78,7 +78,6 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }

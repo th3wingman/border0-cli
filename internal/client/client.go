@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/borderzero/border0-cli/internal/client/password"
 	jwt "github.com/golang-jwt/jwt"
 	"github.com/moby/term"
-	"github.com/mysocketio/mysocketctl-go/internal/client/password"
 	"github.com/pavlo-v-chernykh/keystore-go/v4"
 	"golang.org/x/crypto/ssh"
 )

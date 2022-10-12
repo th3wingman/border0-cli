@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mysocketio/mysocketctl-go/internal/api"
-	"github.com/mysocketio/mysocketctl-go/internal/api/models"
-	"github.com/mysocketio/mysocketctl-go/internal/connector/config"
-	"github.com/mysocketio/mysocketctl-go/internal/connector/discover"
-	"github.com/mysocketio/mysocketctl-go/internal/http"
-	"github.com/mysocketio/mysocketctl-go/internal/ssh"
+	"github.com/borderzero/border0-cli/internal/api"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/connector/config"
+	"github.com/borderzero/border0-cli/internal/connector/discover"
+	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/borderzero/border0-cli/internal/ssh"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
