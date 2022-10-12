@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type CreatePolicyRequest struct {
 	Name        string     `json:"name" binding:"required"`
 	Description string     `json:"description"`
@@ -18,6 +20,9 @@ type Policy struct {
 	Description string     `json:"description"`
 	PolicyData  PolicyData `json:"policy_data"`
 	SocketIDs   []string   `json:"socket_ids"`
+	OrgID       string     `json:"org_id"`
+	OrgWide     bool       `json:"org_wide"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type PolicyData struct {
