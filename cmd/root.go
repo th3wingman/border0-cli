@@ -170,8 +170,8 @@ func print_socket(s models.Socket) string {
 
 	if len(s.Policies) == 0 {
 		socket_output = socket_output + fmt.Sprintf("⚠️ Warning: No policies\n")
-		socket_output = socket_output + fmt.Sprintf("No policies are assigned to this socket. This means that no one will be able connect to this socket\n")
-		socket_output = socket_output + fmt.Sprintf("Attach a Policy, or create an Organization wide Policy.\n")
+		socket_output = socket_output + fmt.Sprintf("No policies are attached to this socket. This means that no one will be able to connect to this socket.\n")
+		socket_output = socket_output + fmt.Sprintf("To resolve this, attach a Policy, or create an Organization-wide Policy.\n")
 	}
 
 	return socket_output
