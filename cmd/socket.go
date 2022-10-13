@@ -374,8 +374,13 @@ func init() {
 	socketCreateCmd.Flags().BoolVarP(&protected, "protected", "p", false, "Protected, default no")
 	socketCreateCmd.Flags().StringVarP(&username, "username", "u", "", "Username, required when protected set to true")
 	socketCreateCmd.Flags().StringVarP(&password, "password", "", "", "Password, required when protected set to true")
+
+	// These are deprecated
 	socketCreateCmd.Flags().StringVarP(&cloudauth_addresses, "allowed_email_addresses", "e", "", "Comma seperated list of allowed Email addresses when using cloudauth")
+	socketCreateCmd.Flags().MarkDeprecated("allowed_email_addresses", "use policies instead")
 	socketCreateCmd.Flags().StringVarP(&cloudauth_domains, "allowed_email_domains", "d", "", "comma seperated list of allowed Email domain (i.e. 'example.com', when using cloudauth")
+	socketCreateCmd.Flags().MarkDeprecated("allowed_email_domains", "use policies instead")
+
 	socketCreateCmd.Flags().StringVarP(&upstream_username, "upstream_username", "j", "", "Upstream username used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_password, "upstream_password", "k", "", "Upstream password used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_http_hostname, "upstream_http_hostname", "", "", "Upstream http hostname")
@@ -404,8 +409,6 @@ func init() {
 	socketConnectCmd.Flags().BoolVarP(&localssh, "localssh", "", false, "Start a local SSH server to accept SSH sessions on this host")
 	socketConnectCmd.Flags().BoolVarP(&localssh, "sshserver", "l", false, "Start a local SSH server to accept SSH sessions on this host")
 	socketConnectCmd.Flags().MarkDeprecated("localssh", "use --sshserver instead")
-	socketCreateCmd.Flags().MarkDeprecated("allowed_email_domains", "use policies instead")
-	socketCreateCmd.Flags().MarkDeprecated("allowed_email_addresses", "use policies instead")
 	socketConnectCmd.Flags().BoolVarP(&httpserver, "httpserver", "", false, "Start a local http server to accept http connections on this host")
 	socketConnectCmd.Flags().StringVarP(&httpserver_dir, "httpserver_dir", "", "", "Directory to serve http connections on this host")
 
