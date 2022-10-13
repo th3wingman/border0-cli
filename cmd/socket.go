@@ -60,7 +60,7 @@ var socketsListCmd = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Socket ID", "DNS Name", "Port(s)", "Type", "Description"})
+		t.AppendHeader(table.Row{"Socket ID", "Name", "DNS Name", "Port(s)", "Type", "Description"})
 
 		for _, s := range sockets {
 			portsStr = ""
@@ -73,7 +73,7 @@ var socketsListCmd = &cobra.Command{
 				}
 			}
 
-			t.AppendRow(table.Row{s.SocketID, s.Dnsname, portsStr, s.SocketType, s.Description})
+			t.AppendRow(table.Row{s.SocketID, s.Name, s.Dnsname, portsStr, s.SocketType, s.Description})
 		}
 		t.SetStyle(table.StyleLight)
 		fmt.Printf("%s\n", t.Render())
@@ -404,6 +404,8 @@ func init() {
 	socketConnectCmd.Flags().BoolVarP(&localssh, "localssh", "", false, "Start a local SSH server to accept SSH sessions on this host")
 	socketConnectCmd.Flags().BoolVarP(&localssh, "sshserver", "l", false, "Start a local SSH server to accept SSH sessions on this host")
 	socketConnectCmd.Flags().MarkDeprecated("localssh", "use --sshserver instead")
+	socketCreateCmd.Flags().MarkDeprecated("allowed_email_domains", "use policies instead")
+	socketCreateCmd.Flags().MarkDeprecated("allowed_email_addresses", "use policies instead")
 	socketConnectCmd.Flags().BoolVarP(&httpserver, "httpserver", "", false, "Start a local http server to accept http connections on this host")
 	socketConnectCmd.Flags().StringVarP(&httpserver_dir, "httpserver_dir", "", "", "Directory to serve http connections on this host")
 

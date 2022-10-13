@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -105,7 +105,7 @@ func print_socket(s models.Socket) string {
 
 	socket_output := ""
 	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Socket ID", "DNS Name", "Port(s)", "Type", "Description"})
+	t.AppendHeader(table.Row{"Socket ID", "Name", "DNS Name", "Port(s)", "Type", "Description"})
 
 	portsStr := ""
 	for _, p := range s.SocketTcpPorts {
@@ -117,15 +117,25 @@ func print_socket(s models.Socket) string {
 		}
 	}
 
-	t.AppendRow(table.Row{s.SocketID, s.Dnsname, portsStr, s.SocketType, s.Description})
+	t.AppendRow(table.Row{s.SocketID, s.Name, s.Dnsname, portsStr, s.SocketType, s.Description})
 	t.SetStyle(table.StyleLight)
 	socket_output = socket_output + fmt.Sprintf("%s\n", t.Render())
 
-	tc := table.NewWriter()
-	tc.AppendHeader(table.Row{"Allowed email addresses", "Allowed email domains"})
-	tc.AppendRow(table.Row{strings.Join(s.AllowedEmailAddresses, "\n"), strings.Join(s.AllowedEmailDomains, "\n")})
-	tc.SetStyle(table.StyleLight)
-	socket_output = socket_output + fmt.Sprintf("\nCloud Authentication, login details:\n%s\n", tc.Render())
+	// Check if we still do cloud auth.
+	printCloudAuth := false
+	if len(s.AllowedEmailAddresses) > 0 {
+		printCloudAuth = true
+	}
+	if len(s.AllowedEmailDomains) > 0 {
+		printCloudAuth = true
+	}
+	if printCloudAuth {
+		tc := table.NewWriter()
+		tc.AppendHeader(table.Row{"Allowed email addresses", "Allowed email domains"})
+		tc.AppendRow(table.Row{strings.Join(s.AllowedEmailAddresses, "\n"), strings.Join(s.AllowedEmailDomains, "\n")})
+		tc.SetStyle(table.StyleLight)
+		socket_output = socket_output + fmt.Sprintf("\nCloud Authentication, login details:\n%s\n", tc.Render())
+	}
 
 	if s.ProtectedSocket {
 		tp := table.NewWriter()
@@ -145,20 +155,23 @@ func print_socket(s models.Socket) string {
 		}
 	}
 
-	if len(s.Policies) > 0 {
-		tp := table.NewWriter()
-		tp.AppendHeader(table.Row{"Policy Name", "Policy Description", "Organization Wide"})
-		for _, p := range s.Policies {
-			orgWide := "No"
+	tp := table.NewWriter()
+	tp.AppendHeader(table.Row{"Policy Name", "Policy Description", "Organization Wide"})
+	for _, p := range s.Policies {
+		orgWide := "No"
 
-			if p.OrgWide {
-				orgWide = "Yes"
-			}
-			tp.AppendRow(table.Row{p.Name, p.Description, orgWide})
+		if p.OrgWide {
+			orgWide = "Yes"
 		}
-		tp.SetStyle(table.StyleLight)
-		socket_output = socket_output + fmt.Sprintf("\nPolicies:\n%s\n", tp.Render())
+		tp.AppendRow(table.Row{p.Name, p.Description, orgWide})
+	}
+	tp.SetStyle(table.StyleLight)
+	socket_output = socket_output + fmt.Sprintf("\nPolicies:\n%s\n", tp.Render())
 
+	if len(s.Policies) == 0 {
+		socket_output = socket_output + fmt.Sprintf("⚠️ Warning: No policies\n")
+		socket_output = socket_output + fmt.Sprintf("No policies are assigned to this socket. This means that no one will be able connect to this socket\n")
+		socket_output = socket_output + fmt.Sprintf("Attach a Policy, or create an Organization wide Policy.\n")
 	}
 
 	return socket_output
