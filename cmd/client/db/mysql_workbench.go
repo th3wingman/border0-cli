@@ -68,7 +68,7 @@ var mysqlWorkbenchCmd = &cobra.Command{
 			return fmt.Errorf("failed to get home dir : %w", err)
 		}
 		// create dir if not exists
-		configPath := filepath.Join(home, ".mysocketio", "mysqlworkbench")
+		configPath := filepath.Join(home, ".border0", "mysqlworkbench")
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			if err := os.Mkdir(configPath, 0700); err != nil {
 				return fmt.Errorf("failed to create directory %s : %w", configPath, err)

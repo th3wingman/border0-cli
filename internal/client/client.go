@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/client/password"
 	jwt "github.com/golang-jwt/jwt"
 	"github.com/moby/term"
@@ -34,17 +35,9 @@ import (
 )
 
 const (
-	mysocketSuccessURL = "https://mysocket.io/succes-message/"
-	mysocketFailURL    = "https://mysocket.io/fail-message/"
+	successURL = "https://mysocket.io/succes-message/"
+	failURL    = "https://mysocket.io/fail-message/"
 )
-
-func apiUrl() string {
-	if os.Getenv("MYSOCKET_API") != "" {
-		return os.Getenv("MYSOCKET_API")
-	} else {
-		return "https://api.border0.com/api/v1"
-	}
-}
 
 func MTLSLogin(hostname string) (string, jwt.MapClaims, error) {
 	if hostname == "" {
@@ -81,8 +74,16 @@ func MTLSLogin(hostname string) (string, jwt.MapClaims, error) {
 		}
 
 		localPort := listener.Addr().(*net.TCPAddr).Port
-		url := fmt.Sprintf("%s/mtls-ca/socket/%s/auth?port=%d", apiUrl(), hostname, localPort)
+		url := fmt.Sprintf("%s/mtls-ca/socket/%s/auth?port=%d", api.APIURL(), hostname, localPort)
 		token = Launch(url, listener)
+
+		// create dir if not exists
+		configPath := filepath.Dir(tokenFile)
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			if err := os.Mkdir(configPath, 0700); err != nil {
+				return "", nil, fmt.Errorf("failed to create directory %s : %w", configPath, err)
+			}
+		}
 
 		f, err := os.Create(tokenFile)
 		if err != nil {
@@ -125,13 +126,13 @@ func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, crt
 		return
 	}
 
-	crtPath = filepath.Join(home, ".mysocketio", orgID+".crt")
+	crtPath = filepath.Join(home, ".border0", orgID+".crt")
 	if _, err = os.Stat(crtPath); os.IsNotExist(err) {
 		err = fmt.Errorf("error: certificate file %s not found", crtPath)
 		return
 	}
 
-	keyPath = filepath.Join(home, ".mysocketio", orgID+".key")
+	keyPath = filepath.Join(home, ".border0", orgID+".key")
 	if _, err = os.Stat(crtPath); os.IsNotExist(err) {
 		err = fmt.Errorf("error: key file %s not found", keyPath)
 		return
@@ -190,7 +191,7 @@ func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyP
 	}
 
 	// create dir if not exists
-	dotDir := filepath.Join(home, ".mysocketio")
+	dotDir := filepath.Join(home, ".border0")
 	if _, err = os.Stat(dotDir); os.IsNotExist(err) {
 		if err = os.Mkdir(dotDir, 0700); err != nil {
 			err = fmt.Errorf("error: failed to create directory %s : %w", dotDir, err)
@@ -326,8 +327,7 @@ func MTLSTokenFile() string {
 	if runtime.GOOS == "windows" {
 		home = os.Getenv("APPDATA")
 	}
-	// return filepath.Join(home, ".mysocketio_token_"+dnsname)
-	return filepath.Join(home, ".mysocketio_client_token")
+	return filepath.Join(home, ".border0/client_token")
 }
 
 func Launch(url string, listener net.Listener) string {
@@ -340,15 +340,15 @@ func Launch(url string, listener net.Listener) string {
 		w.Header().Set("Content-Type", "text/html")
 
 		if q.Get("token") != "" {
-			w.Header().Set("Location", mysocketSuccessURL)
+			w.Header().Set("Location", successURL)
 			w.WriteHeader(302)
 			c <- q.Get("token")
 		} else {
 			if q.Get("error") == "org_not_found" {
-				w.Header().Set("Location", mysocketFailURL)
+				w.Header().Set("Location", failURL)
 
 			} else {
-				w.Header().Set("Location", mysocketFailURL)
+				w.Header().Set("Location", failURL)
 			}
 			w.WriteHeader(302)
 			c <- ""
@@ -360,6 +360,7 @@ func Launch(url string, listener net.Listener) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	defer srv.Shutdown(ctx)
 
 	go func() {
 		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
@@ -369,8 +370,15 @@ func Launch(url string, listener net.Listener) string {
 
 	var token string
 	if openBrowser(url) {
-		token = <-c
-		srv.Shutdown(ctx)
+		select {
+		case token = <-c:
+			if token == "" {
+				log.Fatalln("Error: login failed")
+			}
+			return token
+		case <-time.After(60 * time.Second):
+			log.Fatalln("timeout during login")
+		}
 	}
 	if token == "" {
 		log.Fatalln("Error: login failed")
@@ -422,7 +430,7 @@ func GetCert(token string, email string) *CertificateResponse {
 	// sign cert request
 	jv, _ := json.Marshal(CertificateSigningRequest{Csr: string(csrPem)})
 	body := bytes.NewBuffer(jv)
-	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/organizations/csr", apiUrl()), body)
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/organizations/csr", api.APIURL()), body)
 	req.Header.Add("x-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -563,7 +571,7 @@ func GenSSHKey(token, orgID, hostname string) (*SSHSignResponse, error) {
 	//post signing request
 	jv, _ := json.Marshal(SSHSignRequest{SSHPublicKey: strings.TrimRight(string(data), "\n")})
 	body := bytes.NewBuffer(jv)
-	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/organizations/sign_ssh_key", apiUrl()), body)
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/organizations/sign_ssh_key", api.APIURL()), body)
 	req.Header.Add("x-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -639,7 +647,7 @@ func CertToKeyStore(cert *x509.Certificate, key *rsa.PrivateKey) (ks keystore.Ke
 	}
 
 	pass = password.KeyStore()
-	if err = ks.SetPrivateKeyEntry("mysocket", entry, pass); err != nil {
+	if err = ks.SetPrivateKeyEntry("border0", entry, pass); err != nil {
 		err = fmt.Errorf("error setting encrypted private key to keystore: %w", err)
 		return
 	}

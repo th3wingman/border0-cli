@@ -24,7 +24,7 @@ func BuildProduction() (*zap.Logger, error) {
 }
 
 func fetchLogLevelByEnv() zapcore.Level {
-	loglevel := os.Getenv("MYSOCKET_LOG_LEVEL")
+	loglevel := os.Getenv("BORDER0_LOG_LEVEL")
 
 	switch strings.ToLower(loglevel) {
 	case "debug":

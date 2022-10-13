@@ -3,7 +3,7 @@ connector:
    aws-region: "us-west-2"
 
 credentials:
-   user: my-aweseome-email@mysocket.io
+   user: my-aweseome-email@border0.com
    password: AVeryLongAndSecurePassword
 
 sockets:
@@ -12,14 +12,14 @@ sockets:
       type: http
       host: 127.0.0.1
       allowed_email_addresses: [some-email01@domain.com]
-      allowed_email_domains: [mysocket.io, some-other-domain.com]
+      allowed_email_domains: [border0.com, some-other-domain.com]
 
    - rds.us-east-2:
        port: 3306
        host: my-rds-instance.cluster-giberish.us-east-2.rds.amazonaws.com
        type: database
        allowed_email_addresses: [some-email01@domain.com]
-       allowed_email_domains: [mysocket.io, some-other-domain.com]
+       allowed_email_domains: [border0.com, some-other-domain.com]
        upstream_type: mysql
        upstream_user: fancy_db_user
        upstream_password: AVeryLongAndSecurePasswordThingyTokenLikeStuff
@@ -29,22 +29,22 @@ sockets:
        host: 127.0.0.1
        type: ssh
        allowed_email_addresses: [some-email01@domain.com]
-       allowed_email_domains: [mysocket.io, some-other-domain.com]
+       allowed_email_domains: [border0.com, some-other-domain.com]
 
 aws_groups:
     - group: infra_team
-      allowed_email_domains: [mysocket.io]
-      allowed_email_addresses: [mysocket.io, some-other-domain.com]
+      allowed_email_domains: [border0.com]
+      allowed_email_addresses: [border0.com, some-other-domain.com]
 
 docker_plugin:
     - group: docker_team
-      allowed_email_domains: [mysocket.io]
-      allowed_email_addresses: [mysocket.io, some-other-domain.com]
+      allowed_email_domains: [border0.com]
+      allowed_email_addresses: [border0.com, some-other-domain.com]
 
 network_plugin:
    - group: network_plugin
-     allowed_email_domains: [mysocket.io]
-     allowed_email_addresses: [mysocket.io, some-other-domain.com]
+     allowed_email_domains: [border0.com]
+     allowed_email_addresses: [border0.com, some-other-domain.com]
      scan_interval: 300
      networks:
      - my lan0:

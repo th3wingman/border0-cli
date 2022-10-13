@@ -15,7 +15,7 @@ import (
 var keySignCmd = &cobra.Command{
 	Use:     "ssh-keysign",
 	Aliases: []string{"ssh:keysign"},
-	Short:   "Generate a ssh certificate signed by mysocket",
+	Short:   "Generate a ssh certificate signed by border0",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if hostname == "" {
 			return errors.New("empty hostname not allowed")

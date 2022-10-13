@@ -14,7 +14,7 @@ import (
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/borderzero/border0-cli/internal/enum"
-	mysocketSSH "github.com/borderzero/border0-cli/internal/ssh"
+	border0_ssh "github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
@@ -38,19 +38,19 @@ type Host struct {
 
 func AddCommandsTo(client *cobra.Command) {
 	client.AddCommand(sshCmd)
-	sshCmd.Flags().StringVarP(&hostname, "host", "", "", "The ssh mysocket target host")
+	sshCmd.Flags().StringVarP(&hostname, "host", "", "", "The ssh border0 target host")
 	sshCmd.Flags().StringVarP(&sshLoginName, "username", "u", "", "Specifies the user to log in as on the remote machine(deprecated)")
 	sshCmd.Flags().StringVarP(&sshLoginName, "login", "l", "", "Same as username, specifies the user login to use on remote machine")
 
 	client.AddCommand(keySignCmd)
-	keySignCmd.Flags().StringVarP(&hostname, "host", "", "", "The mysocket target host")
+	keySignCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
 	keySignCmd.MarkFlagRequired("host")
 }
 
 // sshCmd represents the client ssh keysign command
 var sshCmd = &cobra.Command{
 	Use:               "ssh",
-	Short:             "Connect to a mysocket ssh service",
+	Short:             "Connect to a border0 ssh service",
 	ValidArgsFunction: client.AutocompleteHost,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
@@ -231,7 +231,7 @@ var sshCmd = &cobra.Command{
 		done := make(chan bool, 1)
 		defer func() { done <- true }()
 
-		go mysocketSSH.KeepAlive(sshClient, done)
+		go border0_ssh.KeepAlive(sshClient, done)
 		if err := session.Wait(); err != nil {
 			// gracefully handle ssh.ExitMissingError. It's returned if a session is torn down cleanly,
 			// but the server sends no confirmation of the exit status

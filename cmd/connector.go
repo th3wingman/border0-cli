@@ -27,7 +27,7 @@ var connectorStartCmd = &cobra.Command{
 		if connectorConfig != "" {
 			configPath = connectorConfig
 		} else {
-			configPath = filepath.Join("mysocket.yaml")
+			configPath = filepath.Join("border0.yaml")
 		}
 
 		parser := config.NewConfigParser()

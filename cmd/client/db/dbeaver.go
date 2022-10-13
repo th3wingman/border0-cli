@@ -67,7 +67,7 @@ var dbeaverCmd = &cobra.Command{
 			return err
 		}
 		orgID := fmt.Sprint(claims["org_id"])
-		keyStorePath := filepath.Join(home, ".mysocketio", orgID+".jks")
+		keyStorePath := filepath.Join(home, ".border0", orgID+".jks")
 		client.WriteKeyStore(keyStore, keyStorePath, keyStorePassword)
 
 		// for more about jdbc driver properties, see:
@@ -90,7 +90,7 @@ var dbeaverCmd = &cobra.Command{
 		}
 		if pickedHost.PrivateSocket {
 			// NOTE: temp fix - do this to bypass the error that complains the mismatch between
-			//       private hostname and the CN in certificate (*.edge.mysocket.io)
+			//       private hostname and the CN in certificate (*.border0.io)
 			params = append(params, "prop.disableSslHostnameVerification=true")
 		}
 		conn := strings.Join(params, "|")

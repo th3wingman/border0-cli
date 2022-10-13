@@ -9,7 +9,7 @@ import (
 
 func TestParse(t *testing.T) {
 	validConfig := Config{
-		Credentials: Credentials{User: "my-aweseome-email@mysocket.io", Password: "AVeryLongAndSecurePassword", Token: ""},
+		Credentials: Credentials{User: "my-aweseome-email@border0.com", Password: "AVeryLongAndSecurePassword", Token: ""},
 		Connector:   Connector{Name: "my-awesome.connector", AwsRegion: "us-west-2", AwsProfile: ""},
 		Sockets: SocketParams{
 			map[string]SocketConfig{
@@ -19,7 +19,7 @@ func TestParse(t *testing.T) {
 					Name:                  "",
 					Type:                  "http",
 					AllowedEmailAddresses: []string{"some-email01@domain.com"},
-					AllowedEmailDomains:   []string{"mysocket.io", "some-other-domain.com"},
+					AllowedEmailDomains:   []string{"border0.com", "some-other-domain.com"},
 					UpstreamUser:          "",
 					UpstreamPassword:      "",
 					UpstreamType:          "",
@@ -32,7 +32,7 @@ func TestParse(t *testing.T) {
 					Name:                  "",
 					Type:                  "database",
 					AllowedEmailAddresses: []string{"some-email01@domain.com"},
-					AllowedEmailDomains:   []string{"mysocket.io", "some-other-domain.com"},
+					AllowedEmailDomains:   []string{"border0.com", "some-other-domain.com"},
 					UpstreamUser:          "fancy_db_user",
 					UpstreamPassword:      "AVeryLongAndSecurePasswordThingyTokenLikeStuff",
 					UpstreamType:          "mysql",
@@ -45,7 +45,7 @@ func TestParse(t *testing.T) {
 					Name:                  "",
 					Type:                  "ssh",
 					AllowedEmailAddresses: []string{"some-email01@domain.com"},
-					AllowedEmailDomains:   []string{"mysocket.io", "some-other-domain.com"},
+					AllowedEmailDomains:   []string{"border0.com", "some-other-domain.com"},
 					UpstreamUser:          "",
 					UpstreamPassword:      "",
 					UpstreamType:          "",
@@ -55,16 +55,16 @@ func TestParse(t *testing.T) {
 		AwsGroups: []ConnectorGroups{
 			{
 				Group:                 "infra_team",
-				AllowedEmailDomains:   []string{"mysocket.io"},
-				AllowedEmailAddresses: []string{"mysocket.io", "some-other-domain.com"},
+				AllowedEmailDomains:   []string{"border0.com"},
+				AllowedEmailAddresses: []string{"border0.com", "some-other-domain.com"},
 				PrivateSocket:         false,
 			},
 		},
 		DockerPlugin: []ConnectorGroups{
 			{
 				Group:                 "docker_team",
-				AllowedEmailDomains:   []string{"mysocket.io"},
-				AllowedEmailAddresses: []string{"mysocket.io", "some-other-domain.com"},
+				AllowedEmailDomains:   []string{"border0.com"},
+				AllowedEmailAddresses: []string{"border0.com", "some-other-domain.com"},
 				PrivateSocket:         false,
 			},
 		},
@@ -72,8 +72,8 @@ func TestParse(t *testing.T) {
 			{
 				Scan_interval:         300,
 				Group:                 "network_plugin",
-				AllowedEmailDomains:   []string{"mysocket.io"},
-				AllowedEmailAddresses: []string{"mysocket.io", "some-other-domain.com"},
+				AllowedEmailDomains:   []string{"border0.com"},
+				AllowedEmailAddresses: []string{"border0.com", "some-other-domain.com"},
 				Networks: map[string]NetworkPluginNetwork{
 					"my lan0": {
 						Interfaces: []string{"eth0"},
@@ -130,7 +130,7 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name:    "invalid_name",
-			cfg:     &Config{Connector: Connector{Name: "my awesome/connector.lab.mysocket.io"}},
+			cfg:     &Config{Connector: Connector{Name: "my awesome/connector.lab.border0.com"}},
 			wantErr: ErrInvalidConnectorName,
 		},
 	}

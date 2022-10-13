@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/enum"
 	"github.com/fatih/color"
@@ -34,8 +36,9 @@ func Login(orgID string) (token string, claims jwt.MapClaims, err error) {
 			err = errors.New("unable to start local http listener")
 			return
 		}
+
 		localPort := listener.Addr().(*net.TCPAddr).Port
-		url := fmt.Sprintf("%s/client/auth/org/%s?port=%d", apiUrl(), orgID, localPort)
+		url := fmt.Sprintf("%s/client/auth/org/%s?port=%d", api.APIURL(), orgID, localPort)
 		token = Launch(url, listener)
 	}
 
@@ -59,6 +62,16 @@ func Login(orgID string) (token string, claims jwt.MapClaims, err error) {
 
 	// Write to client token file
 	tokenFile := ClientTokenFile(currentUser.HomeDir)
+
+	// create dir if not exists
+	configPath := filepath.Dir(tokenFile)
+	if _, err = os.Stat(configPath); os.IsNotExist(err) {
+		if err = os.Mkdir(configPath, 0700); err != nil {
+			err = fmt.Errorf("failed to create directory %s : %w", configPath, err)
+			return
+		}
+	}
+
 	f, err := os.Create(tokenFile)
 	if err != nil {
 		err = fmt.Errorf("couldn't write token: %w", err)
@@ -115,13 +128,11 @@ func GetClientToken(homeDir string) (string, error) {
 func ClientTokenFile(homedir string) string {
 	tokenfile := ""
 	if runtime.GOOS == "windows" {
-		// Not sure what this should be for windows... probably wont work as is
-		// service will run as admin, so not to adust this?
-		//tokenfile = fmt.Sprintf("%s/.mysocketio_client_token", os.Getenv("APPDATA"))
-		tokenfile = fmt.Sprintf("%s/.mysocketio_client_token", homedir)
+		tokenfile = fmt.Sprintf("%s/.border0/client_token", os.Getenv("APPDATA"))
 	} else {
-		tokenfile = fmt.Sprintf("%s/.mysocketio_client_token", homedir)
+		tokenfile = fmt.Sprintf("%s/.border0/client_token", homedir)
 	}
+
 	return tokenfile
 }
 
@@ -151,7 +162,7 @@ func ValidateClientToken(token string) (email string, claims jwt.MapClaims, err 
 }
 
 func FetchResources(token string, filteredTypes ...string) (resources models.ClientResources, err error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/client/resources", apiUrl()), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/client/resources", api.APIURL()), nil)
 	req.Header.Add("x-access-token", token)
 	client := http.Client{
 		Timeout: 15 * time.Second,
@@ -194,7 +205,7 @@ func FetchResources(token string, filteredTypes ...string) (resources models.Cli
 }
 
 func FetchResource(token string, name string) (resource models.ClientResource, err error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/client/resource/%s", apiUrl(), name), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/client/resource/%s", api.APIURL(), name), nil)
 	req.Header.Add("x-access-token", token)
 	client := http.Client{
 		Timeout: 15 * time.Second,

@@ -40,7 +40,7 @@ func (c ClientResource) FirstDomain(defaultValue string) string {
 }
 
 func (c ClientResource) DomainsToString() string {
-	re := regexp.MustCompile(`edge\.(?:staging\.)?mysocket\.io$`)
+	re := regexp.MustCompile(`(edge\.(?:staging\.)?(mysocket)\.io|\.(?:staging\.)?(border0)\.io)$`)
 	var domainsNotOwnedByUs []string
 	for _, domain := range c.Domains {
 		if !re.MatchString(domain) {
@@ -61,12 +61,12 @@ func (c ClientResource) Instruction() string {
 	case enum.HTTPSocket, enum.HTTPSSocket:
 		instruction = fmt.Sprintf("https://%s", firstDomain)
 	case enum.SSHSocket:
-		instruction = fmt.Sprintf("mysocketctl client ssh --username <username> --host %s", firstDomain)
+		instruction = fmt.Sprintf("border0 client ssh --username <username> --host %s", firstDomain)
 	case enum.TLSSocket:
-		instruction = fmt.Sprintf("mysocketctl client tls --host %s\n", firstDomain) +
-			fmt.Sprintf("mysocketctl client tls --host %s --listener <local_port>", firstDomain)
+		instruction = fmt.Sprintf("border0 client tls --host %s\n", firstDomain) +
+			fmt.Sprintf("border0 client tls --host %s --listener <local_port>", firstDomain)
 	case enum.DatabaseSocket:
-		instruction = fmt.Sprintf("mysocketctl client db --host %s", firstDomain)
+		instruction = fmt.Sprintf("border0 client db --host %s", firstDomain)
 	}
 	return instruction
 }

@@ -73,7 +73,7 @@ func newServer(ca string) *ssh.Server {
 	})
 
 	return &ssh.Server{
-		Version: "Mysocketctl-ssh-server",
+		Version: "Border0-ssh-server",
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			pubCert, _, _, _, err := ssh.ParseAuthorizedKey([]byte(ca))
 			if err != nil {

@@ -83,7 +83,7 @@ var upgradeVersionCmd = &cobra.Command{
             downloaded binary checksum: %s`, checksum, local_checksum)
 		}
 
-		tmpfile, err := ioutil.TempFile("", "mysocketctl-"+latest_version)
+		tmpfile, err := ioutil.TempFile("", "border0-"+latest_version)
 		if err != nil {
 			log.Fatal(err)
 		}

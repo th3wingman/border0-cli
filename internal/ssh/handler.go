@@ -24,7 +24,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
-	mysocketctlhttp "github.com/borderzero/border0-cli/internal/http"
+	border0_http "github.com/borderzero/border0-cli/internal/http"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/net/proxy"
@@ -48,8 +48,8 @@ type httpProxy struct {
 }
 
 func sshServer() string {
-	if os.Getenv("MYSOCKET_SSH") != "" {
-		return os.Getenv("MYSOCKET_SSH")
+	if os.Getenv("BORDER0_TUNNEL") != "" {
+		return os.Getenv("BORDER0_TUNNEL")
 	} else {
 		return "tunnel.border0.com"
 	}
@@ -57,14 +57,12 @@ func sshServer() string {
 
 func getSshCert(userId string, socketID string, accessToken string, numOfRetry int) (s ssh.Signer, err error) {
 
-	// First check if we already have a mysocket key pair
-
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return s, fmt.Errorf("error: failed to get home dir: %w", err)
 	}
 
-	privateKeyFile := home + "/.mysocket"
+	privateKeyFile := home + "/.border0"
 	if _, err := os.Stat(privateKeyFile); os.IsNotExist(err) {
 		err := os.Mkdir(privateKeyFile, 0700)
 		if err != nil {
@@ -72,7 +70,7 @@ func getSshCert(userId string, socketID string, accessToken string, numOfRetry i
 		}
 	}
 
-	privateKeyFile = home + "/.mysocket/user_" + userId
+	privateKeyFile = home + "/.border0/user_" + userId
 
 	if _, err := os.Stat(privateKeyFile); os.IsNotExist(err) {
 		// Let's create a key pair
@@ -127,7 +125,7 @@ func getSshCert(userId string, socketID string, accessToken string, numOfRetry i
 		SSHPublicKey: strings.TrimRight(string(data), "\n"),
 	}
 
-	client, err := mysocketctlhttp.NewClientWithAccessToken(accessToken)
+	client, err := border0_http.NewClientWithAccessToken(accessToken)
 	if err != nil {
 		return s, fmt.Errorf("error: %v", err)
 	}
@@ -180,7 +178,7 @@ func SshConnect(userID string, socketID string, tunnelID string, port int, targe
 		User:            userID,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         defaultTimeout,
-		ClientVersion:   fmt.Sprintf("SSH-2.0-Mysocketctl-%s", version),
+		ClientVersion:   fmt.Sprintf("SSH-2.0-Border0-%s", version),
 	}
 	var keyFiles []string
 	var signers []ssh.Signer
@@ -215,7 +213,7 @@ func SshConnect(userID string, socketID string, tunnelID string, port int, targe
 	go func() {
 		for {
 			time.Sleep(3600 * time.Second)
-			_, err := mysocketctlhttp.RefreshLogin()
+			_, err := border0_http.RefreshLogin()
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -321,7 +319,7 @@ func sshConnect(proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *m
 	}
 
 	if localhttp {
-		go mysocketctlhttp.StartLocalHTTPServer(httpDir, listener)
+		go border0_http.StartLocalHTTPServer(httpDir, listener)
 	} else if localssh {
 		sshServer := newServer(sshCa)
 		go sshServer.Serve(listener)
@@ -489,7 +487,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	if s.haveAuth {
 		req.SetBasicAuth(s.username, s.password)
 	}
-	req.Header.Set("User-Agent", "Mysocketctl")
+	req.Header.Set("User-Agent", "Border0")
 
 	err = req.Write(c)
 	if err != nil {
