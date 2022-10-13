@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/http"
@@ -98,6 +99,15 @@ var switchOrg = &cobra.Command{
 		}
 
 		fmt.Printf("Switching to organization: %s\n", val.OrgName)
+
+		// create dir if not exists
+		configPath := filepath.Dir(http.TokenFilePath())
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			if err := os.Mkdir(configPath, 0700); err != nil {
+				log.Fatalf("failed to create directory %s : %s", configPath, err)
+			}
+		}
+
 		f, err := os.Create(http.TokenFilePath())
 		if err != nil {
 			log.Fatal(err)

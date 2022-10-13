@@ -15,7 +15,7 @@ var SocketFactory = factory.NewFactory(
 		Name:                  "webserver.connector.lab",
 		SocketType:            "http",
 		AllowedEmailAddresses: []string{"some-email01@domain.com"},
-		AllowedEmailDomains:   []string{"mysocket.io", "some-other-domain.com"},
+		AllowedEmailDomains:   []string{"border0.com", "some-other-domain.com"},
 	},
 ).Attr("SocketID", func(args factory.Args) (interface{}, error) {
 	return gofakeit.UUID(), nil

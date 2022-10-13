@@ -70,7 +70,7 @@ func (s *Ec2Discover) Find(ctx context.Context, cfg config.Config, state Discove
 				}
 
 				for _, t := range ti.Tags {
-					if strings.HasPrefix(*t.Key, "mysocket") {
+					if strings.HasPrefix(*t.Key, "border0") {
 						socketData := parseAwsDataTag(*t.Value)
 
 						if socketData.Group == group.Group {

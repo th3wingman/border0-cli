@@ -56,8 +56,8 @@ func (s *K8Discover) Find(ctx context.Context, cfg config.Config, state Discover
 		}
 
 		for _, service := range services.Items {
-			if _, ok := service.Annotations["mysocket.io/group"]; ok {
-				if service.Annotations["mysocket.io/group"] == group.Group {
+			if _, ok := service.Annotations["border0.com/group"]; ok {
+				if service.Annotations["border0.com/group"] == group.Group {
 
 					socket := s.buildSocket(cfg.Connector.Name, group, service)
 					sockets = append(sockets, *socket)
@@ -76,7 +76,7 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 	socket.TargetPort = int(service.Spec.Ports[0].Port)
 	socket.TargetHostname = service.Spec.ClusterIP
 
-	switch service.Annotations["mysocket.io/socketType"] {
+	switch service.Annotations["border0.com/socketType"] {
 	case "http":
 		socket.SocketType = "http"
 	case "ssh":
@@ -90,19 +90,19 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 		socket.SocketType = "tls"
 	}
 
-	enabled, ok := service.Annotations["mysocket.io/privateSocket"]
+	enabled, ok := service.Annotations["border0.com/privateSocket"]
 	if ok && enabled == "true" || group.PrivateSocket {
 		socket.PrivateSocket = true
 	}
 
-	if _, ok = service.Annotations["mysocket.io/allowedEmailAddresses"]; ok {
-		socket.AllowedEmailAddresses = strings.Split(service.Annotations["mysocket.io/allowedEmailAddresses"], ",")
+	if _, ok = service.Annotations["border0.com/allowedEmailAddresses"]; ok {
+		socket.AllowedEmailAddresses = strings.Split(service.Annotations["border0.com/allowedEmailAddresses"], ",")
 	} else {
 		socket.AllowedEmailAddresses = group.AllowedEmailAddresses
 	}
 
-	if _, ok = service.Annotations["mysocket.io/allowedEmailDomains"]; ok {
-		socket.AllowedEmailDomains = strings.Split(service.Annotations["mysocket.io/allowedEmailDomains"], ",")
+	if _, ok = service.Annotations["border0.com/allowedEmailDomains"]; ok {
+		socket.AllowedEmailDomains = strings.Split(service.Annotations["border0.com/allowedEmailDomains"], ",")
 	} else {
 		socket.AllowedEmailDomains = group.AllowedEmailDomains
 	}

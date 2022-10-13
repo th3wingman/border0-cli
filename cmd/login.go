@@ -38,7 +38,7 @@ import (
 // loginCmd represents the login command
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Login to mysocket and get a token",
+	Short: "Login to border0 and get a token",
 	Run: func(cmd *cobra.Command, args []string) {
 
 		// Do version check
@@ -96,7 +96,9 @@ var loginCmd = &cobra.Command{
 
 				if token != nil && token.Token != "" && token.State != "not_authorized" {
 					fmt.Println("Login successful")
-					http.SaveTokenInDisk(token.Token)
+					if err := http.SaveTokenInDisk(token.Token); err != nil {
+						log.Fatalf("failed to save token: %s", err)
+					}
 					return
 				}
 

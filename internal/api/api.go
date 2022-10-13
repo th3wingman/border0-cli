@@ -9,10 +9,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
-	mysocketctlhttp "github.com/borderzero/border0-cli/internal/http"
 )
 
 const APIUrl = "https://api.border0.com/api/v1"
@@ -38,23 +38,23 @@ type API interface {
 	GetAccessToken() string
 }
 
-var APIImpl = (*MysocketAPI)(nil)
+var APIImpl = (*Border0API)(nil)
 
-type APIOption func(*MysocketAPI)
+type APIOption func(*Border0API)
 
 func WithAccessToken(accessToken string) APIOption {
-	return func(h *MysocketAPI) {
+	return func(h *Border0API) {
 		h.AccessToken = accessToken
 	}
 }
 
 func WithVersion(version string) APIOption {
-	return func(h *MysocketAPI) {
+	return func(h *Border0API) {
 		h.Version = version
 	}
 }
 
-type MysocketAPI struct {
+type Border0API struct {
 	AccessToken string
 	Version     string
 }
@@ -62,8 +62,8 @@ type ErrorMessage struct {
 	ErrorMessage string `json:"error_message,omitempty"`
 }
 
-func NewAPI(opts ...APIOption) *MysocketAPI {
-	api := MysocketAPI{}
+func NewAPI(opts ...APIOption) *Border0API {
+	api := Border0API{}
 
 	for _, opt := range opts {
 		opt(&api)
@@ -73,14 +73,37 @@ func NewAPI(opts ...APIOption) *MysocketAPI {
 }
 
 func APIURL() string {
-	if os.Getenv("MYSOCKET_API") != "" {
-		return os.Getenv("MYSOCKET_API")
+	if os.Getenv("BORDER0_API") != "" {
+		return os.Getenv("BORDER0_API")
 	} else {
 		return APIUrl
 	}
 }
 
-func (a *MysocketAPI) Request(method string, url string, target interface{}, data interface{}, requireAccessToken bool) error {
+func getToken() (string, error) {
+	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
+		return "", errors.New("please login first (no token found)")
+	}
+	content, err := ioutil.ReadFile(tokenfile())
+	if err != nil {
+		return "", err
+	}
+
+	tokenString := strings.TrimRight(string(content), "\n")
+	return tokenString, nil
+}
+
+func tokenfile() string {
+	tokenfile := ""
+	if runtime.GOOS == "windows" {
+		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("APPDATA"))
+	} else {
+		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("HOME"))
+	}
+	return tokenfile
+}
+
+func (a *Border0API) Request(method string, url string, target interface{}, data interface{}, requireAccessToken bool) error {
 	jv, _ := json.Marshal(data)
 	body := bytes.NewBuffer(jv)
 
@@ -88,8 +111,7 @@ func (a *MysocketAPI) Request(method string, url string, target interface{}, dat
 
 	//try to find the token in the environment
 	if requireAccessToken && a.AccessToken == "" {
-		token, _ := mysocketctlhttp.GetToken()
-
+		token, _ := getToken()
 		a.AccessToken = token
 	}
 
@@ -99,7 +121,7 @@ func (a *MysocketAPI) Request(method string, url string, target interface{}, dat
 		req.Header.Add("x-access-token", sanitizedAccessToken)
 	}
 
-	req.Header.Add("x-client-requested-with", "mysocketctl")
+	req.Header.Add("x-client-requested-with", "border0")
 	if a.Version != "" {
 		req.Header.Add("x-client-version", a.Version)
 	}
@@ -145,12 +167,12 @@ func (a *MysocketAPI) Request(method string, url string, target interface{}, dat
 	return nil
 }
 
-func (a *MysocketAPI) With(opt APIOption) *MysocketAPI {
+func (a *Border0API) With(opt APIOption) *Border0API {
 	opt(a)
 	return a
 }
 
-func (a *MysocketAPI) GetOrganizationInfo(ctx context.Context) (*models.Organization, error) {
+func (a *Border0API) GetOrganizationInfo(ctx context.Context) (*models.Organization, error) {
 	org := models.Organization{}
 
 	err := a.Request("GET", "organization", &org, nil, true)
@@ -161,7 +183,7 @@ func (a *MysocketAPI) GetOrganizationInfo(ctx context.Context) (*models.Organiza
 	return &org, nil
 }
 
-func (a *MysocketAPI) GetSockets(ctx context.Context) ([]models.Socket, error) {
+func (a *Border0API) GetSockets(ctx context.Context) ([]models.Socket, error) {
 	sockets := []models.Socket{}
 
 	err := a.Request("GET", "socket", &sockets, nil, true)
@@ -172,7 +194,7 @@ func (a *MysocketAPI) GetSockets(ctx context.Context) ([]models.Socket, error) {
 	return sockets, nil
 }
 
-func (a *MysocketAPI) GetSocket(ctx context.Context, socketID string) (*models.Socket, error) {
+func (a *Border0API) GetSocket(ctx context.Context, socketID string) (*models.Socket, error) {
 	socket := models.Socket{}
 
 	err := a.Request("GET", fmt.Sprintf("socket/%v", socketID), &socket, nil, true)
@@ -183,7 +205,7 @@ func (a *MysocketAPI) GetSocket(ctx context.Context, socketID string) (*models.S
 	return &socket, nil
 }
 
-func (a *MysocketAPI) GetTunnel(ctx context.Context, socketID string, tunnelID string) (*models.Tunnel, error) {
+func (a *Border0API) GetTunnel(ctx context.Context, socketID string, tunnelID string) (*models.Tunnel, error) {
 	tunnel := models.Tunnel{}
 
 	err := a.Request("GET", fmt.Sprintf("socket/%v/tunnel/%v", socketID, tunnelID), &tunnel, nil, true)
@@ -194,7 +216,7 @@ func (a *MysocketAPI) GetTunnel(ctx context.Context, socketID string, tunnelID s
 	return &tunnel, nil
 }
 
-func (a *MysocketAPI) CreateSocket(ctx context.Context, socket *models.Socket) (*models.Socket, error) {
+func (a *Border0API) CreateSocket(ctx context.Context, socket *models.Socket) (*models.Socket, error) {
 	s := models.Socket{}
 
 	// Force cloud auth
@@ -208,7 +230,7 @@ func (a *MysocketAPI) CreateSocket(ctx context.Context, socket *models.Socket) (
 	return &s, nil
 }
 
-func (a *MysocketAPI) CreateTunnel(ctx context.Context, socketID string) (*models.Tunnel, error) {
+func (a *Border0API) CreateTunnel(ctx context.Context, socketID string) (*models.Tunnel, error) {
 	t := models.Tunnel{}
 
 	url := fmt.Sprintf("socket/%v/tunnel", socketID)
@@ -220,7 +242,7 @@ func (a *MysocketAPI) CreateTunnel(ctx context.Context, socketID string) (*model
 	return &t, nil
 }
 
-func (a *MysocketAPI) DeleteSocket(ctx context.Context, socketID string) error {
+func (a *Border0API) DeleteSocket(ctx context.Context, socketID string) error {
 	err := a.Request("DELETE", "socket/"+socketID, nil, nil, true)
 	if err != nil {
 		return err
@@ -229,7 +251,7 @@ func (a *MysocketAPI) DeleteSocket(ctx context.Context, socketID string) error {
 	return nil
 }
 
-func (a *MysocketAPI) UpdateSocket(ctx context.Context, socketID string, socket models.Socket) error {
+func (a *Border0API) UpdateSocket(ctx context.Context, socketID string, socket models.Socket) error {
 	var result models.Socket
 
 	// Force cloud auth
@@ -243,7 +265,7 @@ func (a *MysocketAPI) UpdateSocket(ctx context.Context, socketID string, socket 
 	return nil
 }
 
-func (a *MysocketAPI) Login(email, password string) (*models.LoginResponse, error) {
+func (a *Border0API) Login(email, password string) (*models.LoginResponse, error) {
 	form := &models.LoginRequest{Email: email, Password: password}
 
 	loginResponse := models.LoginResponse{}
@@ -255,7 +277,7 @@ func (a *MysocketAPI) Login(email, password string) (*models.LoginResponse, erro
 	return &loginResponse, nil
 }
 
-func (a *MysocketAPI) GetAccessToken() string {
+func (a *Border0API) GetAccessToken() string {
 	return a.AccessToken
 }
 
@@ -267,7 +289,7 @@ type actionsRequest struct {
 	Actions []actionUpdate `json:"actions" binding:"required"`
 }
 
-func (a *MysocketAPI) AttachPolicies(ctx context.Context, socketID string, policyUUIDs []string) ([]string, error) {
+func (a *Border0API) AttachPolicies(ctx context.Context, socketID string, policyUUIDs []string) ([]string, error) {
 	actions := []actionUpdate{}
 	for _, policyUUID := range policyUUIDs {
 		actions = append(actions, actionUpdate{Action: "add", ID: policyUUID})
@@ -285,7 +307,7 @@ func (a *MysocketAPI) AttachPolicies(ctx context.Context, socketID string, polic
 	return response, nil
 }
 
-func (a *MysocketAPI) DetachPolicies(ctx context.Context, socketID string, policyUUIDs []string) ([]string, error) {
+func (a *Border0API) DetachPolicies(ctx context.Context, socketID string, policyUUIDs []string) ([]string, error) {
 	actions := []actionUpdate{}
 	for _, policyUUID := range policyUUIDs {
 		actions = append(actions, actionUpdate{Action: "remove", ID: policyUUID})
@@ -303,7 +325,7 @@ func (a *MysocketAPI) DetachPolicies(ctx context.Context, socketID string, polic
 	return response, nil
 }
 
-func (a *MysocketAPI) GetPolicyByName(ctx context.Context, name string) (*models.Policy, error) {
+func (a *Border0API) GetPolicyByName(ctx context.Context, name string) (*models.Policy, error) {
 	url := fmt.Sprintf("policies/find?name=%s", name)
 
 	var policy *models.Policy
@@ -315,7 +337,7 @@ func (a *MysocketAPI) GetPolicyByName(ctx context.Context, name string) (*models
 	return policy, nil
 }
 
-func (a *MysocketAPI) GetPoliciesBySocketID(socketID string) ([]models.Policy, error) {
+func (a *Border0API) GetPoliciesBySocketID(socketID string) ([]models.Policy, error) {
 	url := fmt.Sprintf("policies?socket_id=%s", socketID)
 
 	var policies []models.Policy

@@ -9,9 +9,11 @@ import (
 	"log"
 	h "net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	jwt "github.com/golang-jwt/jwt"
 )
@@ -31,20 +33,9 @@ type Client struct {
 	version string
 }
 
-func APIURL() string {
-	return apiUrl()
-}
-func apiUrl() string {
-	if os.Getenv("MYSOCKET_API") != "" {
-		return os.Getenv("MYSOCKET_API")
-	} else {
-		return "https://api.border0.com/api/v1"
-	}
-}
-
 func WebUrl() string {
-	if os.Getenv("MYSOCKET_WEB_URL") != "" {
-		return os.Getenv("MYSOCKET_WEB_URL")
+	if os.Getenv("BORDER0_WEB_URL") != "" {
+		return os.Getenv("BORDER0_WEB_URL")
 	} else {
 		return "https://portal.border0.com"
 	}
@@ -57,9 +48,9 @@ func TokenFilePath() string {
 func tokenfile() string {
 	tokenfile := ""
 	if runtime.GOOS == "windows" {
-		tokenfile = fmt.Sprintf("%s/.mysocketio_token", os.Getenv("APPDATA"))
+		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("APPDATA"))
 	} else {
-		tokenfile = fmt.Sprintf("%s/.mysocketio_token", os.Getenv("HOME"))
+		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("HOME"))
 	}
 	return tokenfile
 }
@@ -117,9 +108,9 @@ func (c *Client) Request(method string, url string, target interface{}, data int
 	jv, _ := json.Marshal(data)
 	body := bytes.NewBuffer(jv)
 
-	req, _ := h.NewRequest(method, fmt.Sprintf("%s/%s", apiUrl(), url), body)
+	req, _ := h.NewRequest(method, fmt.Sprintf("%s/%s", api.APIURL(), url), body)
 	req.Header.Add("x-access-token", c.token)
-	req.Header.Add("x-client-requested-with", "mysocketctl")
+	req.Header.Add("x-client-requested-with", "border0")
 	if c.version != "" {
 		req.Header.Add("x-client-version", c.version)
 	}
@@ -173,6 +164,14 @@ func RefreshLogin() (string, error) {
 		return "", err
 	}
 
+	// create dir if not exists
+	configPath := filepath.Dir(tokenfile())
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if err := os.Mkdir(configPath, 0700); err != nil {
+			return "", fmt.Errorf("failed to create directory %s : %s", configPath, err)
+		}
+	}
+
 	f, err := os.Create(tokenfile())
 	if err != nil {
 		return "", err
@@ -223,7 +222,7 @@ func MFAChallenge(code string) error {
 }
 
 func CreateDeviceAuthorization() (string, error) {
-	resp, err := h.Post(apiUrl()+"/device_authorizations", "application/json", nil)
+	resp, err := h.Post(api.APIURL()+"/device_authorizations", "application/json", nil)
 	if err != nil {
 		return "", err
 	}
@@ -270,7 +269,7 @@ func Login(email, password string) (bool, error) {
 
 	requestReader := bytes.NewReader(buf)
 
-	resp, err := h.Post(apiUrl()+"/login", "application/json", requestReader)
+	resp, err := h.Post(api.APIURL()+"/login", "application/json", requestReader)
 	if err != nil {
 		return false, err
 	}
@@ -298,6 +297,14 @@ func Login(email, password string) (bool, error) {
 }
 
 func SaveTokenInDisk(accessToken string) error {
+	// create dir if not exists
+	configPath := filepath.Dir(tokenfile())
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if err := os.Mkdir(configPath, 0700); err != nil {
+			return fmt.Errorf("failed to create directory %s : %s", configPath, err)
+		}
+	}
+
 	f, err := os.Create(tokenfile())
 	if err != nil {
 		return err
@@ -323,7 +330,7 @@ func Register(name, email, password, sshkey string) error {
 		return err
 	}
 	requestReader := bytes.NewReader(buf)
-	resp, err := h.Post(apiUrl()+"/user", "application/json", requestReader)
+	resp, err := h.Post(api.APIURL()+"/user", "application/json", requestReader)
 	if err != nil {
 		return err
 	}
@@ -453,7 +460,7 @@ func GetTunnel(socketID string, tunnelID string) (*models.Tunnel, error) {
 	}
 
 	client := &h.Client{}
-	req, _ := h.NewRequest("GET", apiUrl()+"/socket/"+socketID+"/tunnel/"+tunnelID, nil)
+	req, _ := h.NewRequest("GET", api.APIURL()+"/socket/"+socketID+"/tunnel/"+tunnelID, nil)
 	req.Header.Add("x-access-token", token)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -475,7 +482,7 @@ func GetTunnel(socketID string, tunnelID string) (*models.Tunnel, error) {
 
 func GetDeviceAuthorization(sessionToken string) (*models.SessionTokenForm, error) {
 	client := &h.Client{}
-	req, _ := h.NewRequest("GET", apiUrl()+"/device_authorizations", nil)
+	req, _ := h.NewRequest("GET", api.APIURL()+"/device_authorizations", nil)
 	req.Header.Add("x-access-token", sessionToken)
 	resp, err := client.Do(req)
 	if err != nil {

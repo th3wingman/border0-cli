@@ -68,15 +68,15 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 				if k == "Name" && instanceName == "" {
 					instanceName = v
 				}
-				if strings.HasPrefix(strings.ToLower(k), "mysocket") {
-					mySocketMetadata := s.parseLabels(v)
-					if mySocketMetadata.Group != "" && group.Group == mySocketMetadata.Group {
+				if strings.HasPrefix(strings.ToLower(k), "border0") {
+					metadata := s.parseLabels(v)
+					if metadata.Group != "" && group.Group == metadata.Group {
 						ip := s.extractIPAddress(container.NetworkSettings.Networks, connectorNetworkId, connectorGwIp)
 
 						// Now determine the port
 						// First check if it is defined in the labels, otherwise we'll take it from Docker ports
 						metadataPort := 0
-						metadataPort, _ = strconv.Atoi(mySocketMetadata.Port)
+						metadataPort, _ = strconv.Atoi(metadata.Port)
 						port := uint16(metadataPort)
 
 						// Check what port we should return.
@@ -103,7 +103,7 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 							continue
 						}
 
-						sockets = append(sockets, s.buildSocket(cfg.Connector.Name, group, mySocketMetadata, container, instanceName, ip, port))
+						sockets = append(sockets, s.buildSocket(cfg.Connector.Name, group, metadata, container, instanceName, ip, port))
 					}
 				}
 			}

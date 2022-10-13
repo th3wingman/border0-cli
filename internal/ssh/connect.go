@@ -14,7 +14,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
-	mysocketctlhttp "github.com/borderzero/border0-cli/internal/http"
+	border0_http "github.com/borderzero/border0-cli/internal/http"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
@@ -64,7 +64,7 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 		User:            userID,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         defaultTimeout,
-		ClientVersion:   fmt.Sprintf("SSH-2.0-Mysocketctl-%s", version),
+		ClientVersion:   fmt.Sprintf("SSH-2.0-Border0-%s", version),
 	}
 	var keyFiles []string
 	var signers []ssh.Signer
@@ -99,7 +99,7 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 	go func() {
 		for {
 			time.Sleep(3600 * time.Second)
-			_, err := mysocketctlhttp.RefreshLogin()
+			_, err := border0_http.RefreshLogin()
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -210,7 +210,7 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 	}
 
 	if httpserver {
-		go mysocketctlhttp.StartLocalHTTPServer(httpdir, listener)
+		go border0_http.StartLocalHTTPServer(httpdir, listener)
 	} else if localssh {
 		sshServer := newServer(sshCa)
 		go sshServer.Serve(listener)

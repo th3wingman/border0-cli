@@ -25,10 +25,10 @@ type connectTunnelData struct {
 	action string
 }
 type ConnectorCore struct {
-	discovery   discover.Discover
-	cfg         config.Config
-	mysocketAPI api.API
-	logger      *zap.Logger
+	discovery  discover.Discover
+	cfg        config.Config
+	border0API api.API
+	logger     *zap.Logger
 
 	numberOfRuns int64
 	// connectedSockets map[string]models.Socket
@@ -38,7 +38,7 @@ type ConnectorCore struct {
 	connectedTunnels *SyncMap
 }
 
-func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, mysocketAPI api.API) *ConnectorCore {
+func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API) *ConnectorCore {
 	connectedTunnels := &SyncMap{}
 	connectChan := make(chan connectTunnelData, 5)
 	discoverState := discover.DiscoverState{
@@ -46,7 +46,7 @@ func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.
 		RunsCount: 0,
 	}
 
-	return &ConnectorCore{connectedTunnels: connectedTunnels, connectChan: connectChan, logger: logger, discovery: discovery, cfg: cfg, mysocketAPI: mysocketAPI, discoverState: discoverState}
+	return &ConnectorCore{connectedTunnels: connectedTunnels, connectChan: connectChan, logger: logger, discovery: discovery, cfg: cfg, border0API: border0API, discoverState: discoverState}
 }
 
 func (c *ConnectorCore) IsSocketConnected(key string) bool {
@@ -65,18 +65,18 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	c.connectedTunnels.m.Store(socket.ConnectorData.Key(), session)
 
 	// improve the error handling
-	userID, _, err := http.GetUserIDFromAccessToken(c.mysocketAPI.GetAccessToken())
+	userID, _, err := http.GetUserIDFromAccessToken(c.border0API.GetAccessToken())
 	if err != nil {
 		return err
 	}
 
-	org, err := c.mysocketAPI.GetOrganizationInfo(ctx)
+	org, err := c.border0API.GetOrganizationInfo(ctx)
 	if err != nil {
 		return err
 	}
 
 	//reload socket
-	socketFromApi, err := c.mysocketAPI.GetSocket(ctx, socket.SocketID)
+	socketFromApi, err := c.border0API.GetSocket(ctx, socket.SocketID)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 
 	tunnel := socket.Tunnels[0]
 
-	err = session.Connect(ctx, *userID, socket.SocketID, tunnel.TunnelID, socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.mysocketAPI.GetAccessToken(), "")
+	err = session.Connect(ctx, *userID, socket.SocketID, tunnel.TunnelID, socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.border0API.GetAccessToken(), "")
 	if err != nil {
 		c.connectedTunnels.Delete(socket.ConnectorData.Key())
 		return err
@@ -194,7 +194,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 		discoveredSockets[i] = socket
 	}
 
-	socketsFromApi, err := c.mysocketAPI.GetSockets(ctx)
+	socketsFromApi, err := c.border0API.GetSockets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -257,14 +257,14 @@ func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, loc
 		apiSocket.CloudAuthEnabled = true
 		apiSocket.Tags = localSocket.Tags
 
-		_, err := NewPolicyManager(c.logger, c.mysocketAPI).ApplyPolicies(ctx, apiSocket, localSocket.PolicyNames)
+		_, err := NewPolicyManager(c.logger, c.border0API).ApplyPolicies(ctx, apiSocket, localSocket.PolicyNames)
 		if err != nil {
 			c.logger.Error(err.Error(), zap.String("socket_name", apiSocket.Name))
 		}
 
 		apiSocket.PolicyNames = localSocket.PolicyNames
 
-		err = c.mysocketAPI.UpdateSocket(ctx, apiSocket.SocketID, apiSocket)
+		err = c.border0API.UpdateSocket(ctx, apiSocket.SocketID, apiSocket)
 		if err != nil {
 			return nil, err
 		}
@@ -276,7 +276,7 @@ func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, loc
 }
 
 func (c *ConnectorCore) RecreateSocket(ctx context.Context, socketID string, localSocket models.Socket) (*models.Socket, error) {
-	err := c.mysocketAPI.DeleteSocket(ctx, socketID)
+	err := c.border0API.DeleteSocket(ctx, socketID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +324,7 @@ func (c *ConnectorCore) CheckSocketsToDelete(ctx context.Context, socketsFromApi
 				socket: apiSocket,
 				action: "disconnect"}
 
-			err := c.mysocketAPI.DeleteSocket(ctx, apiSocket.SocketID)
+			err := c.border0API.DeleteSocket(ctx, apiSocket.SocketID)
 			if err != nil {
 				return err
 			}
@@ -373,13 +373,13 @@ func (c *ConnectorCore) CreateSocketAndTunnel(ctx context.Context, s *models.Soc
 		s.Description = fmt.Sprintf("created by %s", c.cfg.Connector.Name)
 	}
 
-	createdSocket, err := c.mysocketAPI.CreateSocket(ctx, s)
+	createdSocket, err := c.border0API.CreateSocket(ctx, s)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 
-	tunnel, err := c.mysocketAPI.CreateTunnel(ctx, createdSocket.SocketID)
+	tunnel, err := c.border0API.CreateTunnel(ctx, createdSocket.SocketID)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -394,13 +394,13 @@ func (c *ConnectorCore) CreateSocketAndTunnel(ctx context.Context, s *models.Soc
 		createdSocket.CustomDomains = append(createdSocket.CustomDomains, createdSocket.Dnsname)
 		createdSocket.PrivateSocket = true
 		createdSocket.UpstreamType = ""
-		err = c.mysocketAPI.UpdateSocket(ctx, createdSocket.SocketID, *createdSocket)
+		err = c.border0API.UpdateSocket(ctx, createdSocket.SocketID, *createdSocket)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	NewPolicyManager(c.logger, c.mysocketAPI).ApplyPolicies(ctx, *createdSocket, s.PolicyNames)
+	NewPolicyManager(c.logger, c.border0API).ApplyPolicies(ctx, *createdSocket, s.PolicyNames)
 	createdSocket.PolicyNames = s.PolicyNames
 
 	return createdSocket, nil

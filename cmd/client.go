@@ -42,8 +42,8 @@ import (
 
 const (
 	// for Service
-	service_name        = "mysocket_service"
-	service_description = "MySocket.io Service"
+	service_name        = "border0_service"
+	service_description = "Border0.com Service"
 )
 
 type Service struct {
@@ -87,16 +87,16 @@ var clientCertFetchCmd = &cobra.Command{
 // clientTlsCmd represents the client tls command
 var clientTlsCmd = &cobra.Command{
 	Use:   "tls",
-	Short: "Connect to a mysocket TLS protected socket",
+	Short: "Connect to a border0 TLS protected socket",
 	Run: func(cmd *cobra.Command, args []string) {
 		if hostname == "" {
 			log.Fatalf("error: empty hostname not allowed")
 		}
 
-		//Check for  hostname checking in *.mysocket-dummy
+		//Check for  hostname checking in *.border0-dummy
 		// This may be used by ssh users
 		// if so strip that
-		substr := "(.*).mysocket-dummy$"
+		substr := "(.*).border0-dummy$"
 		r, _ := regexp.Compile(substr)
 		match := r.FindStringSubmatch(hostname)
 		if match != nil {
@@ -444,18 +444,18 @@ func init() {
 
 	rootCmd.AddCommand(clientCmd)
 	clientCmd.AddCommand(clientTlsCmd)
-	clientTlsCmd.Flags().StringVarP(&hostname, "host", "", "", "The mysocket target host")
+	clientTlsCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
 	clientTlsCmd.Flags().IntVarP(&port, "port", "p", 0, "Port number")
 	clientTlsCmd.Flags().IntVarP(&listener, "listener", "l", 0, "Listener port number")
 	clientTlsCmd.MarkFlagRequired("host")
 
 	clientCmd.AddCommand(clientCertCmd)
 	clientCertCmd.AddCommand(clientCertFetchCmd)
-	clientCertFetchCmd.Flags().StringVarP(&hostname, "host", "", "", "The mysocket target host")
+	clientCertFetchCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
 	clientCertFetchCmd.MarkFlagRequired("host")
 
 	clientCmd.AddCommand(clientLoginCmd)
-	clientLoginCmd.Flags().StringVarP(&orgID, "org", "", "", "The mysocket organization domain name (without .edge.mysocket.io)")
+	clientLoginCmd.Flags().StringVarP(&orgID, "org", "", "", "The border0 organization domain name (without .border0.io)")
 	clientLoginCmd.Flags().IntVarP(&port, "port", "p", 0, "Port number")
 
 	clientLoginCmd.AddCommand(clientLoginStatusCmd)

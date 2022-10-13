@@ -28,19 +28,19 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 	cfg := validConfig()
 
 	tests := []struct {
-		name        string
-		want        []models.Socket
-		cfg         config.Config
-		plugin      discover.Discover
-		mysocketAPI func(*mocks.API)
-		wantErr     bool
+		name       string
+		want       []models.Socket
+		cfg        config.Config
+		plugin     discover.Discover
+		border0API func(*mocks.API)
+		wantErr    bool
 	}{
 		{
 			name:   "happy_path",
 			want:   []models.Socket{expectedSocket},
 			cfg:    cfg,
 			plugin: staticSocketPlugins,
-			mysocketAPI: func(api *mocks.API) {
+			border0API: func(api *mocks.API) {
 				api.EXPECT().GetSockets(mock.Anything).Return([]models.Socket{}, nil)
 				socket.PluginName = staticSocketPlugins.Name()
 				socket.BuildConnectorDataAndTags(cfg.Connector.Name)
@@ -53,7 +53,7 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock API
 			apiMock := &mocks.API{}
-			tt.mysocketAPI(apiMock)
+			tt.border0API(apiMock)
 
 			c := NewConnectorCore(zap.NewNop(), tt.cfg, tt.plugin, apiMock)
 
@@ -93,7 +93,7 @@ func validConfig() config.Config {
 					Name:                  "",
 					Type:                  "http",
 					AllowedEmailAddresses: []string{"some-email01@domain.com"},
-					AllowedEmailDomains:   []string{"mysocket.io", "some-other-domain.com"},
+					AllowedEmailDomains:   []string{"border0.com", "some-other-domain.com"},
 					UpstreamUser:          "",
 					UpstreamPassword:      "",
 					UpstreamType:          "",

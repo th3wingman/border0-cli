@@ -59,14 +59,14 @@ func filePath() (string, error) {
 		return "", fmt.Errorf("failed to get user config dir: %w", err)
 	}
 
-	configDir := filepath.Join(prefix, "mysocket")
+	configDir := filepath.Join(prefix, "border0")
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		if err := os.Mkdir(configDir, 0755); err != nil {
 			return "", fmt.Errorf("failed to create config dir: %w", err)
 		}
 	}
 
-	return filepath.Join(prefix, "mysocket", "preference.json"), nil
+	return filepath.Join(prefix, "border0", "preference.json"), nil
 }
 
 func CreateOrUpdate(orgID, orgSubdomain string) error {

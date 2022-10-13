@@ -13,8 +13,8 @@ var ErrPolicyNotFound = errors.New("we couldn't find the policy")
 var ErrEmptyPolicyList = errors.New("policy list is empty")
 
 type PolicyManager struct {
-	mysocketAPI api.API
-	logger      *zap.Logger
+	border0API api.API
+	logger     *zap.Logger
 }
 
 func NewPolicyManager(logger *zap.Logger, api api.API) *PolicyManager {
@@ -29,7 +29,7 @@ func (p *PolicyManager) ApplyPolicies(ctx context.Context, socket models.Socket,
 	// calculate the policies to attach
 	var policiesToAttach []string
 	for _, policyName := range localPolicies {
-		policy, err := p.mysocketAPI.GetPolicyByName(ctx, policyName)
+		policy, err := p.border0API.GetPolicyByName(ctx, policyName)
 		if err != nil {
 			switch err {
 			case api.ErrNotFound:
@@ -44,7 +44,7 @@ func (p *PolicyManager) ApplyPolicies(ctx context.Context, socket models.Socket,
 	}
 
 	if len(policiesToAttach) > 0 {
-		if _, err := p.mysocketAPI.AttachPolicies(ctx, socket.SocketID, policiesToAttach); err != nil {
+		if _, err := p.border0API.AttachPolicies(ctx, socket.SocketID, policiesToAttach); err != nil {
 			return nil, err
 		}
 	}
@@ -59,7 +59,7 @@ func (p *PolicyManager) ApplyPolicies(ctx context.Context, socket models.Socket,
 		}
 
 		if len(policiesToDetach) > 0 {
-			if _, err := p.mysocketAPI.DetachPolicies(ctx, socket.SocketID, policiesToDetach); err != nil {
+			if _, err := p.border0API.DetachPolicies(ctx, socket.SocketID, policiesToDetach); err != nil {
 				return nil, err
 			}
 		}
