@@ -24,6 +24,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/jedib0t/go-pretty/table"
 
+	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/spf13/cobra"
 )
 
@@ -77,6 +78,14 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	cc.Init(&cc.Config{
+		RootCmd:  rootCmd,
+		Headings: cc.HiCyan + cc.Underline, NoExtraNewlines: true,
+		Commands: cc.HiYellow,
+		Example:  cc.Italic,
+		ExecName: cc.Bold,
+		Flags:    cc.Bold,
+	})
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
