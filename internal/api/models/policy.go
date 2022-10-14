@@ -6,6 +6,7 @@ type CreatePolicyRequest struct {
 	Name        string     `json:"name" binding:"required"`
 	Description string     `json:"description"`
 	PolicyData  PolicyData `json:"policy_data" binding:"required"`
+	Orgwide     bool       `json:"org_wide"`
 }
 
 type UpdatePolicyRequest struct {
