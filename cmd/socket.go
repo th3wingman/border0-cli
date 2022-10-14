@@ -60,7 +60,7 @@ var socketsListCmd = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Socket ID", "DNS Name", "Port(s)", "Type", "Description"})
+		t.AppendHeader(table.Row{"Socket ID", "Name", "DNS Name", "Port(s)", "Type", "Description"})
 
 		for _, s := range sockets {
 			portsStr = ""
@@ -73,7 +73,7 @@ var socketsListCmd = &cobra.Command{
 				}
 			}
 
-			t.AppendRow(table.Row{s.SocketID, s.Dnsname, portsStr, s.SocketType, s.Description})
+			t.AppendRow(table.Row{s.SocketID, s.Name, s.Dnsname, portsStr, s.SocketType, s.Description})
 		}
 		t.SetStyle(table.StyleLight)
 		fmt.Printf("%s\n", t.Render())
@@ -374,8 +374,13 @@ func init() {
 	socketCreateCmd.Flags().BoolVarP(&protected, "protected", "p", false, "Protected, default no")
 	socketCreateCmd.Flags().StringVarP(&username, "username", "u", "", "Username, required when protected set to true")
 	socketCreateCmd.Flags().StringVarP(&password, "password", "", "", "Password, required when protected set to true")
+
+	// These are deprecated
 	socketCreateCmd.Flags().StringVarP(&cloudauth_addresses, "allowed_email_addresses", "e", "", "Comma seperated list of allowed Email addresses when using cloudauth")
+	socketCreateCmd.Flags().MarkDeprecated("allowed_email_addresses", "use policies instead")
 	socketCreateCmd.Flags().StringVarP(&cloudauth_domains, "allowed_email_domains", "d", "", "comma seperated list of allowed Email domain (i.e. 'example.com', when using cloudauth")
+	socketCreateCmd.Flags().MarkDeprecated("allowed_email_domains", "use policies instead")
+
 	socketCreateCmd.Flags().StringVarP(&upstream_username, "upstream_username", "j", "", "Upstream username used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_password, "upstream_password", "k", "", "Upstream password used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_http_hostname, "upstream_http_hostname", "", "", "Upstream http hostname")

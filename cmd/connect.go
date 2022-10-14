@@ -212,6 +212,8 @@ func init() {
 	connectCmd.Flags().BoolVarP(&httpserver, "httpserver", "", false, "Start a local http server to accept http connections on this host")
 	connectCmd.Flags().StringVarP(&httpserver_dir, "httpserver_dir", "", "", "Directory to serve http connections on this host")
 	connectCmd.Flags().MarkDeprecated("localssh", "use --sshserver instead")
+	connectCmd.Flags().MarkDeprecated("allowed_email_domains", "use policies instead")
+	connectCmd.Flags().MarkDeprecated("allowed_email_addresses", "use policies instead")
 
 	connectCmd.MarkFlagRequired("name")
 
