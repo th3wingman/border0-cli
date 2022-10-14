@@ -319,7 +319,7 @@ var policyEditCmd = &cobra.Command{
 
 		err = json.Unmarshal(data, &policyData)
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("⛔ Json format error: %v", err)
 		}
 
 		req := models.UpdatePolicyRequest{
@@ -328,14 +328,14 @@ var policyEditCmd = &cobra.Command{
 
 		client, err := http.NewClient()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("⛔ error: %v", err)
 		}
 		err = client.Request("PUT", "policy/"+policy.ID, nil, req)
 		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
+			log.Fatalf(fmt.Sprintf("⛔ Error: %v", err))
 		}
 
-		fmt.Println("Policy Updated")
+		fmt.Println("✅ Policy Updated")
 	},
 }
 
@@ -349,19 +349,19 @@ var policyAddCmd = &cobra.Command{
 		var err error
 
 		if policyName == "" {
-			log.Fatalf("error: invalid policy name")
+			log.Fatalf("⛔ error: invalid policy name")
 		}
 
 		if policyFile != "" {
 			data, err = os.ReadFile(policyFile)
 			if err != nil {
-				fmt.Printf("could not open policy file %s\n", err)
+				fmt.Printf("⛔ could not open policy file %s\n", err)
 				return
 			}
 
 		} else {
 			if strings.Contains(runtime.GOOS, "windows") {
-				fmt.Printf("not available on windows. Please use the --policy-file or -f option")
+				fmt.Printf("⛔ not available on windows. Please use the --policy-file or -f option")
 				return
 			}
 
@@ -390,34 +390,39 @@ var policyAddCmd = &cobra.Command{
 			if err := (term.TTY{In: os.Stdin, TryDev: true}).Safe(c.Run); err != nil {
 				if err, ok := err.(*exec.Error); ok {
 					if err.Err == exec.ErrNotFound {
-						fmt.Printf("unable to launch the editor")
+						fmt.Printf("⚠️ unable to launch the editor")
 						return
 					}
 				}
-				fmt.Printf("there was a problem with the editor")
+				fmt.Printf("⛔ there was a problem with the editor")
 				return
 			}
+
 			jsonFile, err := os.Open(fpath)
 			if err != nil {
-				fmt.Printf("could not open policy file %s\n", err)
+				fmt.Printf("⛔ could not open policy file %s\n", err)
 				return
 			}
 			defer jsonFile.Close()
+
 			data, err = ioutil.ReadAll(jsonFile)
 			if err != nil {
-				fmt.Printf("could not open policy file %s\n", err)
+				fmt.Printf("⚠️ could not open policy file %s\n", err)
 				return
 			}
 		}
 
 		if err != nil {
-			fmt.Printf("could not open policy file %s\n", err)
+			fmt.Printf("⚠️ could not open policy file %s\n", err)
 			return
 		}
 
 		var policyData models.PolicyData
 
-		json.Unmarshal(data, &policyData)
+		err = json.Unmarshal(data, &policyData)
+		if err != nil {
+			log.Fatalf("⛔ Json format error: %v", err)
+		}
 
 		req := models.CreatePolicyRequest{
 			Name:        policyName,
@@ -427,14 +432,14 @@ var policyAddCmd = &cobra.Command{
 
 		client, err := http.NewClient()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("⛔ error: %v", err)
 		}
 		err = client.Request("POST", "policies", nil, req)
 		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
+			log.Fatalf(fmt.Sprintf("⛔ Error: %v", err))
 		}
 
-		fmt.Println("Policy created")
+		fmt.Println("✅  Policy created")
 	},
 }
 
@@ -457,7 +462,7 @@ func findPolicyByName(name string) (models.Policy, error) {
 	client, err := http.NewClient()
 
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		log.Fatalf("⛔ Error: %v", err)
 	}
 
 	policiesPath := "policies/find?name=" + name
@@ -465,7 +470,7 @@ func findPolicyByName(name string) (models.Policy, error) {
 
 	err = client.Request("GET", policiesPath, &policy, nil)
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Error: %v", err))
+		log.Fatalf(fmt.Sprintf("⛔ Error: %v", err))
 	}
 
 	return policy, nil
