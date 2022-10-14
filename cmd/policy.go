@@ -68,7 +68,7 @@ var policysListCmd = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Name", "Description", "# Sockets"})
+		t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
 
 		for _, s := range policys {
 			var socketIDs string
@@ -79,8 +79,11 @@ var policysListCmd = &cobra.Command{
 				}
 
 			}
-
-			t.AppendRow(table.Row{s.Name, s.Description, len(s.SocketIDs)})
+			if s.OrgWide {
+				t.AppendRow(table.Row{s.Name, s.Description, "All", "Yes"})
+			} else {
+				t.AppendRow(table.Row{s.Name, s.Description, len(s.SocketIDs), "No"})
+			}
 		}
 		t.SetStyle(table.StyleLight)
 		fmt.Printf("%s\n", t.Render())
@@ -208,8 +211,14 @@ var policyShowCmd = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Name", "Description", "# Sockets"})
-		t.AppendRow(table.Row{policy.Name, policy.Description, len(policy.SocketIDs)})
+		t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
+
+		if policy.OrgWide {
+			t.AppendRow(table.Row{policy.Name, policy.Description, "All", "Yes"})
+		} else {
+			t.AppendRow(table.Row{policy.Name, policy.Description, len(policy.SocketIDs), "No"})
+		}
+
 		t.SetStyle(table.StyleLight)
 		fmt.Printf("%s\n", t.Render())
 
@@ -423,6 +432,7 @@ var policyAddCmd = &cobra.Command{
 			Name:        policyName,
 			PolicyData:  policyData,
 			Description: policyDescription,
+			Orgwide:     orgwide,
 		}
 
 		client, err := http.NewClient()
@@ -505,6 +515,7 @@ func init() {
 	policyAddCmd.MarkFlagRequired("name")
 	policyAddCmd.Flags().StringVarP(&policyDescription, "description", "d", "", "Policy Description")
 	policyAddCmd.Flags().StringVarP(&policyFile, "policy-file", "f", "", "Policy Definition File")
+	policyAddCmd.Flags().BoolVarP(&orgwide, "orgwide", "o", false, "Organization wide polciy")
 
 	policyEditCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
 	policyEditCmd.MarkFlagRequired("name")

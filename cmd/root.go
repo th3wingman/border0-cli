@@ -65,6 +65,7 @@ var (
 	connectorConfig        string
 	perPage                int64
 	page                   int64
+	orgwide                bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -101,7 +102,7 @@ func splitLongLines(b string, maxLength int) string {
 	return s
 }
 
-func print_socket(s models.Socket) string {
+func print_socket(s models.Socket, policies []models.Policy) string {
 
 	socket_output := ""
 	t := table.NewWriter()
@@ -155,9 +156,14 @@ func print_socket(s models.Socket) string {
 		}
 	}
 
+	// Merge the the policy lists together
+	//s.Policies = append(s.Policies, policies...)
+	policies = append(policies, s.Policies...)
+
 	tp := table.NewWriter()
+
 	tp.AppendHeader(table.Row{"Policy Name", "Policy Description", "Organization Wide"})
-	for _, p := range s.Policies {
+	for _, p := range policies {
 		orgWide := "No"
 
 		if p.OrgWide {
@@ -168,7 +174,7 @@ func print_socket(s models.Socket) string {
 	tp.SetStyle(table.StyleLight)
 	socket_output = socket_output + fmt.Sprintf("\nPolicies:\n%s\n", tp.Render())
 
-	if len(s.Policies) == 0 {
+	if len(policies) == 0 {
 		socket_output = socket_output + fmt.Sprintf("⚠️ Warning: No policies\n")
 		socket_output = socket_output + fmt.Sprintf("No policies are attached to this socket. This means that no one will be able to connect to this socket.\n")
 		socket_output = socket_output + fmt.Sprintf("To resolve this, attach a Policy, or create an Organization-wide Policy.\n")

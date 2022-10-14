@@ -137,7 +137,18 @@ var connectCmd = &cobra.Command{
 			log.Fatalf(fmt.Sprintf("Error: %v", err))
 		}
 
-		fmt.Print(print_socket(c))
+		// Now also get all Org wide Policies
+		orgWidePolicies := []models.Policy{}
+		err = client.Request("GET", "policies/?org_wide=true", &orgWidePolicies, nil)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("Error: %v", err))
+		}
+
+		if err != nil {
+			log.Fatalf("Error: %v", err)
+		}
+
+		fmt.Print(print_socket(c, orgWidePolicies))
 
 		userID, _, err2 := http.GetUserID()
 		if err2 != nil {
