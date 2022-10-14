@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector/config"
-	"github.com/mitchellh/mapstructure"
 )
 
 type Ec2Discover struct {
@@ -71,7 +70,7 @@ func (s *Ec2Discover) Find(ctx context.Context, cfg config.Config, state Discove
 
 				for _, t := range ti.Tags {
 					if strings.HasPrefix(*t.Key, "border0") {
-						socketData := parseAwsDataTag(*t.Value)
+						socketData := parseLabels(*t.Value)
 
 						if socketData.Group == group.Group {
 							socket := s.buildSocket(cfg.Connector.Name, group, socketData, *ti, instanceName)
@@ -86,7 +85,7 @@ func (s *Ec2Discover) Find(ctx context.Context, cfg config.Config, state Discove
 	return sockets, nil
 }
 
-func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGroups, socketData Ec2SocketData, instance ec2.Instance, instanceName string) *models.Socket {
+func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGroups, socketData SocketDataTag, instance ec2.Instance, instanceName string) *models.Socket {
 	socket := models.Socket{}
 	socket.TargetPort, _ = strconv.Atoi(socketData.Port)
 	socket.PolicyGroup = group.Group
@@ -105,7 +104,7 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 	socket.PolicyNames = group.Policies
 	socket.CloudAuthEnabled = true
 
-	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType)
+	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType, socketData.Name)
 	if socket.PrivateSocket {
 		socket.Dnsname = socket.Name
 	}
@@ -116,8 +115,15 @@ func (s *Ec2Discover) Name() string {
 	return reflect.TypeOf(s).Elem().Name()
 }
 
-func buildSocketName(instanceName, connectorName, socketType string) string {
-	s := strings.Replace(instanceName, "_", "-", -1)
+func buildSocketName(instanceName, connectorName, socketType, supplyLabelName string) string {
+	var s string
+	if supplyLabelName != "" {
+		s = supplyLabelName
+	} else {
+		s = instanceName
+	}
+
+	s = strings.Replace(s, "_", "-", -1)
 	s = strings.Replace(s, ".", "-", -1)
 	s = strings.Replace(s, " ", "-", -1)
 
@@ -128,24 +134,6 @@ func buildSocketName(instanceName, connectorName, socketType string) string {
 	} else {
 		return fmt.Sprintf("%v-%v-%v", socketType, s, connectorName)
 	}
-
-}
-
-func parseAwsDataTag(tag string) Ec2SocketData {
-	data := make(map[string]interface{})
-	fields := strings.Split(tag, ",")
-	for _, field := range fields {
-		keyAndValue := strings.Split(field, "=")
-
-		if len(keyAndValue) >= 2 {
-			data[keyAndValue[0]] = keyAndValue[1]
-		}
-	}
-
-	ec2SocketData := Ec2SocketData{}
-	mapstructure.Decode(data, &ec2SocketData)
-
-	return ec2SocketData
 }
 
 func (s *Ec2Discover) WaitSeconds() int64 {

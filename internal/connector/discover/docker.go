@@ -14,16 +14,8 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/mitchellh/mapstructure"
 	"k8s.io/utils/strings/slices"
 )
-
-type SocketData struct {
-	Port  string `mapstructure:"port"`
-	Type  string
-	Group string
-	Host  string
-}
 
 type DockerFinder struct{}
 
@@ -69,7 +61,7 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 					instanceName = v
 				}
 				if strings.HasPrefix(strings.ToLower(k), "border0") {
-					metadata := s.parseLabels(v)
+					metadata := parseLabels(v)
 					if metadata.Group != "" && group.Group == metadata.Group {
 						ip := s.extractIPAddress(container.NetworkSettings.Networks, connectorNetworkId, connectorGwIp)
 
@@ -113,7 +105,7 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 	return sockets, nil
 }
 
-func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorGroups, socketData SocketData, instance types.Container, instanceName, ipAddress string, port uint16) models.Socket {
+func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorGroups, socketData SocketDataTag, instance types.Container, instanceName, ipAddress string, port uint16) models.Socket {
 	socket := models.Socket{}
 	socket.TargetPort = int(port)
 	socket.PolicyGroup = group.Group
@@ -130,31 +122,12 @@ func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorG
 		socket.TargetHostname = ipAddress
 	}
 
-	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType)
+	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType, socketData.Name)
 	if socket.PrivateSocket {
 		socket.Dnsname = socket.Name
 	}
 	socket.CloudAuthEnabled = true
 	return socket
-}
-
-func (s *DockerFinder) parseLabels(label string) SocketData {
-	labels := map[string]string{}
-	for _, label := range strings.Split(label, ",") {
-		label = strings.TrimSpace(label)
-		if strings.Contains(label, "=") {
-			kv := strings.Split(label, "=")
-			if len(kv) >= 2 {
-				labels[kv[0]] = kv[1]
-			}
-
-		}
-	}
-
-	data := SocketData{}
-	mapstructure.Decode(labels, &data)
-
-	return data
 }
 
 func (s *DockerFinder) findNetworkID(containers []types.Container) (string, string, error) {
