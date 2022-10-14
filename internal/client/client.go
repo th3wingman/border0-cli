@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	successURL = "https://mysocket.io/succes-message/"
-	failURL    = "https://mysocket.io/fail-message/"
+	successURL = "https://www.border0.com/logged-in"
+	failURL    = "https://www.border0.com/fail-message"
 )
 
 func MTLSLogin(hostname string) (string, jwt.MapClaims, error) {
