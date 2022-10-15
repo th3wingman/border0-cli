@@ -39,6 +39,12 @@ jobs:
         run: |
            go version
 
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+
       - name: where am i?
         run: |
           pwd
