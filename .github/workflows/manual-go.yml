@@ -61,9 +61,9 @@ jobs:
           ls
           env
 
-      - name: Run Make gen-version
+      - name: Run Make gen-n-upload-version
         run: |
-          make gen-version
+          make gen-n-upload-version
 
       # - name: Run Make release
       #   run: |

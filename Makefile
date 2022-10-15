@@ -13,11 +13,18 @@ VERSION := $(shell git describe --long --dirty --tags)
 FLAGS := -ldflags "-X github.com/borderzero/border0-cli/cmd.version=$(VERSION) -X github.com/borderzero/border0-cli/cmd.date=$(DATE)"
 
 all: lint moddownload test build
+
 gen-version:
+	echo ${VERSION}
+	echo ${VERSION} > latest_version.txt
+	rm latest_version.txt
+
+gen-n-upload-version:
 	echo ${VERSION}
 	echo ${VERSION} > latest_version.txt
 	python3 ./s3upload.py latest_version.txt ${BUCKET} latest_version.txt
 	rm latest_version.txt
+
 
 release:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_windows_amd64
