@@ -5,7 +5,7 @@ GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 BINARY_NAME=mysocketctl
-BUCKET=pub-mysocketctl-bin
+BUCKET=border0-dev-rnd-bucket
 
 DATE := $(shell git log -1 --format=%cd --date=format:"%Y%m%d")
 VERSION := $(shell git describe --long --dirty --tags)
@@ -64,7 +64,7 @@ release-border0:
 	python3 ./s3upload.py ./bin/mysocketctl_windows_amd64 ${BUCKET} windows_amd64/border0.exe
 
 moddownload:
-	go mod tidy
+	# go mod tidy
 	go mod download
 
 build:
