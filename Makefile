@@ -8,7 +8,7 @@ BINARY_NAME=mysocketctl
 BUCKET=pub-mysocketctl-bin
 
 DATE := $(shell git log -1 --format=%cd --date=format:"%Y%m%d")
-VERSION := $(shell git describe --long --dirty --tags)
+VERSION=$(BORDER0_VERSION)
 FLAGS := -ldflags "-X github.com/borderzero/border0-cli/cmd.version=$(VERSION) -X github.com/borderzero/border0-cli/cmd.date=$(DATE)"
 
 all: lint moddownload test build
