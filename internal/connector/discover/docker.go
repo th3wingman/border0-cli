@@ -116,8 +116,8 @@ func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorG
 	socket.AllowedEmailDomains = group.AllowedEmailDomains
 
 	socket.UpstreamType = socketData.UpstreamType
-	socket.UpstreamUsername = socketData.UpstreamUser
-	socket.UpstreamPassword = socketData.UpstreamPass
+	socket.UpstreamUsername = socketData.UpstreamUsername
+	socket.UpstreamPassword = socketData.UpstreamPassword
 
 	socket.PrivateSocket = group.PrivateSocket
 
