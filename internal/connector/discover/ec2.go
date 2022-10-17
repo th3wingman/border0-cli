@@ -96,6 +96,10 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 	socket.AllowedEmailDomains = group.AllowedEmailDomains
 	socket.PrivateSocket = group.PrivateSocket
 
+	socket.UpstreamType = socketData.UpstreamType
+	socket.UpstreamUsername = socketData.UpstreamUser
+	socket.UpstreamPassword = socketData.UpstreamPass
+
 	socket.TargetHostname = socketData.Host
 	if socket.TargetHostname == "" || socket.TargetHostname == "<nil>" {
 		socket.TargetHostname = *instance.PrivateIpAddress

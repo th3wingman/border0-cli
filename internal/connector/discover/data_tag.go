@@ -7,11 +7,14 @@ import (
 )
 
 type SocketDataTag struct {
-	Port  string `mapstructure:"port"`
-	Type  string `mapstructure:"type"`
-	Group string `mapstructure:"group"`
-	Host  string `mapstructure:"host"`
-	Name  string `mapstructure:"name"`
+	Port         string `mapstructure:"port"`
+	Type         string `mapstructure:"type"`
+	Group        string `mapstructure:"group"`
+	Host         string `mapstructure:"host"`
+	Name         string `mapstructure:"name"`
+	UpstreamUser string `mapstructure:"upstream_user"`
+	UpstreamPass string `mapstructure:"upstream_pass"`
+	UpstreamType string `mapstructure:"upstream_type"`
 }
 
 // Parse the tag and transform it into a structured data called SocketDataTag
