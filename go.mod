@@ -15,6 +15,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/gliderlabs/ssh v0.3.3
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/ivanpirog/coloredcobra v1.0.1
 	github.com/jbenet/go-os-rename v0.0.0-20150428075126-3ac97f61ef67
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mitchellh/mapstructure v1.4.1
@@ -67,7 +68,6 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
-	github.com/ivanpirog/coloredcobra v1.0.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
