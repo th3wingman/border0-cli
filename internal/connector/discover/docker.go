@@ -14,10 +14,13 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 )
 
-type DockerFinder struct{}
+type DockerFinder struct {
+	Logger *zap.Logger
+}
 
 var _ Discover = (*DockerFinder)(nil)
 
@@ -26,6 +29,8 @@ func (s *DockerFinder) SkipRun(ctx context.Context, cfg config.Config, state Dis
 }
 
 func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state DiscoverState) ([]models.Socket, error) {
+	s.Logger.Info("Discovering docker containers")
+
 	sockets := []models.Socket{}
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -34,6 +39,7 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 	}
 
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	s.Logger.Debug("found containers", zap.Any("containers", containers))
 
 	if err != nil {
 		log.Println("Error getting containers:", err)
@@ -46,9 +52,14 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 		println("Error while trying to determine Network ID: ", err)
 	}
 
+	s.Logger.Debug("container info", zap.String("networkId", connectorNetworkId), zap.String("gwIp", connectorGwIp))
+
 	for _, group := range cfg.DockerPlugin {
+		s.Logger.Debug("discover group", zap.Any("group", group))
 
 		for _, container := range containers {
+			s.Logger.Debug("checking container", zap.String("container", container.ID), zap.Int("numer of labels", len(container.Labels)))
+
 			labels := container.Labels
 			var instanceName string
 			if len(labels) > 0 {
@@ -57,12 +68,20 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 			}
 
 			for k, v := range labels {
+				s.Logger.Debug("checking label for container", zap.String("containerID", container.ID), zap.String("label", k), zap.String("value", v))
+
 				if k == "Name" && instanceName == "" {
 					instanceName = v
+					s.Logger.Debug("found instance name", zap.String("containerID", container.ID), zap.String("instanceName", instanceName))
+
 				}
 				if strings.HasPrefix(strings.ToLower(k), "border0") {
+					s.Logger.Debug("found border0 label", zap.String("containerID", container.ID), zap.String("label", k))
+
 					metadata := parseLabels(v)
 					if metadata.Group != "" && group.Group == metadata.Group {
+						s.Logger.Debug("matching group", zap.String("containerID", container.ID), zap.String("group", group.Group))
+
 						ip := s.extractIPAddress(container.NetworkSettings.Networks, connectorNetworkId, connectorGwIp)
 
 						// Now determine the port
@@ -87,15 +106,18 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 						}
 
 						if port == 0 {
-							log.Println("Could not determine container Port... ignoring instance: ", instanceName)
+							s.Logger.Error("Could not determine container Port... ignoring instance: ", zap.String("instanceName", instanceName))
 							continue
 						}
 						if ip == "" {
-							log.Println("Could not determine container IP... ignoring instance: ", instanceName)
+							s.Logger.Error("Could not determine container IP... ignoring instance: ", zap.String("instanceName", instanceName))
 							continue
 						}
 
+						s.Logger.Info("add instance as socket", zap.String("instanceName", instanceName))
 						sockets = append(sockets, s.buildSocket(cfg.Connector.Name, group, metadata, container, instanceName, ip, port))
+					} else {
+						s.Logger.Debug("group not mached", zap.String("containerID", container.ID), zap.String("group", group.Group))
 					}
 				}
 			}

@@ -67,7 +67,7 @@ func (c *ConnectorService) Start() error {
 	}
 
 	if len(c.cfg.DockerPlugin) > 0 {
-		plugins = append(plugins, &discover.DockerFinder{})
+		plugins = append(plugins, &discover.DockerFinder{Logger: c.logger})
 	}
 
 	if len(c.cfg.NetworkPlugin) > 0 {
