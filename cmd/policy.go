@@ -42,16 +42,16 @@ func policysList(cmd *cobra.Command, args []string) {
 		log.Fatalf("Error: %v", err)
 	}
 
-	policiesPath := "policies"
+	policiesPath := "policies?org_wide=true"
 	if perPage != 0 {
 		if page == 0 {
 			page = 1
 		}
-		policiesPath += fmt.Sprintf("?page_size=%d", perPage)
+		policiesPath += fmt.Sprintf("&page_size=%d", perPage)
 		policiesPath += fmt.Sprintf("&page=%d", page)
 	} else {
 		if page != 0 {
-			policiesPath += fmt.Sprintf("?page_size=%d", 100)
+			policiesPath += fmt.Sprintf("&page_size=%d", 100)
 			policiesPath += fmt.Sprintf("&page=%d", page)
 		}
 	}
