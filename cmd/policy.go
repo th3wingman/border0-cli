@@ -32,212 +32,226 @@ var policyCmd = &cobra.Command{
 var policysListCmd = &cobra.Command{
 	Use:   "ls",
 	Short: "List your Policies",
-	Run: func(cmd *cobra.Command, args []string) {
-		client, err := http.NewClient()
+	Run:   policysList,
+}
 
-		if err != nil {
-			log.Fatalf("Error: %v", err)
+func policysList(cmd *cobra.Command, args []string) {
+	client, err := http.NewClient()
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	policiesPath := "policies?org_wide=true"
+	if perPage != 0 {
+		if page == 0 {
+			page = 1
 		}
-
-		policiesPath := "policies"
-		if perPage != 0 {
-			if page == 0 {
-				page = 1
-			}
-			policiesPath += fmt.Sprintf("?page_size=%d", perPage)
+		policiesPath += fmt.Sprintf("&page_size=%d", perPage)
+		policiesPath += fmt.Sprintf("&page=%d", page)
+	} else {
+		if page != 0 {
+			policiesPath += fmt.Sprintf("&page_size=%d", 100)
 			policiesPath += fmt.Sprintf("&page=%d", page)
+		}
+	}
+
+	if socketID != "" {
+		policiesPath += fmt.Sprintf("&socket_id=%s", socketID)
+	}
+
+	policys := []models.Policy{}
+	err = client.Request("GET", policiesPath, &policys, nil)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
+
+	for _, s := range policys {
+		var socketIDs string
+
+		for _, p := range s.SocketIDs {
+			if socketIDs == "" {
+				socketIDs = socketIDs + ", " + p
+			}
+
+		}
+		if s.OrgWide {
+			t.AppendRow(table.Row{s.Name, s.Description, "All", "Yes"})
 		} else {
-			if page != 0 {
-				policiesPath += fmt.Sprintf("?page_size=%d", 100)
-				policiesPath += fmt.Sprintf("&page=%d", page)
-			}
+			t.AppendRow(table.Row{s.Name, s.Description, len(s.SocketIDs), "No"})
 		}
-
-		if socketID != "" {
-			policiesPath += fmt.Sprintf("&socket_id=%s", socketID)
-		}
-
-		policys := []models.Policy{}
-		err = client.Request("GET", policiesPath, &policys, nil)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
-
-		if err != nil {
-			log.Fatalf("Error: %v", err)
-		}
-
-		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
-
-		for _, s := range policys {
-			var socketIDs string
-
-			for _, p := range s.SocketIDs {
-				if socketIDs == "" {
-					socketIDs = socketIDs + ", " + p
-				}
-
-			}
-			if s.OrgWide {
-				t.AppendRow(table.Row{s.Name, s.Description, "All", "Yes"})
-			} else {
-				t.AppendRow(table.Row{s.Name, s.Description, len(s.SocketIDs), "No"})
-			}
-		}
-		t.SetStyle(table.StyleLight)
-		fmt.Printf("%s\n", t.Render())
-	},
+	}
+	t.SetStyle(table.StyleLight)
+	fmt.Printf("%s\n", t.Render())
 }
 
 // policyDeleteCmd represents the policy delete command
 var policyDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a policy",
-	Run: func(cmd *cobra.Command, args []string) {
-		if policyName == "" {
-			log.Fatalf("error: invalid policy name")
-		}
+	Run:   policyDelete,
+}
 
-		policy, err := findPolicyByName(policyName)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+// policyDelete represents the policy delete command
+func policyDelete(cmd *cobra.Command, args []string) {
+	if policyName == "" {
+		log.Fatalf("error: invalid policy name")
+	}
 
-		client, err := http.NewClient()
-		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
+	policy, err := findPolicyByName(policyName)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
 
-		err = client.Request("DELETE", "policy/"+policy.ID, nil, nil)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+	client, err := http.NewClient()
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
 
-		fmt.Println("Policy deleted")
-	},
+	err = client.Request("DELETE", "policy/"+policy.ID, nil, nil)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
+
+	fmt.Println("Policy deleted")
+
 }
 
 // policyAttachCmd represents the policy delete command
 var policyAttachCmd = &cobra.Command{
 	Use:   "attach",
 	Short: "Attach a policy",
-	Run: func(cmd *cobra.Command, args []string) {
-		if policyName == "" {
-			log.Fatalf("error: invalid policy name")
-		}
+	Run:   policyAttach,
+}
 
-		if socketID == "" {
-			log.Fatalf("error: invalid socket id")
-		}
+func policyAttach(cmd *cobra.Command, args []string) {
+	if policyName == "" {
+		log.Fatalf("error: invalid policy name")
+	}
 
-		policy, err := findPolicyByName(policyName)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+	if socketID == "" {
+		log.Fatalf("error: invalid socket id")
+	}
 
-		client, err := http.NewClient()
-		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
+	policy, err := findPolicyByName(policyName)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
 
-		body := models.AddSocketToPolicyRequest{
-			Actions: []models.PolicyActionUpdateRequest{{
-				ID:     socketID,
-				Action: "add",
-			}},
-		}
+	client, err := http.NewClient()
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
 
-		err = client.Request("PUT", "policy/"+policy.ID+"/socket", nil, body)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+	body := models.AddSocketToPolicyRequest{
+		Actions: []models.PolicyActionUpdateRequest{{
+			ID:     socketID,
+			Action: "add",
+		}},
+	}
 
-		fmt.Println("Policy attached to socket")
-	},
+	err = client.Request("PUT", "policy/"+policy.ID+"/socket", nil, body)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
+
+	fmt.Println("Policy attached to socket")
 }
 
 // policyDettachCmd represents the policy delete command
 var policyDettachCmd = &cobra.Command{
 	Use:   "detach",
 	Short: "Detach a policy",
-	Run: func(cmd *cobra.Command, args []string) {
-		if policyName == "" {
-			log.Fatalf("error: invalid policy name")
-		}
+	Run:   policyDettach,
+}
 
-		if socketID == "" {
-			log.Fatalf("error: invalid socket id")
-		}
+// policyDettach represents the policy dettach command
+func policyDettach(cmd *cobra.Command, args []string) {
+	if policyName == "" {
+		log.Fatalf("error: invalid policy name")
+	}
 
-		policy, err := findPolicyByName(policyName)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+	if socketID == "" {
+		log.Fatalf("error: invalid socket id")
+	}
 
-		client, err := http.NewClient()
-		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
+	policy, err := findPolicyByName(policyName)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
 
-		body := models.AddSocketToPolicyRequest{
-			Actions: []models.PolicyActionUpdateRequest{{
-				ID:     socketID,
-				Action: "remove",
-			}},
-		}
+	client, err := http.NewClient()
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
 
-		err = client.Request("PUT", "policy/"+policy.ID+"/socket", nil, body)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+	body := models.AddSocketToPolicyRequest{
+		Actions: []models.PolicyActionUpdateRequest{{
+			ID:     socketID,
+			Action: "remove",
+		}},
+	}
 
-		fmt.Println("Policy detached from socket")
-	},
+	err = client.Request("PUT", "policy/"+policy.ID+"/socket", nil, body)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
+
+	fmt.Println("Policy detached from socket")
 }
 
 // policyShowCmd represents the policy show command
 var policyShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show a policy",
-	Run: func(cmd *cobra.Command, args []string) {
-		if policyName == "" {
-			log.Fatalf("error: invalid policy name")
-		}
+	Run:   policyShow,
+}
 
-		policy, err := findPolicyByName(policyName)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
+// policyShow represents the policy show command
+func policyShow(cmd *cobra.Command, args []string) {
+	if policyName == "" {
+		log.Fatalf("error: invalid policy name")
+	}
 
-		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
+	policy, err := findPolicyByName(policyName)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("Error: %v", err))
+	}
 
-		if policy.OrgWide {
-			t.AppendRow(table.Row{policy.Name, policy.Description, "All", "Yes"})
-		} else {
-			t.AppendRow(table.Row{policy.Name, policy.Description, len(policy.SocketIDs), "No"})
-		}
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
 
-		t.SetStyle(table.StyleLight)
-		fmt.Printf("%s\n", t.Render())
+	if policy.OrgWide {
+		t.AppendRow(table.Row{policy.Name, policy.Description, "All", "Yes"})
+	} else {
+		t.AppendRow(table.Row{policy.Name, policy.Description, len(policy.SocketIDs), "No"})
+	}
 
-		jsonData, err := json.MarshalIndent(policy.PolicyData, "", "  ")
+	t.SetStyle(table.StyleLight)
+	fmt.Printf("%s\n", t.Render())
 
-		if err != nil {
-			fmt.Printf("could not marshal json: %s\n", err)
-			return
-		}
-		// This is for the colored JSON output
-		var colorData map[string]interface{}
-		json.Unmarshal([]byte(jsonData), &colorData)
-		f := colorjson.NewFormatter()
-		f.Indent = 2
-		colorString, _ := f.Marshal(colorData)
-		fmt.Printf("\nPolicy Data:\n\n")
-		fmt.Println(string(colorString))
+	jsonData, err := json.MarshalIndent(policy.PolicyData, "", "  ")
 
-	},
+	if err != nil {
+		fmt.Printf("could not marshal json: %s\n", err)
+		return
+	}
+	// This is for the colored JSON output
+	var colorData map[string]interface{}
+	json.Unmarshal([]byte(jsonData), &colorData)
+	f := colorjson.NewFormatter()
+	f.Indent = 2
+	colorString, _ := f.Marshal(colorData)
+	fmt.Printf("\nPolicy Data:\n\n")
+	fmt.Println(string(colorString))
+
 }
 
 // policyEditCmd represents the policy edit command

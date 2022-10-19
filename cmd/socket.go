@@ -421,7 +421,51 @@ func init() {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
 
-	socketCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
+	var policyCmd = &cobra.Command{
+		Use:   "policy",
+		Short: "Manage your global Policies",
+	}
+
+	var policyShowCmd = &cobra.Command{
+		Use:   "show",
+		Short: "Show a policy",
+		Run:   policyShow,
+	}
+
+	policyShowCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
+	policyShowCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
+
+	var policyAttachCmd = &cobra.Command{
+		Use:   "attach",
+		Short: "Attach a policy",
+		Run:   policyAttach,
+	}
+
+	policyAttachCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
+	policyAttachCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
+
+	var policyDettachCmd = &cobra.Command{
+		Use:   "detach",
+		Short: "Detach a policy",
+		Run:   policyDettach,
+	}
+
+	policyDettachCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
+	policyDettachCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
+
+	var policysListCmd = &cobra.Command{
+		Use:   "ls",
+		Short: "List your Policies",
+		Run:   policysList,
+	}
+
+	policysListCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
+
+	policyCmd.AddCommand(policysListCmd)
+	policyCmd.AddCommand(policyAttachCmd)
+	policyCmd.AddCommand(policyDettachCmd)
+	policyCmd.AddCommand(policyShowCmd)
+
 	socketCmd.AddCommand(policyCmd)
 
 	socketConnectCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
