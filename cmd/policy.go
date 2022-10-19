@@ -529,7 +529,8 @@ func policyTemplate() string {
 	if _email, ok := claims["user_email"].(string); ok {
 		adminEmail = _email
 	} else {
-		log.Fatalf("Error reading token, make sure you're logged in. %v", err)
+		// API tokens don't have an email address for now we'll just use this
+		adminEmail = "admin@example.com"
 	}
 
 	// Also let's get yesterday's date
