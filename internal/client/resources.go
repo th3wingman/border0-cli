@@ -111,6 +111,10 @@ func IsExistingClientTokenValid(homeDir string) (valid bool, token, email string
 }
 
 func GetClientToken(homeDir string) (string, error) {
+	if os.Getenv("BORDER0_CLIENT_TOKEN") != "" {
+		return os.Getenv("BORDER0_CLIENT_TOKEN"), nil
+	}
+
 	tokenFile := ClientTokenFile(homeDir)
 	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
 		fmt.Println(tokenFile)
