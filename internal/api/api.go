@@ -81,8 +81,12 @@ func APIURL() string {
 }
 
 func getToken() (string, error) {
+	if os.Getenv("BORDER0_ADMIN_TOKEN") != "" {
+		return os.Getenv("BORDER0_ADMIN_TOKEN"), nil
+	}
+
 	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
-		return "", errors.New("please login first (no token found)")
+		return "", errors.New("API: please login first (no token found)")
 	}
 	content, err := ioutil.ReadFile(tokenfile())
 	if err != nil {

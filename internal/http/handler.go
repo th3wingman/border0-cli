@@ -440,6 +440,10 @@ func GetLatestBinary(osname string, osarch string) (string, []byte, error) {
 }
 
 func GetToken() (string, error) {
+	if os.Getenv("BORDER0_ADMIN_TOKEN") != "" {
+		return os.Getenv("BORDER0_ADMIN_TOKEN"), nil
+	}
+
 	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
 		return "", errors.New("please login first (no token found)")
 	}
