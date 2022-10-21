@@ -41,6 +41,19 @@ const (
 	failURL    = "https://www.border0.com/fail-message"
 )
 
+func CheckIfTokenIsExpired(rawToken string) bool {
+	tempJWT, _ := jwt.Parse(rawToken, nil)
+
+	if tempJWT != nil {
+		claims := tempJWT.Claims.(jwt.MapClaims)
+		exp := int64(claims["exp"].(float64))
+		if exp-10 > time.Now().Unix() {
+			return false
+		}
+	}
+	return true
+}
+
 func MTLSLogin(hostname string) (string, jwt.MapClaims, error) {
 	if hostname == "" {
 		return "", nil, errors.New("empty hostname not allowed")
@@ -49,16 +62,22 @@ func MTLSLogin(hostname string) (string, jwt.MapClaims, error) {
 	tokenFile := MTLSTokenFile()
 	var token string
 
-	if _, err := os.Stat(tokenFile); err == nil {
-		content, _ := ioutil.ReadFile(tokenFile)
-		tokenString := strings.TrimRight(string(content), "\n")
-		tmpJWT, _ := jwt.Parse(tokenString, nil)
+	if os.Getenv("BORDER0_CLIENT_TOKEN") != "" {
+		token = os.Getenv("BORDER0_CLIENT_TOKEN")
+		if CheckIfTokenIsExpired(token) {
+			// verify if our os.variable supplied token is not expired, error out if it is
+			return "", nil, errors.New("token from environment variable BORDER0_CLIENT_TOKEN is expired")
+		}
+	} else {
+		if _, err := os.Stat(tokenFile); err == nil {
+			content, _ := ioutil.ReadFile(tokenFile)
+			tokenString := strings.TrimRight(string(content), "\n")
 
-		if tmpJWT != nil {
-			claims := tmpJWT.Claims.(jwt.MapClaims)
-			exp := int64(claims["exp"].(float64))
-
-			if exp-10 > time.Now().Unix() {
+			if CheckIfTokenIsExpired(tokenString) {
+				// token is expired, we rely on refresh logic
+				token = ""
+			} else {
+				// assing the token variable from token file
 				token = tokenString
 			}
 		}
