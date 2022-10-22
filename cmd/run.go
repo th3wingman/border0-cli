@@ -113,7 +113,7 @@ func createSocketStartTunnel(cmd *cobra.Command) {
 			client, _ := http.NewClient()
 			err = client.Request("DELETE", "socket/"+c.SocketID, nil, nil)
 			if err != nil {
-				log.Fatalf("error: %v", err)
+				log.Printf("error: %v", err)
 			}
 			os.Exit(0)
 		}()
@@ -124,7 +124,7 @@ func createSocketStartTunnel(cmd *cobra.Command) {
 		org := models.Organization{}
 		err = client.Request("GET", "organization", &org, nil)
 		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
+			log.Printf("Error: %v", err)
 		}
 
 		ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir)
@@ -137,7 +137,7 @@ func createSocketStartTunnel(cmd *cobra.Command) {
 
 		err = client.Request("DELETE", "socket/"+c.SocketID, nil, nil)
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Printf("error: %v", err)
 		}
 
 		// Sleep for 2 second
