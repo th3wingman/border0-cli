@@ -106,10 +106,36 @@ var runCmd = &cobra.Command{
 }
 
 func createSocketStartTunnel(cmd *cobra.Command, quitChannel chan bool, cleanupDone chan bool) {
+	socketId := ""
+	go func() {
+		// This will make sure we cleanup the socket as soon as we get something on the quitChannel
+		<-quitChannel
+		if socketId != "" {
+			client, _ := http.NewClient()
+			err := client.Request("DELETE", "socket/"+socketId, nil, nil)
+			if err != nil {
+				log.Printf("error: %v", err)
+			}
+		}
+		// And let our parent know we're done with the clean up
+		cleanupDone <- true
+
+	}()
+
+	i := 0
 	for {
+		i++
+		if i < 3 {
+			time.Sleep(1000 * time.Millisecond)
+		} else if i < 10 {
+			time.Sleep(2000 * time.Millisecond)
+		} else {
+			time.Sleep(time.Duration(i) * time.Second)
+		}
 		client, err := http.NewClient()
 		if err != nil {
-			log.Fatalf("Error: %v", err)
+			log.Printf("Error: %v", err)
+			continue
 		}
 		hostname, err := os.Hostname()
 		if err != nil {
@@ -125,30 +151,20 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannel chan bool, cleanupD
 		err = client.WithVersion(version).Request("POST", "connect", &c, connection)
 		if err != nil {
 			log.Printf("Error: %v", err)
+			continue
 		}
+		socketId = c.SocketID
 
 		fmt.Print(print_socket(c))
 
 		userID, _, err := http.GetUserID()
 		if err != nil {
 			log.Printf("error: %v", err)
+			continue
 		}
 
 		userIDStr := *userID
 		time.Sleep(1 * time.Second)
-
-		go func() {
-			// This will make sure we cleanup the socket as soon as we get something on the quitChannel
-			<-quitChannel
-			client, _ := http.NewClient()
-			err = client.Request("DELETE", "socket/"+c.SocketID, nil, nil)
-			if err != nil {
-				log.Printf("error: %v", err)
-			}
-			// And let our parent know we're done with the clean up
-			cleanupDone <- true
-
-		}()
 
 		SetRlimit()
 		localssh = true
@@ -157,11 +173,13 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannel chan bool, cleanupD
 		err = client.Request("GET", "organization", &org, nil)
 		if err != nil {
 			log.Printf("Error: %v", err)
+			continue
 		}
 
 		ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir)
 		if err != nil {
 			fmt.Println(err)
+			continue
 		}
 
 		// Sleep for 2 second before reconnecting
