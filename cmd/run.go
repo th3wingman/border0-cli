@@ -106,37 +106,36 @@ var runCmd = &cobra.Command{
 }
 
 func createSocketStartTunnel(cmd *cobra.Command, quitChannel chan bool, cleanupDone chan bool) {
-
-	client, err := http.NewClient()
-	if err != nil {
-		log.Fatalf("Error: %v", err)
-	}
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown-container"
-	}
-	connection := &models.Socket{
-		Name:             hostname,
-		Description:      "border0 run " + hostname,
-		SocketType:       "ssh",
-		CloudAuthEnabled: true,
-	}
-	c := models.Socket{}
-	err = client.WithVersion(version).Request("POST", "connect", &c, connection)
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
-
-	fmt.Print(print_socket(c))
-
-	userID, _, err := http.GetUserID()
-	if err != nil {
-		log.Printf("error: %v", err)
-	}
-
-	userIDStr := *userID
-	time.Sleep(1 * time.Second)
 	for {
+		client, err := http.NewClient()
+		if err != nil {
+			log.Fatalf("Error: %v", err)
+		}
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown-container"
+		}
+		connection := &models.Socket{
+			Name:             hostname,
+			Description:      "border0 run " + hostname,
+			SocketType:       "ssh",
+			CloudAuthEnabled: true,
+		}
+		c := models.Socket{}
+		err = client.WithVersion(version).Request("POST", "connect", &c, connection)
+		if err != nil {
+			log.Printf("Error: %v", err)
+		}
+
+		fmt.Print(print_socket(c))
+
+		userID, _, err := http.GetUserID()
+		if err != nil {
+			log.Printf("error: %v", err)
+		}
+
+		userIDStr := *userID
+		time.Sleep(1 * time.Second)
 
 		go func() {
 			// This will make sure we cleanup the socket as soon as we get something on the quitChannel
