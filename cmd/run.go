@@ -62,38 +62,69 @@ var runCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		go createSocketStartTunnel(cmd)
+		// Let's make sure we catch the signals
+		cleanupDone := make(chan bool)
+		quitChannel := make(chan bool)
+		chsyscall := make(chan os.Signal)
 
-		if err := process.Wait(); err != nil {
-			if exiterr, ok := err.(*exec.ExitError); ok {
-				log.Printf("Exit Status: %d", exiterr.ExitCode())
-				os.Exit(exiterr.ExitCode())
-			} else {
-				log.Fatalf("cmd.Wait: %v", err)
-				os.Exit(1)
+		signal.Notify(chsyscall, os.Interrupt, syscall.SIGTERM,
+			syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT,
+			syscall.SIGTSTP, syscall.SIGHUP, syscall.SIGALRM, syscall.SIGUSR1, syscall.SIGUSR2)
+		// This makes sure we intercept the signals and relay them to the process
+		go func() {
+			for {
+				syscall := <-chsyscall
+				//fmt.Printf("Received an interrupt, signalling process...+%v", syscall)
+				process.Process.Signal(syscall)
+			}
 
+		}()
+
+		go createSocketStartTunnel(cmd, quitChannel, cleanupDone)
+
+		process.Wait() // will wait until finished
+
+		// if done, then cleanup.. this makes sure we don't leave any sockets orphans
+		quitChannel <- true
+
+		// wait for cleanup to finish
+		// We'll set a ticker as well, to make sure we have a timeout
+		// In case the cleanup doesn't finish or take to long
+		ticker := time.NewTicker(2000 * time.Millisecond)
+		for {
+			select {
+			case <-ticker.C:
+				fmt.Println("Timeout reached, exiting")
+				os.Exit(process.ProcessState.ExitCode())
+			case <-cleanupDone:
+				//fmt.Println("Process finished with exit code", process.ProcessState.ExitCode())
+				os.Exit(process.ProcessState.ExitCode())
 			}
 		}
 
 	},
 }
 
-func createSocketStartTunnel(cmd *cobra.Command) {
+func createSocketStartTunnel(cmd *cobra.Command, quitChannel chan bool, cleanupDone chan bool) {
 	for {
 		client, err := http.NewClient()
 		if err != nil {
 			log.Fatalf("Error: %v", err)
 		}
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown-container"
+		}
 		connection := &models.Socket{
-			Name:             "mycontainer",
-			Description:      "border0 run mycontainer",
+			Name:             hostname,
+			Description:      "border0 run " + hostname,
 			SocketType:       "ssh",
 			CloudAuthEnabled: true,
 		}
 		c := models.Socket{}
 		err = client.WithVersion(version).Request("POST", "connect", &c, connection)
 		if err != nil {
-			log.Println(fmt.Sprintf("Error: %v", err))
+			log.Printf("Error: %v", err)
 		}
 
 		fmt.Print(print_socket(c))
@@ -105,17 +136,18 @@ func createSocketStartTunnel(cmd *cobra.Command) {
 
 		userIDStr := *userID
 		time.Sleep(1 * time.Second)
-		ch := make(chan os.Signal)
-		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+
 		go func() {
-			<-ch
-			fmt.Println("cleaning up...")
+			// This will make sure we cleanup the socket as soon as we get something on the quitChannel
+			<-quitChannel
 			client, _ := http.NewClient()
 			err = client.Request("DELETE", "socket/"+c.SocketID, nil, nil)
 			if err != nil {
 				log.Printf("error: %v", err)
 			}
-			os.Exit(0)
+			// And let our parent know we're done with the clean up
+			cleanupDone <- true
+
 		}()
 
 		SetRlimit()
@@ -132,57 +164,11 @@ func createSocketStartTunnel(cmd *cobra.Command) {
 			fmt.Println(err)
 		}
 
-		fmt.Println("cleaning up...")
-		client, err = http.NewClient()
-
-		err = client.Request("DELETE", "socket/"+c.SocketID, nil, nil)
-		if err != nil {
-			log.Printf("error: %v", err)
-		}
-
-		// Sleep for 2 second
+		// Sleep for 2 second before reconnecting
 		time.Sleep(2 * time.Second)
 	}
 
 }
-
-/*
-func startSocketTunnel(cmd *cobra.Command) {
-	createSocket()
-
-		// Start a socket tunnel
-		for {
-			border0ProcessPath := "/usr/local/bin/border0"
-
-			border0ProcessArgs := []string{"connect", "--type", "ssh", "--sshserver", "--name", "mycontainer"}
-
-			border0Process := exec.Command(border0ProcessPath, border0ProcessArgs...)
-
-			border0Process.Stdout = cmd.OutOrStdout()
-			border0Process.Stderr = cmd.OutOrStderr()
-			border0Process.Stdin = cmd.InOrStdin()
-
-			err := border0Process.Start()
-			if err != nil {
-				errlog.Fatalf("failed to start Border0 tunnel: %v", err)
-
-			}
-			if err := border0Process.Wait(); err != nil {
-				if exiterr, ok := err.(*exec.ExitError); ok {
-					log.Printf("Border0 tunnel exit Status: %d", exiterr.ExitCode())
-					os.Exit(exiterr.ExitCode())
-				} else {
-					log.Fatalf("cmd.Wait: %v", err)
-					os.Exit(1)
-
-				}
-			}
-			time.Sleep(2 * time.Second)
-		}
-
-
-}
-*/
 
 func init() {
 	rootCmd.AddCommand(runCmd)
