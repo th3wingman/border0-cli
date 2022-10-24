@@ -334,7 +334,38 @@ func processStats(process exec.Cmd) {
 		//fmt.Printf("Process %d: %
 		exec, _ := p.CmdLine()
 		netstat, _ := p.Netstat()
-		fmt.Fprintf(w, "<h1>Process data</h1>")
+
+		fmt.Fprintf(w, `
+		<!DOCTYPE html>
+	<head>
+		<title>Welcome to Border0</title>
+		<style>
+			body {
+				background-color: #2D2D2D;
+				color: white;
+				font-family: "Source Code Pro", Menlo, Monaco, fixed-width;
+			}
+			
+			h1 {
+				color: #C26356;
+				font-size: 30px;
+				font-family: Menlo, Monaco, fixed-width;
+			}
+			
+			p {
+				color: white;
+				font-family: "Source Code Pro", Menlo, Monaco, fixed-width;
+			}
+			a {
+				color: white;
+				font-family: "Source Code Pro", Menlo, Monaco, fixed-width;
+			  }
+		</style>
+	</head>
+	<body>
+		<h1>🚀 Border0 Process data</h1>
+		`)
+
 		fmt.Fprintf(w, "command:  %s<br>", stat.Comm)
 		fmt.Fprintf(w, "command:  %s<br>", exec)
 		fmt.Fprintf(w, "pid:      %d<br>", stat.PID)
@@ -401,6 +432,7 @@ func processStats(process exec.Cmd) {
 		fmt.Fprintf(w, "====process processes====<br>")
 		pps, _ := pprocess.Processes()
 		fmt.Fprintf(w, "%+v<br>", pps)
+		fmt.Fprintf(w, "</body></html>")
 
 		w.Flush()
 
