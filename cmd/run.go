@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -195,7 +194,7 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 			continue
 		}
 
-		ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir)
+		ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, false, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir)
 		if err != nil {
 			fmt.Println(err)
 			continue
@@ -364,6 +363,7 @@ func processStats(process exec.Cmd) {
 
 		fmt.Fprintf(w, "%+v", v)
 
+		fmt.Fprintf(w, "====Swap data====<br>")
 		sm, _ := mem.SwapMemory()
 		fmt.Fprintf(w, "%v swap memory", sm)
 
@@ -371,9 +371,11 @@ func processStats(process exec.Cmd) {
 		cput, _ := cpu.Times(true)
 		fmt.Fprintf(w, "%+v<br>", cput)
 
+		fmt.Fprintf(w, "====CPU Info====<br>")
 		cpui, _ := cpu.Info()
 		fmt.Fprintf(w, "%+v<br>", cpui)
 
+		fmt.Fprintf(w, "====Disk usage /====<br>")
 		disku, _ := disk.Usage("/")
 		fmt.Fprintf(w, "%+v<br>", disku)
 
@@ -407,10 +409,6 @@ func processStats(process exec.Cmd) {
 
 	}
 
-}
-func printJson(data interface{}, title string) string {
-	pretty, _ := json.MarshalIndent(data, "", "    ")
-	return (fmt.Sprintf("====================%s======================\n %s", title, pretty))
 }
 
 func init() {
