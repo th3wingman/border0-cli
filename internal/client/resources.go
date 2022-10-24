@@ -117,7 +117,6 @@ func GetClientToken(homeDir string) (string, error) {
 
 	tokenFile := ClientTokenFile(homeDir)
 	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
-		fmt.Println(tokenFile)
 		return "", fmt.Errorf("please login first (no token found in " + tokenFile + ")")
 	}
 	content, err := ioutil.ReadFile(tokenFile)
@@ -311,6 +310,15 @@ func EnterDBName(inputDBName, suggestedDBname string) (enteredDBName string, err
 }
 
 func PickHost(inputHost string, socketTypes ...string) (models.ClientResource, error) {
+	if inputHost != "" {
+		valid, _, _, err := IsExistingClientTokenValid("")
+		if !valid || err != nil {
+			return models.ClientResource{
+				Domains: []string{inputHost},
+			}, nil
+		}
+	}
+
 	token, err := ReadTokenOrAskToLogIn()
 	if err != nil {
 		return models.ClientResource{}, err
