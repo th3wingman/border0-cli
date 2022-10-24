@@ -373,9 +373,9 @@ func processStats(process exec.Cmd) {
 		
 		`)
 
-		fmt.Fprintf(w, "command:  %s<br>", stat.Comm)
-		fmt.Fprintf(w, "command:  %s<br>", exec)
-		fmt.Fprintf(w, "pid:      %d<br>", stat.PID)
+		//fmt.Fprintf(w, "command:  %s<br>", stat.Comm)
+		fmt.Fprintf(w, "command:  %s<br>", strings.Join(exec, ""))
+
 		fmt.Fprintf(w, "<hr>")
 		fmt.Fprintf(w, "cpu time: %fs<br>", stat.CPUTime())
 		fmt.Fprintf(w, "vsize:    %dB<br>", stat.VirtualMemory())
@@ -388,7 +388,7 @@ func processStats(process exec.Cmd) {
 		//fmt.Fprintf(w, "<h1>Netstat</h1><br>")
 		//fmt.Fprintf(w, "netstat:     %+v<br>", netstat)
 
-		fmt.Fprintf(w, "====process processes====<br>")
+		fmt.Fprintf(w, "====processes====<br>")
 		pps, _ := pprocess.Processes()
 		for pid := range pps {
 			p := pps[pid]
