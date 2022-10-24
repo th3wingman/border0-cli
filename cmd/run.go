@@ -33,7 +33,6 @@ import (
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
 
@@ -333,13 +332,15 @@ func processStats(process exec.Cmd) {
 		//fmt.Printf("Process %d has %d open file descriptors
 		//fmt.Printf("Process %d: %
 		exec, _ := p.CmdLine()
-		netstat, _ := p.Netstat()
+		//netstat, _ := p.Netstat()
 
 		fmt.Fprintf(w, `
 		<!DOCTYPE html>
 	<head>
 		<title>Welcome to Border0</title>
+
 		<style>
+
 			body {
 				background-color: #2D2D2D;
 				color: white;
@@ -360,10 +361,16 @@ func processStats(process exec.Cmd) {
 				color: white;
 				font-family: "Source Code Pro", Menlo, Monaco, fixed-width;
 			  }
-		</style>
+
+	</style>
+
 	</head>
 	<body>
+
+
 		<h1>🚀 Border0 Process data</h1>
+
+		
 		`)
 
 		fmt.Fprintf(w, "command:  %s<br>", stat.Comm)
@@ -374,64 +381,98 @@ func processStats(process exec.Cmd) {
 		fmt.Fprintf(w, "vsize:    %dB<br>", stat.VirtualMemory())
 		fmt.Fprintf(w, "rss:      %dB<br>", stat.ResidentMemory())
 		fmt.Fprintf(w, "<hr>")
-		fmt.Fprintf(w, "Load last 1min:     %f<br>", loadavg.Load1)
-		fmt.Fprintf(w, "Load last 5min:     %f<br>", loadavg.Load5)
-		fmt.Fprintf(w, "Load last 15min:     %f<br>", loadavg.Load15)
+		fmt.Fprintf(w, "Load last 1min:     %.2f<br>", loadavg.Load1)
+		fmt.Fprintf(w, "Load last 5min:     %.2f<br>", loadavg.Load5)
+		fmt.Fprintf(w, "Load last 15min:    %.2f<br>", loadavg.Load15)
 		fmt.Fprintf(w, "<hr>")
-		fmt.Fprintf(w, "<h1>Netstat</h1><br>")
-		fmt.Fprintf(w, "netstat:     %+v<br>", netstat)
+		//fmt.Fprintf(w, "<h1>Netstat</h1><br>")
+		//fmt.Fprintf(w, "netstat:     %+v<br>", netstat)
+
+		fmt.Fprintf(w, "====process processes====<br>")
+		pps, _ := pprocess.Processes()
+		for pid := range pps {
+			p := pps[pid]
+			ret, _ := pprocess.NewProcess(int32(p.Pid))
+			g, _ := ret.Cmdline()
+			fmt.Fprintf(w, "%d => %s<br>", p.Pid, g)
+
+		}
 
 		fmt.Fprintf(w, "<hr>")
-		fmt.Fprintf(w, "<h1>Host info</h1><br>")
+		fmt.Fprintf(w, "<h1>Host info</h1>")
 		hi, _ := host.Info()
-		fmt.Fprintf(w, "%+v", hi)
+
+		fmt.Fprintf(w, "hostname:     %s<br>", hi.Hostname)
+		fmt.Fprintf(w, "uptime:       %d<br>", hi.Uptime)
+		t := time.Unix(int64(hi.BootTime), 0)
+		fmt.Fprintf(w, "bootTime:     %s<br>", t)
+		fmt.Fprintf(w, "procs:        %d<br>", hi.Procs)
+		fmt.Fprintf(w, "os:           %s<br>", hi.OS)
+		fmt.Fprintf(w, "platform:     %s<br>", hi.Platform)
+		fmt.Fprintf(w, "platformFamily: %s<br>", hi.PlatformFamily)
+		fmt.Fprintf(w, "platformVersion: %s<br>", hi.PlatformVersion)
+		fmt.Fprintf(w, "kernelVersion: %s<br>", hi.KernelVersion)
+		fmt.Fprintf(w, "virtualizationSystem: %s<br>", hi.VirtualizationSystem)
+		fmt.Fprintf(w, "virtualizationRole: %s<br>", hi.VirtualizationRole)
+		fmt.Fprintf(w, "hostid: %s<br>", hi.HostID)
+
+		fmt.Fprintf(w, "<hr>")
 
 		v, _ := mem.VirtualMemory()
 
 		fmt.Fprintf(w, "====Virtual Memory====<br>")
 		// almost every return value is a struct
-		fmt.Fprintf(w, "Total: %v, Free:%v, UsedPercent:%f%%\n", v.Total, v.Free, v.UsedPercent)
-
-		fmt.Fprintf(w, "%+v", v)
+		fmt.Fprintf(w, "Total: %v<br> Free:%v<br> UsedPercent:%f%%<br><hr>", v.Total, v.Free, v.UsedPercent)
 
 		fmt.Fprintf(w, "====Swap data====<br>")
 		sm, _ := mem.SwapMemory()
-		fmt.Fprintf(w, "%v swap memory", sm)
+		//fmt.Fprintf(w, "%v swap memory", sm)
+		fmt.Fprintf(w, "Total: %v<br> Free:%v<br> UsedPercent:%f%%<br><hr>", sm.Total, sm.Free, sm.UsedPercent)
 
 		fmt.Fprintf(w, "====CPU data====<br>")
 		cput, _ := cpu.Times(true)
-		fmt.Fprintf(w, "%+v<br>", cput)
+		for _, cpu := range cput {
+			fmt.Fprintf(w, "CPU: %s<br> user:%f<br> system:%f<br> idle:%f<br> nice:%f<br> iowait:%f<br> irq:%f<br> softirq:%f<br> steal:%f<br> guest:%f<br> guestNice:%f<br><hr>", cpu.CPU, cpu.User, cpu.System, cpu.Idle, cpu.Nice, cpu.Iowait, cpu.Irq, cpu.Softirq, cpu.Steal, cpu.Guest, cpu.GuestNice)
+		}
+		//fmt.Fprintf(w, "%+v<br>", cput)
 
 		fmt.Fprintf(w, "====CPU Info====<br>")
 		cpui, _ := cpu.Info()
-		fmt.Fprintf(w, "%+v<br>", cpui)
+		for _, cpu := range cpui {
+			fmt.Fprintf(w, "CPU: %d<br> cores:%d<br> mhz:%f<br> cacheSize:%d<br> modelname:%s<br> vendorId:%s<br> physicalId:%s<br> cpuFamily:%s<br> model:%s<br> stepping:%d<br> flags:%s<br><hr>", cpu.CPU, cpu.Cores, cpu.Mhz, cpu.CacheSize, cpu.ModelName, cpu.VendorID, cpu.PhysicalID, cpu.Family, cpu.Model, cpu.Stepping, cpu.Flags)
+		}
+		//fmt.Fprintf(w, "%+v<br>", cpui)
 
 		fmt.Fprintf(w, "====Disk usage /====<br>")
 		disku, _ := disk.Usage("/")
-		fmt.Fprintf(w, "%+v<br>", disku)
-
-		fmt.Fprintf(w, "====load avg====<br>")
-		la, _ := load.Avg()
-		fmt.Fprintf(w, "%+v<br>", la)
+		fmt.Fprintf(w, "Total: %v<br> Free:%v<br> UsedPercent:%0.2f%%<br><hr>", disku.Total, disku.Free, disku.UsedPercent)
 
 		fmt.Fprintf(w, "====Network interfaces====<br>")
 		ni, _ := net.Interfaces()
-		fmt.Fprintf(w, "%+v<br>", ni)
+		for _, n := range ni {
+			fmt.Fprintf(w, "Name: %s<br> HardwareAddr:%s<br> Flags:%s<br> MTU:%d<br> Index:%d<br> Addrs:%s<br>", n.Name, n.HardwareAddr, n.Flags, n.MTU, n.Index, n.Addrs)
+		}
+		fmt.Fprintf(w, "<hr>")
+		//fmt.Fprintf(w, "%+v<br>", ni)
 
 		fmt.Fprintf(w, "====Net io counter====<br>")
 		nioc, _ := net.IOCounters(true)
-		fmt.Fprintf(w, "%+v<br>", nioc)
+		//fmt.Fprintf(w, "%+v<br>", nioc)
+		for _, n := range nioc {
+			fmt.Fprintf(w, "Name: %s<br> BytesSent:%d<br> BytesRecv:%d<br> PacketsSent:%d<br> PacketsRecv:%d<br> Errin:%d<br> Errout:%d<br> Dropin:%d<br> Dropout:%d<br><br>", n.Name, n.BytesSent, n.BytesRecv, n.PacketsSent, n.PacketsRecv, n.Errin, n.Errout, n.Dropin, n.Dropout)
+		}
+		fmt.Fprintf(w, "<hr>")
 
 		fmt.Fprintf(w, "====net protocl counters====<br>")
 		npc, _ := net.ProtoCounters([]string{})
-		fmt.Fprintf(w, "%+v<br>", npc)
+		//fmt.Fprintf(w, "%+v<br>", npc)
+		for _, n := range npc {
+			fmt.Fprintf(w, "Protocol: %s<br>", n.Protocol)
+			fmt.Fprintf(w, "%+v", n)
+			fmt.Fprintf(w, "<br>")
 
-		fmt.Fprintf(w, "====process pids====<br>")
-		ppi, _ := pprocess.Pids()
-		fmt.Fprintf(w, "%+v<br>", ppi)
-		fmt.Fprintf(w, "====process processes====<br>")
-		pps, _ := pprocess.Processes()
-		fmt.Fprintf(w, "%+v<br>", pps)
+		}
+
 		fmt.Fprintf(w, "</body></html>")
 
 		w.Flush()
