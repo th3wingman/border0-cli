@@ -36,6 +36,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
 
+	backoff "github.com/cenkalti/backoff/v4"
 	pprocess "github.com/shirou/gopsutil/process"
 	"github.com/spf13/cobra"
 )
@@ -139,68 +140,77 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 
 	}()
 
-	i := 0
 	for {
-		i++
-		if i < 3 {
-			time.Sleep(1000 * time.Millisecond)
-		} else if i < 10 {
-			time.Sleep(2000 * time.Millisecond)
-		} else {
-			time.Sleep(time.Duration(i) * time.Second)
-		}
-		client, err := http.NewClient()
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown-container"
-		}
-		connection := &models.Socket{
-			Name:             "ssh-" + hostname,
-			Description:      "border0 systems stats " + hostname,
-			SocketType:       "ssh",
-			CloudAuthEnabled: true,
-		}
-		c := models.Socket{}
-		err = client.WithVersion(version).Request("POST", "connect", &c, connection)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
-		socketId = c.SocketID
+		b := backoff.NewExponentialBackOff()
+		b.InitialInterval = 2 * time.Second
+		b.MaxInterval = 60 * time.Second
+		retriesTentimesWithBackoff := backoff.WithMaxRetries(b, 10)
 
-		fmt.Print(print_socket(c))
-
-		userID, _, err := http.GetUserID()
-		if err != nil {
-			log.Printf("error: %v", err)
-			continue
+		notify := func(err error, t time.Duration) {
+			log.Printf("%v Will try again in: %s", err, t.Round(time.Second))
 		}
 
-		userIDStr := *userID
-		time.Sleep(1 * time.Second)
+		_ = backoff.RetryNotify(func() error {
+			client, err := http.NewClient()
+			if err != nil {
+				//log.Printf("Error: %v", err)
+				return err
+				//continue
+			}
+			hostname, err := os.Hostname()
+			if err != nil {
+				hostname = "unknown-container"
+			}
+			connection := &models.Socket{
+				Name:             "ssh-" + hostname,
+				Description:      "border0 systems stats " + hostname,
+				SocketType:       "ssh",
+				CloudAuthEnabled: true,
+			}
+			c := models.Socket{}
+			err = client.WithVersion(version).Request("POST", "connect", &c, connection)
+			if err != nil {
+				//log.Printf("Error: %v", err)
+				//continue
+				return err
+			}
+			socketId = c.SocketID
 
-		SetRlimit()
-		localsshServer := true
+			fmt.Print(print_socket(c))
 
-		org := models.Organization{}
-		err = client.Request("GET", "organization", &org, nil)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
+			userID, _, err := http.GetUserID()
+			if err != nil {
+				//log.Printf("error: %v", err)
+				return err
+				//continue
+			}
 
-		ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, false, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
+			userIDStr := *userID
+			time.Sleep(1 * time.Second)
 
-		// Sleep for 2 second before reconnecting
-		time.Sleep(2 * time.Second)
+			SetRlimit()
+			localsshServer := true
+
+			org := models.Organization{}
+			err = client.Request("GET", "organization", &org, nil)
+			if err != nil {
+				//log.Printf("Error: %v", err)
+				return err
+				//continue
+			}
+
+			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, false, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir)
+			if err != nil {
+				//fmt.Println(err)
+				//continue
+				return err
+			}
+
+			// Sleep for 2 second before reconnecting
+			time.Sleep(2 * time.Second)
+			return err
+		}, retriesTentimesWithBackoff, notify)
+
 	}
 
 }
@@ -223,69 +233,76 @@ func createHTTPSocketStartTunnel(cmd *cobra.Command, quitChannelHttp chan bool, 
 	}()
 	// Start a goroutine to wait for the process to exit
 
-	i := 0
 	for {
-		i++
-		if i < 3 {
-			time.Sleep(1000 * time.Millisecond)
-		} else if i < 10 {
-			time.Sleep(2000 * time.Millisecond)
-		} else {
-			time.Sleep(time.Duration(i) * time.Second)
-		}
-		client, err := http.NewClient()
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown-container"
-		}
-		connection := &models.Socket{
-			Name:             "status-" + hostname,
-			Description:      "border0 systems stats " + hostname,
-			SocketType:       "http",
-			CloudAuthEnabled: true,
-		}
-		c := models.Socket{}
-		err = client.WithVersion(version).Request("POST", "connect", &c, connection)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
-		socketId = c.SocketID
 
-		fmt.Print(print_socket(c))
+		b := backoff.NewExponentialBackOff()
+		b.InitialInterval = 2 * time.Second
+		b.MaxInterval = 60 * time.Second
+		retriesTentimesWithBackoff := backoff.WithMaxRetries(b, 10)
 
-		userID, _, err := http.GetUserID()
-		if err != nil {
-			log.Printf("error: %v", err)
-			continue
+		notify := func(err error, t time.Duration) {
+			log.Printf("%v Will try again in: %s", err, t.Round(time.Second))
 		}
 
-		userIDStr := *userID
-		time.Sleep(1 * time.Second)
+		_ = backoff.RetryNotify(func() error {
+			client, err := http.NewClient()
+			if err != nil {
+				//log.Printf("Error: %v", err)
+				//continue
+				return err
+			}
+			hostname, err := os.Hostname()
+			if err != nil {
+				hostname = "unknown-container"
+			}
+			connection := &models.Socket{
+				Name:             "status-" + hostname,
+				Description:      "border0 systems stats " + hostname,
+				SocketType:       "http",
+				CloudAuthEnabled: true,
+			}
+			c := models.Socket{}
+			err = client.WithVersion(version).Request("POST", "connect", &c, connection)
+			if err != nil {
+				//log.Printf("Error: %v", err)
+				//continue
+				return err
+			}
+			socketId = c.SocketID
 
-		SetRlimit()
-		httpserver = true
-		httpserver_dir = "/tmp/border0stats"
+			fmt.Print(print_socket(c))
 
-		org := models.Organization{}
-		err = client.Request("GET", "organization", &org, nil)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
+			userID, _, err := http.GetUserID()
+			if err != nil {
+				//log.Printf("error: %v", err)
+				//continue
+				return err
+			}
 
-		ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, false, org.Certificates["ssh_public_key"], "", httpserver_dir)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
+			userIDStr := *userID
+			time.Sleep(1 * time.Second)
 
-		// Sleep for 2 second before reconnecting
-		time.Sleep(2 * time.Second)
+			SetRlimit()
+			httpserver = true
+			httpserver_dir = "/tmp/border0stats"
+
+			org := models.Organization{}
+			err = client.Request("GET", "organization", &org, nil)
+			if err != nil {
+				//log.Printf("Error: %v", err)
+				//continue
+				return err
+			}
+
+			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, false, org.Certificates["ssh_public_key"], "", httpserver_dir)
+			if err != nil {
+				//fmt.Println(err)
+				//continue
+				return err
+			}
+
+			return err
+		}, retriesTentimesWithBackoff, notify)
 	}
 
 }
