@@ -176,7 +176,15 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 			}
 			socketId = c.SocketID
 
-			fmt.Print(print_socket(c))
+			// Now also get all Org wide Policies
+			orgWidePolicies := []models.Policy{}
+			err = client.Request("GET", "policies/?org_wide=true", &orgWidePolicies, nil)
+
+			if err != nil {
+				return err
+			}
+
+			fmt.Print(print_socket(c, orgWidePolicies))
 
 			userID, _, err := http.GetUserID()
 			if err != nil {
@@ -270,7 +278,15 @@ func createHTTPSocketStartTunnel(cmd *cobra.Command, quitChannelHttp chan bool, 
 			}
 			socketId = c.SocketID
 
-			fmt.Print(print_socket(c))
+			// Now also get all Org wide Policies
+			orgWidePolicies := []models.Policy{}
+			err = client.Request("GET", "policies/?org_wide=true", &orgWidePolicies, nil)
+
+			if err != nil {
+				log.Fatalf("Error: %v", err)
+			}
+
+			fmt.Print(print_socket(c, orgWidePolicies))
 
 			userID, _, err := http.GetUserID()
 			if err != nil {
