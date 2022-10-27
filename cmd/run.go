@@ -21,9 +21,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"os/signal"
+	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
@@ -61,13 +60,17 @@ var runCmd = &cobra.Command{
 			processArgs = args[1:]
 		}
 
+		if runtime.GOOS != "linux" {
+			log.Println("Warning: the run command is meant to Run containers processes and may not work well on non-Linux enviroments")
+		}
+
 		process := exec.Command(processPath, processArgs...)
 		process.Stdout = cmd.OutOrStdout()
 		process.Stderr = cmd.OutOrStderr()
 		process.Stdin = cmd.InOrStdin()
 		err := process.Start()
 		if err != nil {
-			errlog.Fatalf("cmd.Start: %v", err)
+			log.Printf("cmd.Start: %v", err)
 			os.Exit(1)
 		}
 
@@ -77,9 +80,8 @@ var runCmd = &cobra.Command{
 		quitChannelHttp := make(chan bool)
 		chsyscall := make(chan os.Signal)
 
-		signal.Notify(chsyscall, os.Interrupt, syscall.SIGTERM,
-			syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT,
-			syscall.SIGTSTP, syscall.SIGHUP, syscall.SIGALRM, syscall.SIGUSR1, syscall.SIGUSR2)
+		handleSignals(chsyscall)
+
 		// This makes sure we intercept the signals and relay them to the process
 		go func() {
 			for {
@@ -337,24 +339,21 @@ func processStats(process exec.Cmd) {
 		defer f.Close()
 		w := bufio.NewWriter(f)
 		time.Sleep(2 * time.Second)
-		p, err := procfs.NewProc(process.Process.Pid)
+
+		fs, err := procfs.NewFS("/proc")
 		if err != nil {
-			log.Printf("could not get process: %s", err)
+			log.Printf("failed to open procfs: %v", err)
+		}
+
+		p, err := fs.Proc(process.Process.Pid)
+		if err != nil {
+			log.Printf("could not get process1: %s", err)
 		}
 
 		stat, err := p.Stat()
 
 		if err != nil {
 			log.Printf("could not get process stat: %s", err)
-		}
-
-		if err != nil {
-			log.Printf("could not get process fdinfo: %s", err)
-		}
-
-		fs, err := procfs.NewFS("/proc")
-		if err != nil {
-			log.Printf("failed to open procfs: %v", err)
 		}
 
 		loadavg, err := fs.LoadAvg()
@@ -414,10 +413,12 @@ func processStats(process exec.Cmd) {
 		fmt.Fprintf(w, "vsize:    %dB<br>", stat.VirtualMemory())
 		fmt.Fprintf(w, "rss:      %dB<br>", stat.ResidentMemory())
 		fmt.Fprintf(w, "<hr>")
-		fmt.Fprintf(w, "Load last 1min:     %.2f<br>", loadavg.Load1)
-		fmt.Fprintf(w, "Load last 5min:     %.2f<br>", loadavg.Load5)
-		fmt.Fprintf(w, "Load last 15min:    %.2f<br>", loadavg.Load15)
-		fmt.Fprintf(w, "<hr>")
+		if loadavg != nil {
+			fmt.Fprintf(w, "Load last 1min:     %.2f<br>", loadavg.Load1)
+			fmt.Fprintf(w, "Load last 5min:     %.2f<br>", loadavg.Load5)
+			fmt.Fprintf(w, "Load last 15min:    %.2f<br>", loadavg.Load15)
+			fmt.Fprintf(w, "<hr>")
+		}
 		//fmt.Fprintf(w, "<h1>Netstat</h1><br>")
 		//fmt.Fprintf(w, "netstat:     %+v<br>", netstat)
 
