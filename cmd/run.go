@@ -50,6 +50,11 @@ var runCmd = &cobra.Command{
 		var processPath string
 		var processArgs []string
 
+		if len(args) == 0 && runcommand == "" {
+			cmd.Help()
+			return
+		}
+
 		if runcommand == "" {
 			processPath = args[0]
 			processArgs = args[1:]
