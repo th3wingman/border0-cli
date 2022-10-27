@@ -140,9 +140,6 @@ var connectCmd = &cobra.Command{
 		// Now also get all Org wide Policies
 		orgWidePolicies := []models.Policy{}
 		err = client.Request("GET", "policies/?org_wide=true", &orgWidePolicies, nil)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
 
 		if err != nil {
 			log.Fatalf("Error: %v", err)
