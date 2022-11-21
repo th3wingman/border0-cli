@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -75,6 +75,8 @@ var loginCmd = &cobra.Command{
 				fmt.Printf("failed opening browser. Open the url (%s) in a browser\n", url)
 			}
 
+			// Polling for token
+			i := 1
 			for {
 				retriesThreeTimesEveryTwoSeconds := backoff.WithMaxRetries(backoff.NewConstantBackOff(2*time.Second), 3)
 
@@ -102,7 +104,14 @@ var loginCmd = &cobra.Command{
 					return
 				}
 
-				time.Sleep(5 * time.Second)
+				if i < 10 {
+					time.Sleep(1 * time.Second)
+				} else if i < 20 {
+					time.Sleep(2 * time.Second)
+				} else {
+					time.Sleep(5 * time.Second)
+				}
+				i++
 			}
 		}
 		// If email is not provided, then prompt for it
