@@ -9,9 +9,13 @@ Installation
 --------------------
 Please download the binaries at https://download.border0.com
 
+
 Shell auto-completion
 --------------------
 display autocomplete installation instructions
 ```shell
 border0 completion --help
 ```
+Security
+--------------------
+Please go [here](SECURITY.md) for reporting security concerns
