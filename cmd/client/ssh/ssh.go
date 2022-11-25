@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -113,20 +114,33 @@ var sshCmd = &cobra.Command{
 			return fmt.Errorf("unable to create ssh key: %w", err)
 		}
 
-		cert, key, _, _, port, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			log.Fatalf("failed to get certificate: %v", err.Error())
 		}
 
 		certificate := tls.Certificate{
-			Certificate: [][]byte{cert.Raw},
-			PrivateKey:  key,
+			Certificate: [][]byte{info.Certficate.Raw},
+			PrivateKey:  info.PrivateKey,
 		}
 
-		config := tls.Config{Certificates: []tls.Certificate{certificate}, InsecureSkipVerify: true, ServerName: hostname}
-		conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, port), &config)
-		if err != nil {
-			return fmt.Errorf("failed to connect to %s:%d: %w", hostname, port, err)
+		tlsConfig := tls.Config{
+			Certificates:       []tls.Certificate{certificate},
+			InsecureSkipVerify: true,
+		}
+
+		var conn net.Conn
+		if info.ConnectorAuthenticationEnabled {
+			conn, err = client.ConnectorAuthConnect(fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+			if err != nil {
+				fmt.Println("ERROR: could not setup listener:", err)
+				return err
+			}
+		} else {
+			conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+			if err != nil {
+				return fmt.Errorf("failed to connect to %s:%d: %w", hostname, info.Port, err)
+			}
 		}
 
 		home, err := os.UserHomeDir()
@@ -166,10 +180,10 @@ var sshCmd = &cobra.Command{
 			Auth:            []ssh.AuthMethod{ssh.PublicKeys(certSigner)},
 		}
 
-		fmt.Printf("\nConnecting to Server: %s:%d as %s \n", hostname, port, sshLoginName)
+		fmt.Printf("\nConnecting to Server: %s:%d as %s \n", hostname, info.Port, sshLoginName)
 		serverConn, chans, reqs, err := ssh.NewClientConn(conn, hostname, sshConfig)
 		if err != nil {
-			return fmt.Errorf("dial into remote server error: %s %+v", err, conn.ConnectionState())
+			return fmt.Errorf("dial into remote server error: %s", err)
 		}
 		defer serverConn.Close()
 

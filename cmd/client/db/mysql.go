@@ -1,6 +1,7 @@
 package db
 
 import (
+	"crypto/tls"
 	"fmt"
 
 	"github.com/borderzero/border0-cli/client/preference"
@@ -47,7 +48,7 @@ var mysqlCmd = &cobra.Command{
 		socketPref.DatabaseClient = "mysql"
 		pref.SetSocket(socketPref)
 
-		_, _, crtPath, keyPath, port, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			return err
 		}
@@ -64,12 +65,27 @@ var mysqlCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
+		if info.ConnectorAuthenticationEnabled {
+			certificate := tls.Certificate{
+				Certificate: [][]byte{info.Certficate.Raw},
+				PrivateKey:  info.PrivateKey,
+			}
+
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), certificate, 0)
+			if err != nil {
+				fmt.Println("ERROR: could not setup listener:", err)
+				return err
+			}
+
+			hostname = "localhost"
+		}
+
 		err = client.ExecCommand("mysql", []string{
 			"-h", hostname,
-			"-P", fmt.Sprint(port),
+			"-P", fmt.Sprint(info.Port),
 			"--protocol", "TCP",
-			"--ssl-cert", crtPath,
-			"--ssl-key", keyPath,
+			"--ssl-cert", info.CertificatePath,
+			"--ssl-key", info.PrivateKeyPath,
 			dbName,
 		}...)
 		return err

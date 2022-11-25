@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log"
@@ -90,7 +91,19 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 
 	tunnel := socket.Tunnels[0]
 
-	err = session.Connect(ctx, *userID, socket.SocketID, tunnel.TunnelID, socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.border0API.GetAccessToken(), "")
+	var caCertPool *x509.CertPool
+	if socket.ConnectorAuthenticationEnabled {
+		caCertPool = x509.NewCertPool()
+		if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
+			log.Fatalf("error: no organization ca certificate found")
+		} else {
+			if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
+				log.Fatalf("error: failed to parse ca certificate")
+			}
+		}
+	}
+
+	err = session.Connect(ctx, *userID, socket.SocketID, tunnel.TunnelID, socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.border0API.GetAccessToken(), "", socket.ConnectorAuthenticationEnabled, caCertPool)
 	if err != nil {
 		c.connectedTunnels.Delete(socket.ConnectorData.Key())
 		return err

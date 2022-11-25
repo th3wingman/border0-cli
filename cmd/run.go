@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"bufio"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
@@ -169,10 +170,11 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 				hostname = "unknown-container"
 			}
 			connection := &models.Socket{
-				Name:             "ssh-" + hostname,
-				Description:      "border0 systems stats " + hostname,
-				SocketType:       "ssh",
-				CloudAuthEnabled: true,
+				Name:                           "ssh-" + hostname,
+				Description:                    "border0 systems stats " + hostname,
+				SocketType:                     "ssh",
+				CloudAuthEnabled:               true,
+				ConnectorAuthenticationEnabled: connectorAuthEnabled,
 			}
 			c := models.Socket{}
 			err = client.WithVersion(version).Request("POST", "connect", &c, connection)
@@ -214,7 +216,19 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 				//continue
 			}
 
-			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, false, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir)
+			var caCertPool *x509.CertPool
+			if c.ConnectorAuthenticationEnabled {
+				caCertPool = x509.NewCertPool()
+				if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
+					return fmt.Errorf("error: no organization ca certificate found")
+				} else {
+					if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
+						return fmt.Errorf("error: failed to parse ca certificate")
+					}
+				}
+			}
+
+			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, false, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir, c.ConnectorAuthenticationEnabled, caCertPool)
 			if err != nil {
 				//fmt.Println(err)
 				//continue
@@ -271,10 +285,11 @@ func createHTTPSocketStartTunnel(cmd *cobra.Command, quitChannelHttp chan bool, 
 				hostname = "unknown-container"
 			}
 			connection := &models.Socket{
-				Name:             "status-" + hostname,
-				Description:      "border0 systems stats " + hostname,
-				SocketType:       "http",
-				CloudAuthEnabled: true,
+				Name:                           "status-" + hostname,
+				Description:                    "border0 systems stats " + hostname,
+				SocketType:                     "http",
+				CloudAuthEnabled:               true,
+				ConnectorAuthenticationEnabled: connectorAuthEnabled,
 			}
 			c := models.Socket{}
 			err = client.WithVersion(version).Request("POST", "connect", &c, connection)
@@ -317,7 +332,19 @@ func createHTTPSocketStartTunnel(cmd *cobra.Command, quitChannelHttp chan bool, 
 				return err
 			}
 
-			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, false, org.Certificates["ssh_public_key"], "", httpserver_dir)
+			var caCertPool *x509.CertPool
+			if c.ConnectorAuthenticationEnabled {
+				caCertPool = x509.NewCertPool()
+				if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
+					return fmt.Errorf("error: no organization ca certificate found")
+				} else {
+					if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
+						return fmt.Errorf("error: failed to parse ca certificate")
+					}
+				}
+			}
+
+			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, false, org.Certificates["ssh_public_key"], "", httpserver_dir, c.ConnectorAuthenticationEnabled, caCertPool)
 			if err != nil {
 				//fmt.Println(err)
 				//continue

@@ -269,7 +269,7 @@ func AutocompleteHost(cmd *cobra.Command, args []string, toComplete string) ([]s
 		return hosts, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	resources, err := FetchResources(token, "ssh")
+	resources, err := FetchResources(token, cmd.Name())
 	if err != nil {
 		return hosts, cobra.ShellCompDirectiveNoFileComp
 	}

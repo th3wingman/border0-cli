@@ -2,6 +2,8 @@ package ssh
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"log"
@@ -19,7 +21,7 @@ import (
 )
 
 func newServer(ca string) *ssh.Server {
-	ssh.Handle(func(s ssh.Session) {
+	handler := ssh.Handler(func(s ssh.Session) {
 		user, err := user.Lookup(s.User())
 		if err != nil {
 			log.Printf("could not find user: %s", err)
@@ -72,8 +74,37 @@ func newServer(ca string) *ssh.Server {
 
 	})
 
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Printf("could not generate rsa key: %s", err)
+		return nil
+	}
+
+	signer, err := gossh.NewSignerFromKey(key)
+	if err != nil {
+		log.Printf("could not generate signer: %s", err)
+		return nil
+	}
+
+	requestHandlers := map[string]ssh.RequestHandler{}
+	for k, v := range ssh.DefaultRequestHandlers {
+		requestHandlers[k] = v
+	}
+
+	channelHandlers := map[string]ssh.ChannelHandler{}
+	for k, v := range ssh.DefaultChannelHandlers {
+		channelHandlers[k] = v
+	}
+
+	subsystemHandlers := map[string]ssh.SubsystemHandler{}
+	for k, v := range ssh.DefaultSubsystemHandlers {
+		subsystemHandlers[k] = v
+	}
+
 	return &ssh.Server{
-		Version: "Border0-ssh-server",
+		Version:     "Border0-ssh-server",
+		HostSigners: []ssh.Signer{signer},
+		Handler:     handler,
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			pubCert, _, _, _, err := ssh.ParseAuthorizedKey([]byte(ca))
 			if err != nil {
@@ -101,6 +132,9 @@ func newServer(ca string) *ssh.Server {
 
 			return true
 		},
+		RequestHandlers:   requestHandlers,
+		ChannelHandlers:   channelHandlers,
+		SubsystemHandlers: subsystemHandlers,
 	}
 }
 

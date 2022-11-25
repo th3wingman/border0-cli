@@ -1,6 +1,7 @@
 package db
 
 import (
+	"crypto/tls"
 	"fmt"
 
 	"github.com/borderzero/border0-cli/client/preference"
@@ -53,7 +54,7 @@ var pgcliCmd = &cobra.Command{
 		socketPref.DatabaseClient = "pgcli"
 		pref.SetSocket(socketPref)
 
-		_, _, crtPath, keyPath, port, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			return err
 		}
@@ -70,9 +71,29 @@ var pgcliCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
+		if info.ConnectorAuthenticationEnabled {
+			certificate := tls.Certificate{
+				Certificate: [][]byte{info.Certficate.Raw},
+				PrivateKey:  info.PrivateKey,
+			}
+
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), certificate, 0)
+			if err != nil {
+				fmt.Println("ERROR: could not setup listener:", err)
+				return err
+			}
+
+			hostname = "127.0.0.1"
+		}
+
+		sslmode := "verify-full"
+		if pickedHost.PrivateSocket || info.ConnectorAuthenticationEnabled {
+			sslmode = "verify-ca"
+		}
+
 		return client.ExecCommand("pgcli", fmt.Sprintf(
-			"postgres://:@%[1]s:%[2]d/%[3]s?sslmode=verify-full&sslkey=%[4]s&sslcert=%[5]s&sslrootcert=%[6]s",
-			hostname, port, dbName, keyPath, crtPath, certChainPath,
+			"postgres://:@%[1]s:%[2]d/%[3]s?sslmode=%[7]s&sslkey=%[4]s&sslcert=%[5]s&sslrootcert=%[6]s",
+			hostname, info.Port, dbName, info.PrivateKeyPath, info.CertificatePath, certChainPath, sslmode,
 		))
 	},
 }

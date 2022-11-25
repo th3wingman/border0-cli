@@ -1,6 +1,7 @@
 package db
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 
@@ -56,7 +57,7 @@ var psqlCmd = &cobra.Command{
 		socketPref.DatabaseClient = "psql"
 		pref.SetSocket(socketPref)
 
-		_, _, crtPath, keyPath, port, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			return err
 		}
@@ -73,14 +74,34 @@ var psqlCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
+		if info.ConnectorAuthenticationEnabled {
+			certificate := tls.Certificate{
+				Certificate: [][]byte{info.Certficate.Raw},
+				PrivateKey:  info.PrivateKey,
+			}
+
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), certificate, 0)
+			if err != nil {
+				fmt.Println("ERROR: could not setup listener:", err)
+				return err
+			}
+
+			hostname = "localhost"
+		}
+
+		sslmode := "verify-full"
+		if pickedHost.PrivateSocket || info.ConnectorAuthenticationEnabled {
+			sslmode = "verify-ca"
+		}
+
 		return client.ExecCommand("psql",
 			"--host", hostname,
-			"--port", fmt.Sprint(port),
+			"--port", fmt.Sprint(info.Port),
 			strings.Join([]string{
 				fmt.Sprintf("dbname=%s", dbName),
-				"sslmode=verify-full",
-				fmt.Sprintf("sslkey=%s", keyPath),
-				fmt.Sprintf("sslcert=%s", crtPath),
+				fmt.Sprintf("sslmode=%s", sslmode),
+				fmt.Sprintf("sslkey=%s", info.PrivateKeyPath),
+				fmt.Sprintf("sslcert=%s", info.CertificatePath),
 				fmt.Sprintf("sslrootcert=%s", certChainPath),
 			}, " "),
 		)
