@@ -300,6 +300,7 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 							return
 						}
 						log.Printf("client %s authenticated", tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName)
+						time.Sleep(200 * time.Millisecond)
 					}
 
 					if localssh {

@@ -405,6 +405,7 @@ func sshConnect(proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *m
 							return
 						}
 						log.Printf("client %s authenticated", tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName)
+						time.Sleep(200 * time.Millisecond)
 					}
 
 					if localssh {

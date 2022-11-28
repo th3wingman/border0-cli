@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -34,6 +33,11 @@ func newServer(ca string) *ssh.Server {
 			return
 		}
 
+		var cmd exec.Cmd
+
+		cmd.Path = shell
+		cmd.Args = []string{shell}
+
 		pubKey := s.PublicKey()
 		cert, ok := pubKey.(*gossh.Certificate)
 		if !ok {
@@ -46,20 +50,17 @@ func newServer(ca string) *ssh.Server {
 		uid, _ := strconv.ParseUint(user.Uid, 10, 32)
 		gid, _ := strconv.ParseUint(user.Gid, 10, 32)
 
-		var cmd exec.Cmd
-		if len(s.Command()) > 0 {
-			cmd.Path = shell
-			if runtime.GOOS == "windows" {
-				cmd.Args = []string{shell, "/C", s.RawCommand()}
-			} else {
-				cmd.Args = []string{shell, "-c", s.RawCommand()}
-			}
-		} else {
-			cmd.Path = shell
-			if runtime.GOOS != "windows" {
-				cmd.Args = []string{"-" + filepath.Base(shell)}
-			}
-		}
+		// if len(s.Command()) > 0 {
+		// 	if runtime.GOOS == "windows" {
+		// 		cmd.Args = append(cmd.Args, "/C", s.RawCommand())
+		// 	} else {
+		// 		cmd.Args = append(cmd.Args, "-c", s.RawCommand())
+		// 	}
+		// 	} else {
+		// 		if runtime.GOOS != "windows" {
+		// 			cmd.Args = append(cmd.Args"-" + filepath.Base(shell)}
+		// 		}
+		// }
 
 		cmd.Env = []string{
 			"LANG=en_US.UTF-8",
@@ -71,7 +72,6 @@ func newServer(ca string) *ssh.Server {
 		cmd.Dir = user.HomeDir
 
 		execCmd(s, cmd, uid, gid)
-
 	})
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
