@@ -314,6 +314,13 @@ type ResourceInfo struct {
 	ConnectorAuthenticationEnabled bool
 }
 
+func (info *ResourceInfo) SetupTLSCertificate() tls.Certificate {
+	return tls.Certificate{
+		Certificate: [][]byte{info.Certficate.Raw},
+		PrivateKey:  info.PrivateKey,
+	}
+}
+
 func GetResourceInfo(hostname string) (info ResourceInfo, err error) {
 	var claims jwt.MapClaims
 

@@ -1,7 +1,6 @@
 package db
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -62,12 +61,7 @@ var mysqlWorkbenchCmd = &cobra.Command{
 		connectionName := hostname
 
 		if info.ConnectorAuthenticationEnabled {
-			certificate := tls.Certificate{
-				Certificate: [][]byte{info.Certficate.Raw},
-				PrivateKey:  info.PrivateKey,
-			}
-
-			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), certificate, 0)
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), info.SetupTLSCertificate(), 0)
 			if err != nil {
 				fmt.Println("ERROR: could not setup listener:", err)
 				return err
