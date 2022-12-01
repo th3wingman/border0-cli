@@ -237,7 +237,6 @@ func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyP
 }
 
 func GetSocketPort(name string, token string) (socketPort int, err error) {
-
 	resource, err := FetchResource(token, name)
 
 	if err != nil {
@@ -288,7 +287,7 @@ func IsClientCertValid() (crtPath, keyPath string, valid bool) {
 	return
 }
 
-func FetchCertAndReturnPaths(hostname string) (crtPath, keyPath string, socketPort int, err error) {
+func FetchCertAndReturnPaths(hostname string) (crtPath, keyPath string, err error) {
 	token, claims, err := MTLSLogin(hostname)
 	if err != nil {
 		return
@@ -303,44 +302,55 @@ func FetchCertAndReturnPaths(hostname string) (crtPath, keyPath string, socketPo
 		return
 	}
 
-	socketPort, err = GetSocketPort(hostname, token)
+	return
+}
+
+type ResourceInfo struct {
+	Certficate                     *x509.Certificate
+	PrivateKey                     *rsa.PrivateKey
+	CertificatePath                string
+	PrivateKeyPath                 string
+	Port                           int
+	ConnectorAuthenticationEnabled bool
+}
+
+func (info *ResourceInfo) SetupTLSCertificate() tls.Certificate {
+	return tls.Certificate{
+		Certificate: [][]byte{info.Certficate.Raw},
+		PrivateKey:  info.PrivateKey,
+	}
+}
+
+func GetResourceInfo(hostname string) (info ResourceInfo, err error) {
+	var claims jwt.MapClaims
+
+	token, claims, err := MTLSLogin(hostname)
+	if err != nil {
+		return
+	}
+
+	var ok bool
+	if info.CertificatePath, info.PrivateKeyPath, ok = IsClientCertValid(); !ok {
+		info.CertificatePath, info.PrivateKeyPath, err = FetchCertAndReturnPaths(hostname)
+		if err != nil {
+			return
+		}
+	}
+
+	resource, err := FetchResource(token, hostname)
+	if err != nil {
+		return
+	}
+
+	info.Port = resource.SocketPorts[0]
+	info.ConnectorAuthenticationEnabled = resource.ConnectorAuthenticationEnabled
+
+	info.Certficate, info.PrivateKey, _, _, err = ReadOrgCert(claims["org_id"].(string))
 	if err != nil {
 		return
 	}
 
 	return
-}
-
-func GetOrgCert(hostname string) (*x509.Certificate, *rsa.PrivateKey, string, string, int, error) {
-	var ok bool
-	var err error
-	var port int
-	var claims jwt.MapClaims
-	var token, certPath, keyPath string
-
-	token, claims, err = MTLSLogin(hostname)
-	if err != nil {
-		return nil, nil, "", "", 0, err
-	}
-
-	if certPath, keyPath, ok = IsClientCertValid(); ok {
-		port, err = GetSocketPort(hostname, token)
-		if err != nil {
-			return nil, nil, "", "", 0, err
-		}
-	} else {
-		certPath, keyPath, port, err = FetchCertAndReturnPaths(hostname)
-		if err != nil {
-			return nil, nil, "", "", 0, err
-		}
-	}
-
-	cert, key, _, _, err := ReadOrgCert(claims["org_id"].(string))
-	if err != nil {
-		return nil, nil, "", "", 0, err
-	}
-
-	return cert, key, certPath, keyPath, port, nil
 }
 
 func MTLSTokenFile() string {
@@ -797,4 +807,79 @@ func OnInterruptDo(action func()) {
 		action()
 		os.Exit(1)
 	}()
+}
+
+func StartConnectorAuthListener(addr string, certificate tls.Certificate, port int) (int, error) {
+	tlsConfig := &tls.Config{
+		Certificates:       []tls.Certificate{certificate},
+		InsecureSkipVerify: true,
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	if err != nil {
+		return 0, fmt.Errorf("unable to start local TLS listener, %s", err)
+	}
+
+	go func() {
+		defer l.Close()
+		for {
+			lcon, err := l.Accept()
+			if err != nil {
+				log.Fatalf("Listener: Accept Error: %s\n", err)
+			}
+
+			go func() {
+				conn, err := ConnectorAuthConnect(addr, tlsConfig)
+				if err != nil {
+					log.Printf("Failed to connect: %v", err)
+					return
+				}
+
+				handleConnection(lcon, conn)
+			}()
+		}
+	}()
+
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+func ConnectorAuthConnect(addr string, tlsConfig *tls.Config) (conn net.Conn, err error) {
+	conn, err = tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		log.Printf("Failed to connect: %v", err)
+		return
+	}
+
+	connectorConn := tls.Client(conn, tlsConfig)
+	if err = connectorConn.Handshake(); err != nil {
+		log.Printf("failed to authenticate to connector: %v", err.Error())
+		return
+	}
+
+	_, err = conn.Write([]byte("BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"))
+	if err != nil {
+		log.Printf("failed to write to proxy: %v", err.Error())
+		conn.Close()
+	}
+
+	return
+}
+
+func handleConnection(src net.Conn, dst net.Conn) {
+	defer src.Close()
+	defer dst.Close()
+
+	chDone := make(chan bool, 1)
+
+	go func() {
+		io.Copy(src, dst)
+		chDone <- true
+	}()
+
+	go func() {
+		io.Copy(dst, src)
+		chDone <- true
+	}()
+
+	<-chDone
 }

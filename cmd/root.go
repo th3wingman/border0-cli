@@ -68,6 +68,7 @@ var (
 	page                   int64
 	orgwide                bool
 	runcommand             string
+	connectorAuthEnabled   bool
 )
 
 // rootCmd represents the base command when called without any subcommands

@@ -24,6 +24,10 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 		return
 	}
 
+	if len(s.Command()) > 0 {
+		cmd.Args = append(cmd.Args, "/C", s.RawCommand())
+	}
+
 	if isPty {
 
 		cpty, err := conpty.New(int16(ptyReq.Window.Width), int16(ptyReq.Window.Height))

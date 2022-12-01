@@ -46,7 +46,7 @@ var mycliCmd = &cobra.Command{
 		socketPref.DatabaseClient = "mycli"
 		pref.SetSocket(socketPref)
 
-		_, _, crtPath, keyPath, port, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			return err
 		}
@@ -63,11 +63,21 @@ var mycliCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
+		if info.ConnectorAuthenticationEnabled {
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), info.SetupTLSCertificate(), 0)
+			if err != nil {
+				fmt.Println("ERROR: could not setup listener:", err)
+				return err
+			}
+
+			hostname = "localhost"
+		}
+
 		err = client.ExecCommand("mycli", []string{
 			"-h", hostname,
-			"-P", fmt.Sprint(port),
-			"--ssl-cert", crtPath,
-			"--ssl-key", keyPath,
+			"-P", fmt.Sprint(info.Port),
+			"--ssl-cert", info.CertificatePath,
+			"--ssl-key", info.PrivateKeyPath,
 			dbName,
 		}...)
 		return err

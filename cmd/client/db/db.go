@@ -77,11 +77,11 @@ var dbCmd = &cobra.Command{
 		)
 		switch pickedHost.DatabaseType {
 		case "mysql":
-			dbClients = []string{"mysql", "mysqlworkbench", "mycli", "dbeaver"}
+			dbClients = dbClientsMySQL
 		case "postgres":
-			dbClients = []string{"psql", "pgcli"}
+			dbClients = dbClientsPostgreSQL
 		default:
-			dbClients = append(dbClientsMySQL, dbClientsPostgreSQL...)
+			dbClients = dbClientsMySQL
 		}
 		prompt := &survey.Select{
 			Message: "choose a client:",

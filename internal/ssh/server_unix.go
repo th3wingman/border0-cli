@@ -19,43 +19,84 @@ import (
 
 func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 
-	ptyReq, winCh, isPty := s.Pty()
-	if isPty {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("TERM=%s", ptyReq.Term))
+	euid := os.Geteuid()
+	loginCmd, _ := exec.LookPath("login")
 
-		f, err := pty.StartWithAttrs(&cmd, &pty.Winsize{}, &syscall.SysProcAttr{
-			Credential: &syscall.Credential{
+	sysProcAttr := &syscall.SysProcAttr{}
+
+	if len(s.Command()) > 0 {
+		sysProcAttr.Credential = &syscall.Credential{
+			Uid:         uint32(uid),
+			Gid:         uint32(gid),
+			NoSetGroups: true,
+		}
+
+		cmd.Args = append(cmd.Args, "-c", s.RawCommand())
+	} else {
+		if euid == 0 {
+			if loginCmd != "" {
+				cmd.Path = loginCmd
+				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", s.User()}, cmd.Args...)
+			}
+		} else {
+			sysProcAttr.Credential = &syscall.Credential{
 				Uid:         uint32(uid),
 				Gid:         uint32(gid),
 				NoSetGroups: true,
-			},
-			Setsid:  true,
-			Setctty: true,
-		})
+			}
+
+			cmd.Args = []string{fmt.Sprintf("-%s", cmd.Args[0])}
+		}
+	}
+
+	ptyReq, winCh, isPty := s.Pty()
+
+	if isPty {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("TERM=%s", ptyReq.Term))
+		sysProcAttr.Setsid = true
+		sysProcAttr.Setctty = true
+
+		f, err := pty.StartWithAttrs(&cmd, &pty.Winsize{}, sysProcAttr)
 		if err != nil {
 			log.Println(err)
 			return
 		}
+
 		go func() {
 			for win := range winCh {
 				setWinsize(f, win.Width, win.Height)
 			}
 		}()
+
+		done := make(chan bool, 2)
+
 		go func() {
 			io.Copy(f, s)
+			done <- true
 		}()
-		io.Copy(s, f)
 
-		cmd.Wait()
-	} else {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Credential: &syscall.Credential{
-				Uid:         uint32(uid),
-				Gid:         uint32(gid),
-				NoSetGroups: true,
-			},
-			Setsid: true,
+		go func() {
+			io.Copy(s, f)
+			done <- true
+		}()
+
+		go func() {
+			cmd.Wait()
+			done <- true
+		}()
+
+		select {
+		case <-done:
+		case <-s.Context().Done():
 		}
+
+		if cmd.ProcessState == nil {
+			cmd.Process.Signal(syscall.SIGHUP)
+		}
+
+	} else {
+		sysProcAttr.Setsid = true
+		cmd.SysProcAttr = sysProcAttr
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {

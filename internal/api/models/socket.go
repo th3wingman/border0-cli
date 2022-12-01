@@ -43,30 +43,31 @@ func (c *ConnectorData) Key() string {
 }
 
 type Socket struct {
-	Tunnels               []Tunnel          `json:"tunnels,omitempty"`
-	Username              string            `json:"user_name,omitempty"`
-	SocketID              string            `json:"socket_id,omitempty"`
-	SocketTcpPorts        []int             `json:"socket_tcp_ports,omitempty"`
-	Dnsname               string            `json:"dnsname,omitempty"`
-	Name                  string            `json:"name,omitempty"`
-	Description           string            `json:"description,omitempty"`
-	SocketType            string            `json:"socket_type,omitempty"`
-	ProtectedSocket       bool              `json:"protected_socket"`
-	ProtectedUsername     string            `json:"protected_username"`
-	ProtectedPassword     string            `json:"protected_password"`
-	AllowedEmailAddresses []string          `json:"cloud_authentication_email_allowed_addressses,omitempty"`
-	AllowedEmailDomains   []string          `json:"cloud_authentication_email_allowed_domains,omitempty"`
-	SSHCa                 string            `json:"ssh_ca,omitempty"`
-	UpstreamUsername      string            `json:"upstream_username,omitempty"`
-	UpstreamPassword      string            `json:"upstream_password,omitempty"`
-	UpstreamHttpHostname  string            `json:"upstream_http_hostname,omitempty"`
-	UpstreamType          string            `json:"upstream_type,omitempty"`
-	CloudAuthEnabled      bool              `json:"cloud_authentication_enabled,omitempty"`
-	Tags                  map[string]string `json:"tags,omitempty"`
-	CustomDomains         []string          `json:"custom_domains,omitempty"`
-	PrivateSocket         bool              `json:"private_socket"`
-	PolicyNames           []string          `json:"policy_names,omitempty"`
-	Policies              []Policy          `json:"policies,omitempty"`
+	Tunnels                        []Tunnel          `json:"tunnels,omitempty"`
+	Username                       string            `json:"user_name,omitempty"`
+	SocketID                       string            `json:"socket_id,omitempty"`
+	SocketTcpPorts                 []int             `json:"socket_tcp_ports,omitempty"`
+	Dnsname                        string            `json:"dnsname,omitempty"`
+	Name                           string            `json:"name,omitempty"`
+	Description                    string            `json:"description,omitempty"`
+	SocketType                     string            `json:"socket_type,omitempty"`
+	ProtectedSocket                bool              `json:"protected_socket"`
+	ProtectedUsername              string            `json:"protected_username"`
+	ProtectedPassword              string            `json:"protected_password"`
+	AllowedEmailAddresses          []string          `json:"cloud_authentication_email_allowed_addressses,omitempty"`
+	AllowedEmailDomains            []string          `json:"cloud_authentication_email_allowed_domains,omitempty"`
+	SSHCa                          string            `json:"ssh_ca,omitempty"`
+	UpstreamUsername               string            `json:"upstream_username,omitempty"`
+	UpstreamPassword               string            `json:"upstream_password,omitempty"`
+	UpstreamHttpHostname           string            `json:"upstream_http_hostname,omitempty"`
+	UpstreamType                   string            `json:"upstream_type,omitempty"`
+	CloudAuthEnabled               bool              `json:"cloud_authentication_enabled,omitempty"`
+	ConnectorAuthenticationEnabled bool              `json:"connector_authentication_enabled,omitempty"`
+	Tags                           map[string]string `json:"tags,omitempty"`
+	CustomDomains                  []string          `json:"custom_domains,omitempty"`
+	PrivateSocket                  bool              `json:"private_socket"`
+	PolicyNames                    []string          `json:"policy_names,omitempty"`
+	Policies                       []Policy          `json:"policies,omitempty"`
 
 	TargetHostname string         `json:"-"`
 	TargetPort     int            `json:"-"`

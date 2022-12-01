@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/internal/client"
@@ -51,15 +53,27 @@ var mysqlWorkbenchCmd = &cobra.Command{
 		socketPref.DatabaseClient = "mysqlworkbench"
 		pref.SetSocket(socketPref)
 
-		_, _, crtPath, keyPath, port, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			return err
+		}
+
+		connectionName := hostname
+
+		if info.ConnectorAuthenticationEnabled {
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), info.SetupTLSCertificate(), 0)
+			if err != nil {
+				fmt.Println("ERROR: could not setup listener:", err)
+				return err
+			}
+
+			hostname = "localhost"
 		}
 
 		// for more info about mysql workbench command line options and config files, see:
 		// https://dev.mysql.com/doc/workbench/en/wb-command-line-options.html
 		// https://dev.mysql.com/doc/workbench/en/wb-configuring-files.html
-		xmlDoc, err := mysqlworkbench.ConnectionsXML(hostname, port, crtPath, keyPath, dbName)
+		xmlDoc, err := mysqlworkbench.ConnectionsXML(connectionName, hostname, info.Port, info.CertificatePath, info.PrivateKeyPath, dbName)
 		if err != nil {
 			return err
 		}
@@ -94,12 +108,19 @@ var mysqlWorkbenchCmd = &cobra.Command{
 		fmt.Println("Starting up MySQL Workbench...")
 		switch runtime.GOOS {
 		case "darwin":
-			err = client.ExecCommand("open", "-a", "MySQLWorkbench", "--args", "--configdir", configPath)
+			err = client.ExecCommand("open", "-a", "MySQLWorkbench", "--args", "--configdir", configPath, "--query", connectionName)
 		case "windows":
-			err = client.ExecCommand("cmd", "/C", "start", "", "mysqlworkbench.exe", "--configdir", configPath)
+			err = client.ExecCommand("cmd", "/C", "start", "", "mysqlworkbench.exe", "--configdir", configPath, "--query", connectionName)
 		default:
-			err = client.ExecCommand("mysql-workbench", "--configdir", configPath)
+			err = client.ExecCommand("mysql-workbench", "--configdir", configPath, "--query", connectionName)
 		}
+
+		if info.ConnectorAuthenticationEnabled {
+			ch := make(chan os.Signal, 1)
+			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+			<-ch
+		}
+
 		return err
 	},
 }

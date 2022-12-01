@@ -2,10 +2,18 @@ package ssh
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/url"
 	"os"
@@ -16,6 +24,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	border0_http "github.com/borderzero/border0-cli/internal/http"
 	"github.com/cenkalti/backoff/v4"
+	gssh "github.com/gliderlabs/ssh"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/proxy"
@@ -51,7 +60,7 @@ func NewConnection(logger *zap.Logger, opts ...ConnectionOption) *Connection {
 	return connection
 }
 
-func (c *Connection) Connect(ctx context.Context, userID string, socketID string, tunnelID string, port int, targethost string, identityFile string, proxyHost string, version string, localssh, httpserver bool, sshCa string, accessToken, httpdir string) error {
+func (c *Connection) Connect(ctx context.Context, userID string, socketID string, tunnelID string, port int, targethost string, identityFile string, proxyHost string, version string, localssh, httpserver bool, sshCa string, accessToken, httpdir string, connectorAuthRequired bool, caCertPool *x509.CertPool) error {
 	c.socketID = socketID
 	c.tunnelID = tunnelID
 
@@ -142,7 +151,7 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 		c.logger.Info("Connecting to Server", zap.String("server", sshServer()))
 		time.Sleep(1 * time.Second)
 
-		err = c.connect(ctx, proxyDialer, sshConfig, tunnel, port, targethost, localssh, httpserver, sshCa, httpdir)
+		err = c.connect(ctx, proxyDialer, sshConfig, tunnel, port, targethost, localssh, httpserver, sshCa, httpdir, connectorAuthRequired, c.socketID, caCertPool)
 		if err != nil {
 			// abort retry when session is disconnected or it's already connected in the tcp port
 			if errors.Is(err, ErrListenOnPort) || errors.Is(err, ErrSessionDisconnected) {
@@ -160,7 +169,7 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 	return errors.New("ssh session disconnected")
 }
 
-func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *models.Tunnel, port int, targethost string, localssh, httpserver bool, sshCa, httpdir string) error {
+func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *models.Tunnel, port int, targethost string, localssh, httpserver bool, sshCa, httpdir string, connectorAuthRequired bool, socketID string, caCertPool *x509.CertPool) error {
 	remoteHost := net.JoinHostPort(sshServer(), "22")
 
 	defer c.Close()
@@ -209,11 +218,65 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 		return err
 	}
 
+	var tlsConfig *tls.Config
+
+	if connectorAuthRequired {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			c.logger.Error("Failed to generate private key", zap.Error(err))
+			return err
+		}
+
+		keyDer, err := x509.MarshalECPrivateKey(key)
+		if err != nil {
+			c.logger.Error("Failed to serialize private key", zap.Error(err))
+			return err
+		}
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName:   socketID,
+				Organization: []string{"Border0 Connector"},
+			},
+			IsCA:                  true,
+			NotBefore:             time.Now().Add(-time.Hour * 24 * 365),
+			NotAfter:              time.Now().Add(time.Hour * 24 * 365 * 10),
+			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+			KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+			BasicConstraintsValid: true,
+			DNSNames:              []string{socketID},
+		}
+
+		certDer, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+		if err != nil {
+			c.logger.Error("failed to create certificate", zap.Error(err))
+			return err
+		}
+
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDer})
+		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer})
+
+		cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+		if err != nil {
+			c.logger.Error("failed to create certificate", zap.Error(err))
+			return err
+		}
+
+		tlsConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    caCertPool,
+		}
+	}
+
+	var sshServer *gssh.Server
+	if localssh {
+		sshServer = newServer(sshCa)
+	}
+
 	if httpserver {
 		go border0_http.StartLocalHTTPServer(httpdir, listener)
-	} else if localssh {
-		sshServer := newServer(sshCa)
-		go sshServer.Serve(listener)
 	} else {
 		go func() {
 			for {
@@ -224,13 +287,33 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 				}
 
 				go func() {
-					local, err := net.Dial("tcp", fmt.Sprintf("%s:%d", targethost, port))
-					if err != nil {
-						c.logger.Error("Dial INTO local service error", zap.Error(err))
-						return
+					if connectorAuthRequired {
+						tlsConn := tls.Server(client, tlsConfig)
+						if err = tlsConn.Handshake(); err != nil {
+							log.Printf("client tls handshake failed: %s", err)
+							return
+						}
+
+						_, err = client.Write([]byte("BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"))
+						if err != nil {
+							log.Printf("Failed to complete handshake: %s", err)
+							return
+						}
+						log.Printf("client %s authenticated", tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName)
+						time.Sleep(200 * time.Millisecond)
 					}
 
-					go handleClient(client, local)
+					if localssh {
+						go sshServer.HandleConn(client)
+					} else {
+						local, err := net.Dial("tcp", fmt.Sprintf("%s:%d", targethost, port))
+						if err != nil {
+							c.logger.Error("Dial INTO local service error", zap.Error(err))
+							return
+						}
+
+						go handleClient(client, local)
+					}
 				}()
 			}
 		}()

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
@@ -192,7 +193,19 @@ var tunnelConnectCmd = &cobra.Command{
 			log.Fatalf(fmt.Sprintf("Error: %v", err))
 		}
 
-		err = ssh.SshConnect(userIDStr, socketID, tunnelID, port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir)
+		var caCertPool *x509.CertPool
+		if socket.ConnectorAuthenticationEnabled {
+			caCertPool = x509.NewCertPool()
+			if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
+				log.Fatalf("error: no organization ca certificate found")
+			} else {
+				if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
+					log.Fatalf("error: failed to parse ca certificate")
+				}
+			}
+		}
+
+		err = ssh.SshConnect(userIDStr, socketID, tunnelID, port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir, socket.ConnectorAuthenticationEnabled, caCertPool)
 		if err != nil {
 			fmt.Println(err)
 		}

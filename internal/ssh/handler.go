@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
@@ -19,7 +20,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 
 	"github.com/borderzero/border0-cli/internal/api"
@@ -28,6 +31,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/net/proxy"
+
+	gssh "github.com/gliderlabs/ssh"
 )
 
 const (
@@ -163,7 +168,7 @@ func getSshCert(userId string, socketID string, accessToken string, numOfRetry i
 	return certSigner, nil
 }
 
-func SshConnect(userID string, socketID string, tunnelID string, port int, targethost string, identityFile string, proxyHost string, version string, localhttp, localssh bool, sshCa string, accessToken, httpdir string) error {
+func SshConnect(userID string, socketID string, tunnelID string, port int, targethost string, identityFile string, proxyHost string, version string, localhttp, localssh bool, sshCa string, accessToken, httpdir string, connectorAuthRequired bool, caCertPool *x509.CertPool) error {
 	var tunnel *models.Tunnel
 	var err error
 
@@ -255,11 +260,11 @@ func SshConnect(userID string, socketID string, tunnelID string, port int, targe
 		fmt.Println("\nConnecting to Server: " + sshServer() + "\n")
 		time.Sleep(1 * time.Second)
 
-		sshConnect(proxyDialer, sshConfig, tunnel, port, targethost, localhttp, localssh, sshCa, httpdir)
+		sshConnect(proxyDialer, sshConfig, tunnel, port, targethost, localhttp, localssh, sshCa, httpdir, connectorAuthRequired, caCertPool, socketID)
 	}
 }
 
-func sshConnect(proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *models.Tunnel, port int, targethost string, localhttp, localssh bool, sshCa, httpDir string) {
+func sshConnect(proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *models.Tunnel, port int, targethost string, localhttp, localssh bool, sshCa, httpDir string, connectorAuthRequired bool, caCertPool *x509.CertPool, socketID string) {
 	remoteHost := net.JoinHostPort(sshServer(), "22")
 
 	conn, err := proxyDialer.Dial("tcp", remoteHost)
@@ -318,11 +323,65 @@ func sshConnect(proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *m
 		return
 	}
 
+	var tlsConfig *tls.Config
+
+	if connectorAuthRequired {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			log.Printf("Failed to generate ECDSA key: %s\n", err)
+			return
+		}
+
+		keyDer, err := x509.MarshalECPrivateKey(key)
+		if err != nil {
+			log.Printf("Failed to serialize ECDSA key: %s\n", err)
+			return
+		}
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName:   socketID,
+				Organization: []string{"Border0 Connector"},
+			},
+			IsCA:                  true,
+			NotBefore:             time.Now().Add(-time.Hour * 24 * 365),
+			NotAfter:              time.Now().Add(time.Hour * 24 * 365 * 10),
+			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+			KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+			BasicConstraintsValid: true,
+			DNSNames:              []string{socketID},
+		}
+
+		certDer, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+		if err != nil {
+			log.Printf("Failed to create certificate: %s\n", err)
+			return
+		}
+
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDer})
+		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer})
+
+		cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+		if err != nil {
+			log.Printf("Failed to create certificate: %s\n", err)
+			return
+		}
+
+		tlsConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    caCertPool,
+		}
+	}
+
+	var sshServer *gssh.Server
+	if localssh {
+		sshServer = newServer(sshCa)
+	}
+
 	if localhttp {
 		go border0_http.StartLocalHTTPServer(httpDir, listener)
-	} else if localssh {
-		sshServer := newServer(sshCa)
-		go sshServer.Serve(listener)
 	} else {
 		go func() {
 			for {
@@ -333,13 +392,33 @@ func sshConnect(proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *m
 				}
 
 				go func() {
-					local, err := net.Dial("tcp", fmt.Sprintf("%s:%d", targethost, port))
-					if err != nil {
-						log.Printf("Dial INTO local service error: %s", err)
-						return
+					if connectorAuthRequired {
+						tlsConn := tls.Server(client, tlsConfig)
+						if err = tlsConn.Handshake(); err != nil {
+							log.Printf("client tls handshake failed: %s", err)
+							return
+						}
+
+						_, err = client.Write([]byte("BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"))
+						if err != nil {
+							log.Printf("Failed to complete handshake: %s", err)
+							return
+						}
+						log.Printf("client %s authenticated", tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName)
+						time.Sleep(200 * time.Millisecond)
 					}
 
-					go handleClient(client, local)
+					if localssh {
+						go sshServer.HandleConn(client)
+					} else {
+						local, err := net.Dial("tcp", fmt.Sprintf("%s:%d", targethost, port))
+						if err != nil {
+							log.Printf("Dial INTO local service error: %s", err)
+							return
+						}
+
+						go handleClient(client, local)
+					}
 				}()
 			}
 		}()

@@ -3,9 +3,11 @@ package db
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/internal/client"
@@ -50,22 +52,35 @@ var dbeaverCmd = &cobra.Command{
 		socketPref.DatabaseClient = "dbeaver"
 		pref.SetSocket(socketPref)
 
-		cert, key, _, _, socketPort, err := client.GetOrgCert(hostname)
+		info, err := client.GetResourceInfo(hostname)
 		if err != nil {
 			return err
 		}
 
-		keyStore, keyStorePassword, _ := client.CertToKeyStore(cert, key)
+		connectionName := hostname
+
+		if info.ConnectorAuthenticationEnabled {
+			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), info.SetupTLSCertificate(), 0)
+			if err != nil {
+				return fmt.Errorf("could not start listener: %w", err)
+			}
+
+			hostname = "localhost"
+		}
+
+		keyStore, keyStorePassword, _ := client.CertToKeyStore(info.Certficate, info.PrivateKey)
 		defer client.Zeroing(keyStorePassword)
 
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home dir : %w", err)
 		}
-		_, claims, err := client.MTLSLogin(hostname)
+
+		_, claims, err := client.MTLSLogin(connectionName)
 		if err != nil {
 			return err
 		}
+
 		orgID := fmt.Sprint(claims["org_id"])
 		keyStorePath := filepath.Join(home, ".border0", orgID+".jks")
 		client.WriteKeyStore(keyStore, keyStorePath, keyStorePassword)
@@ -76,7 +91,7 @@ var dbeaverCmd = &cobra.Command{
 		// https://github.com/dbeaver/dbeaver/wiki/Command-Line#connection-parameters
 		params := []string{
 			"host=" + hostname,
-			"port=" + fmt.Sprint(socketPort),
+			"port=" + fmt.Sprint(info.Port),
 			"database=" + dbName,
 			"prop.clientCertificateKeyStoreUrl=file:" + keyStorePath,
 			"prop.clientCertificateKeyStorePassword=" + string(keyStorePassword),
@@ -88,7 +103,8 @@ var dbeaverCmd = &cobra.Command{
 			"prop.verifyServerCertificate=false",
 			"prop.requireSSL=false",
 		}
-		if pickedHost.PrivateSocket {
+
+		if pickedHost.PrivateSocket || info.ConnectorAuthenticationEnabled {
 			// NOTE: temp fix - do this to bypass the error that complains the mismatch between
 			//       private hostname and the CN in certificate (*.border0.io)
 			params = append(params, "prop.disableSslHostnameVerification=true")
@@ -117,6 +133,13 @@ var dbeaverCmd = &cobra.Command{
 		default:
 			err = client.ExecCommand("dbeaver", "-con", conn)
 		}
+
+		if info.ConnectorAuthenticationEnabled {
+			ch := make(chan os.Signal, 1)
+			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+			<-ch
+		}
+
 		return err
 	},
 }

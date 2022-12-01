@@ -16,16 +16,11 @@ limitations under the License.
 package cmd
 
 import (
-	"crypto/tls"
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"os"
 	"os/user"
-	"regexp"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -33,6 +28,8 @@ import (
 
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/cmd/client/db"
+	clientTls "github.com/borderzero/border0-cli/cmd/client/tls"
+
 	"github.com/borderzero/border0-cli/cmd/client/hosts"
 	"github.com/borderzero/border0-cli/cmd/client/ssh"
 	"github.com/borderzero/border0-cli/internal/client"
@@ -71,7 +68,7 @@ var clientCertFetchCmd = &cobra.Command{
 	Short: "Fetch Client certificate",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if crtPath, keyPath, ok := client.IsClientCertValid(); !ok {
-			crtPath, keyPath, _, err := client.FetchCertAndReturnPaths(hostname)
+			crtPath, keyPath, err := client.FetchCertAndReturnPaths(hostname)
 			if err != nil {
 				return err
 			}
@@ -81,75 +78,6 @@ var clientCertFetchCmd = &cobra.Command{
 			fmt.Println("Client certificate file:", crtPath, "and", keyPath)
 		}
 		return nil
-	},
-}
-
-// clientTlsCmd represents the client tls command
-var clientTlsCmd = &cobra.Command{
-	Use:   "tls",
-	Short: "Connect to a border0 TLS protected socket",
-	Run: func(cmd *cobra.Command, args []string) {
-		if hostname == "" {
-			log.Fatalf("error: empty hostname not allowed")
-		}
-
-		//Check for  hostname checking in *.border0-dummy
-		// This may be used by ssh users
-		// if so strip that
-		substr := "(.*).border0-dummy$"
-		r, _ := regexp.Compile(substr)
-		match := r.FindStringSubmatch(hostname)
-		if match != nil {
-			hostname = match[1]
-		}
-
-		cert, key, _, _, port, err := client.GetOrgCert(hostname)
-		if err != nil {
-			log.Fatalf("failed to get certificate: %v", err.Error())
-		}
-
-		certificate := tls.Certificate{
-			Certificate: [][]byte{cert.Raw},
-			PrivateKey:  key,
-		}
-
-		config := tls.Config{Certificates: []tls.Certificate{certificate}, InsecureSkipVerify: true, ServerName: hostname}
-
-		if listener > 0 {
-			l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", listener))
-			if err != nil {
-				log.Fatalln("Error: Unable to start local TLS listener.")
-			}
-
-			log.Print("Waiting for connections...")
-
-			for {
-				lcon, err := l.Accept()
-				if err != nil {
-					log.Fatalf("Listener: Accept Error: %s\n", err)
-				}
-
-				go func() {
-					conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, port), &config)
-					if err != nil {
-						log.Printf("failed to connect: %v", err.Error())
-						return
-					}
-
-					log.Print("Connection established from ", lcon.RemoteAddr())
-					tcp_con_handle(conn, lcon, lcon)
-				}()
-			}
-
-		} else {
-			conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, port), &config)
-			if err != nil {
-				log.Fatalf("failed to connect: %v", err.Error())
-			}
-
-			tcp_con_handle(conn, os.Stdin, os.Stdout)
-		}
-
 	},
 }
 
@@ -398,56 +326,11 @@ func updateDNS(homedir string) (refreshInt int, err error) {
 	return refreshRate, nil
 }
 
-func tcp_con_handle(con net.Conn, in io.Reader, out io.Writer) {
-	chan_to_stdout := stream_copy(con, out)
-	chan_to_remote := stream_copy(in, con)
-
-	select {
-	case <-chan_to_stdout:
-	case <-chan_to_remote:
-	}
-}
-
-// Performs copy operation between streams: os and tcp streams
-func stream_copy(src io.Reader, dst io.Writer) <-chan int {
-	buf := make([]byte, 1024)
-	sync_channel := make(chan int)
-	go func() {
-		defer func() {
-			if con, ok := dst.(net.Conn); ok {
-				con.Close()
-			}
-			sync_channel <- 0 // Notify that processing is finished
-		}()
-		for {
-			var nBytes int
-			var err error
-			nBytes, err = src.Read(buf)
-			if err != nil {
-				if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
-					log.Printf("Read error: %s\n", err)
-				}
-				break
-			}
-			_, err = dst.Write(buf[0:nBytes])
-			if err != nil {
-				log.Fatalf("Write error: %s\n", err)
-			}
-		}
-	}()
-	return sync_channel
-}
-
 func init() {
 	stdlog = log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	errlog = log.New(os.Stderr, "", log.Ldate|log.Ltime)
 
 	rootCmd.AddCommand(clientCmd)
-	clientCmd.AddCommand(clientTlsCmd)
-	clientTlsCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
-	clientTlsCmd.Flags().IntVarP(&port, "port", "p", 0, "Port number")
-	clientTlsCmd.Flags().IntVarP(&listener, "listener", "l", 0, "Listener port number")
-	clientTlsCmd.MarkFlagRequired("host")
 
 	clientCmd.AddCommand(clientCertCmd)
 	clientCertCmd.AddCommand(clientCertFetchCmd)
@@ -468,4 +351,5 @@ func init() {
 	db.AddCommandsTo(clientCmd)
 	hosts.AddCommandsTo(clientCmd)
 	ssh.AddCommandsTo(clientCmd)
+	clientTls.AddCommandsTo(clientCmd)
 }

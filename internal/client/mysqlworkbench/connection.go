@@ -7,7 +7,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-func ConnectionsXML(host string, port int, sslCertPath, sslKeyPath, dbName string) (string, error) {
+func ConnectionsXML(name string, host string, port int, sslCertPath, sslKeyPath, dbName string) (string, error) {
 	id := uuid.NewV4().String()
 	conns := xmlDoc{
 		GrtFormat: "2.0",
@@ -23,7 +23,7 @@ func ConnectionsXML(host string, port int, sslCertPath, sslKeyPath, dbName strin
 					Values: []value{
 						{
 							attrs: attrs{Type: "string", Key: "name"},
-							Data:  host,
+							Data:  name,
 						},
 						{
 							attrs: attrs{Type: "string", Key: "hostIdentifier"},

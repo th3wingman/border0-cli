@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
@@ -154,19 +155,20 @@ var socketCreateCmd = &cobra.Command{
 
 		s := models.Socket{}
 		newSocket := &models.Socket{
-			Name:                  name,
-			Description:           description,
-			ProtectedSocket:       protected,
-			SocketType:            socketType,
-			ProtectedUsername:     username,
-			ProtectedPassword:     password,
-			AllowedEmailAddresses: allowedEmailAddresses,
-			AllowedEmailDomains:   allowedEmailDomains,
-			UpstreamUsername:      upstream_username,
-			UpstreamPassword:      upstream_password,
-			UpstreamHttpHostname:  upstream_http_hostname,
-			UpstreamType:          upstreamType,
-			CloudAuthEnabled:      true,
+			Name:                           name,
+			Description:                    description,
+			ProtectedSocket:                protected,
+			SocketType:                     socketType,
+			ProtectedUsername:              username,
+			ProtectedPassword:              password,
+			AllowedEmailAddresses:          allowedEmailAddresses,
+			AllowedEmailDomains:            allowedEmailDomains,
+			UpstreamUsername:               upstream_username,
+			UpstreamPassword:               upstream_password,
+			UpstreamHttpHostname:           upstream_http_hostname,
+			UpstreamType:                   upstreamType,
+			CloudAuthEnabled:               true,
+			ConnectorAuthenticationEnabled: connectorAuthEnabled,
 		}
 		err = client.WithVersion(version).Request("POST", "socket", &s, newSocket)
 		if err != nil {
@@ -299,6 +301,24 @@ var socketConnectCmd = &cobra.Command{
 
 		userIDStr := *userID
 
+		org := models.Organization{}
+		err = client.Request("GET", "organization", &org, nil)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("Error: %v", err))
+		}
+
+		var caCertPool *x509.CertPool
+		if socket.ConnectorAuthenticationEnabled {
+			caCertPool = x509.NewCertPool()
+			if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
+				log.Fatalf("error: no organization ca certificate found")
+			} else {
+				if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
+					log.Fatalf("error: failed to parse ca certificate")
+				}
+			}
+		}
+
 		// Handle control + C
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
@@ -320,13 +340,7 @@ var socketConnectCmd = &cobra.Command{
 			localssh = false
 		}
 
-		org := models.Organization{}
-		err = client.Request("GET", "organization", &org, nil)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
-
-		err = ssh.SshConnect(userIDStr, socketID, "", port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir)
+		err = ssh.SshConnect(userIDStr, socketID, "", port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir, socket.ConnectorAuthenticationEnabled, caCertPool)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -406,6 +420,7 @@ func init() {
 	socketCreateCmd.Flags().StringVarP(&upstream_http_hostname, "upstream_http_hostname", "", "", "Upstream http hostname")
 	socketCreateCmd.Flags().StringVarP(&upstream_type, "upstream_type", "", "", "Upstream type: http, https for http sockets or mysql, postgres for database sockets")
 	socketCreateCmd.Flags().StringVarP(&socketType, "type", "t", "http", "Socket type: http, https, ssh, tls, database")
+	socketCreateCmd.Flags().BoolVarP(&connectorAuthEnabled, "connector_auth", "c", false, "Enables connector authentication")
 	socketCreateCmd.MarkFlagRequired("name")
 
 	socketDeleteCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
