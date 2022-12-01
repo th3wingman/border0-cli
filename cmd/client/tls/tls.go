@@ -78,20 +78,10 @@ var clientTlsCmd = &cobra.Command{
 				}
 
 				go func() {
-					var conn net.Conn
-					if info.ConnectorAuthenticationEnabled {
-						conn, err = client.ConnectorAuthConnect(fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
-						if err != nil {
-							log.Printf("failed to connect: %v", err.Error())
-							return
-						}
-					} else {
-						conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
-						if err != nil {
-							log.Printf("failed to connect: %v", err.Error())
-							return
-						}
-
+					conn, err := establishConnection(info.ConnectorAuthenticationEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+					if err != nil {
+						log.Printf("failed to connect: %v", err.Error())
+						return
 					}
 
 					log.Print("Connection established from ", lcon.RemoteAddr())
@@ -99,23 +89,26 @@ var clientTlsCmd = &cobra.Command{
 				}()
 			}
 		} else {
-			var conn net.Conn
-			if info.ConnectorAuthenticationEnabled {
-				conn, err = client.ConnectorAuthConnect(fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
-				if err != nil {
-					log.Fatalf("failed to connect: %v", err.Error())
-				}
-			} else {
-				conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
-				if err != nil {
-					log.Fatalf("failed to connect: %v", err.Error())
-				}
+			conn, err := establishConnection(info.ConnectorAuthenticationEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+			if err != nil {
+				log.Fatalf("failed to connect: %v", err.Error())
 			}
+
 			tcp_con_handle(conn, os.Stdin, os.Stdout)
 		}
 
 		return err
 	},
+}
+
+func establishConnection(connectorAuthenticationEnabled bool, addr string, tlsConfig *tls.Config) (conn net.Conn, err error) {
+	if connectorAuthenticationEnabled {
+		conn, err = client.ConnectorAuthConnect(addr, tlsConfig)
+	} else {
+		conn, err = tls.Dial("tcp", addr, tlsConfig)
+	}
+
+	return
 }
 
 func tcp_con_handle(con net.Conn, in io.Reader, out io.Writer) {
