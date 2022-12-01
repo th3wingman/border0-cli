@@ -41,7 +41,7 @@ var clientTlsCmd = &cobra.Command{
 		//Check for  hostname checking in *.border0-dummy
 		// This may be used by ssh users
 		// if so strip that
-		substr := "(.*).border0-dummy$"
+		substr := "(.*)\\.border0\\-dummy$"
 		r, _ := regexp.Compile(substr)
 		match := r.FindStringSubmatch(hostname)
 		if match != nil {
@@ -85,7 +85,7 @@ var clientTlsCmd = &cobra.Command{
 					}
 
 					log.Print("Connection established from ", lcon.RemoteAddr())
-					tcp_con_handle(conn, lcon, lcon)
+					copy(conn, lcon, lcon)
 				}()
 			}
 		} else {
@@ -94,7 +94,7 @@ var clientTlsCmd = &cobra.Command{
 				log.Fatalf("failed to connect: %v", err.Error())
 			}
 
-			tcp_con_handle(conn, os.Stdin, os.Stdout)
+			copy(conn, os.Stdin, os.Stdout)
 		}
 
 		return err
@@ -111,26 +111,26 @@ func establishConnection(connectorAuthenticationEnabled bool, addr string, tlsCo
 	return
 }
 
-func tcp_con_handle(con net.Conn, in io.Reader, out io.Writer) {
-	chan_to_stdout := stream_copy(con, out)
-	chan_to_remote := stream_copy(in, con)
+func copy(con net.Conn, in io.Reader, out io.Writer) {
+	toStdoutChan := copyStream(con, out)
+	toRemoteChan := copyStream(in, con)
 
 	select {
-	case <-chan_to_stdout:
-	case <-chan_to_remote:
+	case <-toStdoutChan:
+	case <-toRemoteChan:
 	}
 }
 
 // Performs copy operation between streams: os and tcp streams
-func stream_copy(src io.Reader, dst io.Writer) <-chan int {
+func copyStream(src io.Reader, dst io.Writer) <-chan int {
 	buf := make([]byte, 1024)
-	sync_channel := make(chan int)
+	syncChannel := make(chan int)
 	go func() {
 		defer func() {
 			if con, ok := dst.(net.Conn); ok {
 				con.Close()
 			}
-			sync_channel <- 0 // Notify that processing is finished
+			syncChannel <- 0 // Notify that processing is finished
 		}()
 		for {
 			var nBytes int
@@ -148,7 +148,7 @@ func stream_copy(src io.Reader, dst io.Writer) <-chan int {
 			}
 		}
 	}()
-	return sync_channel
+	return syncChannel
 }
 
 func AddCommandsTo(client *cobra.Command) {

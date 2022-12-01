@@ -68,8 +68,7 @@ var dbeaverCmd = &cobra.Command{
 
 			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), certificate, 0)
 			if err != nil {
-				fmt.Println("ERROR: could not setup listener:", err)
-				return err
+				return fmt.Errorf("could not start listener: %w", err)
 			}
 
 			hostname = "localhost"

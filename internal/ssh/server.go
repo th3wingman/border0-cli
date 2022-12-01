@@ -50,18 +50,6 @@ func newServer(ca string) *ssh.Server {
 		uid, _ := strconv.ParseUint(user.Uid, 10, 32)
 		gid, _ := strconv.ParseUint(user.Gid, 10, 32)
 
-		// if len(s.Command()) > 0 {
-		// 	if runtime.GOOS == "windows" {
-		// 		cmd.Args = append(cmd.Args, "/C", s.RawCommand())
-		// 	} else {
-		// 		cmd.Args = append(cmd.Args, "-c", s.RawCommand())
-		// 	}
-		// 	} else {
-		// 		if runtime.GOOS != "windows" {
-		// 			cmd.Args = append(cmd.Args"-" + filepath.Base(shell)}
-		// 		}
-		// }
-
 		cmd.Env = []string{
 			"LANG=en_US.UTF-8",
 			"HOME=" + user.HomeDir,
@@ -76,14 +64,12 @@ func newServer(ca string) *ssh.Server {
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		log.Printf("could not generate rsa key: %s", err)
-		return nil
+		log.Fatalf("could not generate rsa key: %s", err)
 	}
 
 	signer, err := gossh.NewSignerFromKey(key)
 	if err != nil {
-		log.Printf("could not generate signer: %s", err)
-		return nil
+		log.Fatalf("could not generate signer: %s", err)
 	}
 
 	requestHandlers := map[string]ssh.RequestHandler{}
