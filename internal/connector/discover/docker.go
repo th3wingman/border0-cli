@@ -142,6 +142,7 @@ func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorG
 	socket.UpstreamPassword = socketData.UpstreamPassword
 
 	socket.PrivateSocket = group.PrivateSocket
+	socket.ConnectorAuthenticationEnabled = group.ConnectorAuthenticationEnabled
 
 	socket.TargetHostname = socketData.Host
 	if socket.TargetHostname == "" || socket.TargetHostname == "<nil>" {
