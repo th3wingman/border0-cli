@@ -68,12 +68,15 @@ var loginCmd = &cobra.Command{
 			deviceIdentifier := fmt.Sprint(claims["identifier"])
 
 			url := fmt.Sprintf("%s/login?device_identifier=%v", http.WebUrl(), url.QueryEscape(deviceIdentifier))
-			fmt.Println(`please login with the link below:`)
-			fmt.Println(url)
+			fmt.Printf("Please navigate to the URL below in order to complete the login process:\n%s\n", url)
 
-			if err := open.Run(url); err != nil {
-				fmt.Printf("failed opening browser. Open the url (%s) in a browser\n", url)
-			}
+			// Try opening the system's browser automatically. The error is ignored because the desired behavior of the
+			// handler is the same regardless of whether opening the browser fails or succeeds -- we still print the URL.
+			// This is desirable because in the event opening the browser succeeds, the customer may still accidentally
+			// close the new tab / browser session, or may want to authenticate in a different browser / session. In the
+			// event that opening the browser fails, the customer may still complete authenticating by navigating to the
+			// URL in a different device.
+			_ = open.Run(url)
 
 			// Polling for token
 			i := 1
