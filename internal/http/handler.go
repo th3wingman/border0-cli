@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	h "net/http"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -108,35 +108,37 @@ func (c *Client) Request(method string, url string, target interface{}, data int
 	jv, _ := json.Marshal(data)
 	body := bytes.NewBuffer(jv)
 
-	req, _ := h.NewRequest(method, fmt.Sprintf("%s/%s", api.APIURL(), url), body)
+	req, err := http.NewRequest(method, fmt.Sprintf("%s/%s", api.APIURL(), url), body)
+	if err != nil {
+		return fmt.Errorf("failed to create new http request object: %s", err)
+	}
 	req.Header.Add("x-access-token", c.token)
 	req.Header.Add("x-client-requested-with", "border0")
 	if c.version != "" {
 		req.Header.Add("x-client-version", c.version)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &h.Client{}
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 401 {
+	if resp.StatusCode == http.StatusUnauthorized {
 		return errors.New("no valid token, Please login")
 	}
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return errors.New("not found")
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
 		responseData, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create object (%d) %v", resp.StatusCode, string(responseData))
 	}
 
-	if resp.StatusCode == 204 {
+	if resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
 
@@ -159,7 +161,7 @@ func RefreshLogin() (string, error) {
 	loginRefresh := models.LoginRefresh{}
 	res := models.TokenForm{}
 
-	err = client.Request("POST", "login/refresh", &res, loginRefresh)
+	err = client.Request(http.MethodPost, "login/refresh", &res, loginRefresh)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +198,7 @@ func MFAChallenge(code string) error {
 	form := models.MfaForm{Code: code}
 	res := models.TokenForm{}
 
-	err = c.Request("POST", "users/mfa_challenge", &res, &form)
+	err = c.Request(http.MethodPost, "users/mfa_challenge", &res, &form)
 	if err != nil {
 		return err
 	}
@@ -222,23 +224,23 @@ func MFAChallenge(code string) error {
 }
 
 func CreateDeviceAuthorization() (string, error) {
-	resp, err := h.Post(api.APIURL()+"/device_authorizations", "application/json", nil)
+	resp, err := http.Post(fmt.Sprintf("%s/device_authorizations", api.APIURL()), "application/json", nil)
 	if err != nil {
 		return "", err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 401 {
+	if resp.StatusCode == http.StatusUnauthorized {
 		return "", ErrUnauthorized
 	}
 
-	if resp.StatusCode == 429 {
+	if resp.StatusCode == http.StatusTooManyRequests {
 		responseData, _ := ioutil.ReadAll(resp.Body)
 		return "", fmt.Errorf("unauthorized %v", string(responseData))
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		var errorMessage ErrorMessage
 		json.NewDecoder(resp.Body).Decode(&errorMessage)
 
@@ -269,18 +271,18 @@ func Login(email, password string) (bool, error) {
 
 	requestReader := bytes.NewReader(buf)
 
-	resp, err := h.Post(api.APIURL()+"/login", "application/json", requestReader)
+	resp, err := http.Post(fmt.Sprintf("%s/login", api.APIURL()), "application/json", requestReader)
 	if err != nil {
 		return false, err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 401 {
+	if resp.StatusCode == http.StatusUnauthorized {
 		return false, errors.New("Login failed")
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return false, errors.New("failed to login")
 	}
 
@@ -330,14 +332,14 @@ func Register(name, email, password, sshkey string) error {
 		return err
 	}
 	requestReader := bytes.NewReader(buf)
-	resp, err := h.Post(api.APIURL()+"/user", "application/json", requestReader)
+	resp, err := http.Post(fmt.Sprintf("%s/user", api.APIURL()), "application/json", requestReader)
 	if err != nil {
 		return err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		responseData, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("failed to register user %d\n%v", resp.StatusCode, string(responseData))
 	}
@@ -345,16 +347,13 @@ func Register(name, email, password, sshkey string) error {
 }
 
 func GetLatestVersion() (string, error) {
-	client := &h.Client{}
-	req, _ := h.NewRequest("GET", download_url+"/latest_version.txt", nil)
-	resp, err := client.Do(req)
+	resp, err := http.Get(fmt.Sprintf("%s/latest_version.txt", download_url))
 	if err != nil {
 		return "", err
 	}
-
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("version check failed. Failed to get latest version (%d)", resp.StatusCode)
 	}
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
@@ -397,17 +396,14 @@ func GetLatestBinary(osname string, osarch string) (string, []byte, error) {
 		return "", nil, fmt.Errorf("unknown OS: %s", osname)
 	}
 
-	client := &h.Client{}
 	// Download checksum
-	req, _ := h.NewRequest("GET", checksum_url, nil)
-	resp, err := client.Do(req)
+	resp, err := http.Get(checksum_url)
 	if err != nil {
 		return "", nil, err
 	}
-
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", nil, fmt.Errorf("failed to get latest checksum version (%d)", resp.StatusCode)
 	}
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
@@ -420,15 +416,13 @@ func GetLatestBinary(osname string, osarch string) (string, []byte, error) {
 	checksum = strings.TrimSuffix(checksum, "\n")
 
 	// Download binary
-	req, _ = h.NewRequest("GET", bin_url, nil)
-	resp, err = client.Do(req)
+	resp, err = http.Get(bin_url)
 	if err != nil {
 		return "", nil, err
 	}
-
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", nil, fmt.Errorf("failed to get latest version (%d)", resp.StatusCode)
 	}
 
@@ -463,17 +457,24 @@ func GetTunnel(socketID string, tunnelID string) (*models.Tunnel, error) {
 		return nil, err
 	}
 
-	client := &h.Client{}
-	req, _ := h.NewRequest("GET", api.APIURL()+"/socket/"+socketID+"/tunnel/"+tunnelID, nil)
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/socket/%s/tunnel/%s", api.APIURL(), socketID, tunnelID),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	req.Header.Add("x-access-token", token)
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get tunnel (%d)", resp.StatusCode)
 	}
 
@@ -485,21 +486,23 @@ func GetTunnel(socketID string, tunnelID string) (*models.Tunnel, error) {
 }
 
 func GetDeviceAuthorization(sessionToken string) (*models.SessionTokenForm, error) {
-	client := &h.Client{}
-	req, _ := h.NewRequest("GET", api.APIURL()+"/device_authorizations", nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/device_authorizations", api.APIURL()), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new http request object: %s", err)
+	}
 	req.Header.Add("x-access-token", sessionToken)
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 401 {
+	if resp.StatusCode == http.StatusUnauthorized {
 		return nil, ErrUnauthorized
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get device_authorization (%d)", resp.StatusCode)
 	}
 
