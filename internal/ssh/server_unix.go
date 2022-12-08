@@ -16,13 +16,16 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
+	"github.com/opencontainers/selinux/go-selinux"
 )
 
 func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 
 	euid := os.Geteuid()
-	loginCmd, _ := exec.LookPath("login")
-
+	var loginCmd string
+	if selinux.EnforceMode() != selinux.Enforcing {
+		loginCmd, _ = exec.LookPath("login")
+	}
 	sysProcAttr := &syscall.SysProcAttr{}
 
 	if len(s.Command()) > 0 {
