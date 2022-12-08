@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/creack/pty"
@@ -33,11 +34,9 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 
 		cmd.Args = append(cmd.Args, "-c", s.RawCommand())
 	} else {
-		if euid == 0 {
-			if loginCmd != "" {
-				cmd.Path = loginCmd
-				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", s.User()}, cmd.Args...)
-			}
+		if euid == 0 && loginCmd != "" {
+			cmd.Path = loginCmd
+			cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", s.User()}, cmd.Args...)
 		} else {
 			sysProcAttr.Credential = &syscall.Credential{
 				Uid:         uint32(uid),
@@ -62,13 +61,17 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 			return
 		}
 
+		done := make(chan bool, 2)
+		go func() {
+			cmd.Wait()
+			done <- true
+		}()
+
 		go func() {
 			for win := range winCh {
 				setWinsize(f, win.Width, win.Height)
 			}
 		}()
-
-		done := make(chan bool, 2)
 
 		go func() {
 			io.Copy(f, s)
@@ -76,12 +79,8 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 		}()
 
 		go func() {
+			time.Sleep(200 * time.Millisecond)
 			io.Copy(s, f)
-			done <- true
-		}()
-
-		go func() {
-			cmd.Wait()
 			done <- true
 		}()
 
