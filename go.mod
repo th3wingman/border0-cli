@@ -20,6 +20,7 @@ require (
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6
+	github.com/opencontainers/selinux v1.10.2
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil/v3 v3.22.10
