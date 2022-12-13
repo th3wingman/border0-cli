@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,26 +43,27 @@ func policysList(cmd *cobra.Command, args []string) {
 		log.Fatalf("Error: %v", err)
 	}
 
-	policiesPath := "policies?org_wide=true"
+	policiesPath := "policies"
 	if perPage != 0 {
 		if page == 0 {
 			page = 1
 		}
-		policiesPath += fmt.Sprintf("&page_size=%d", perPage)
+		policiesPath += fmt.Sprintf("?page_size=%d", perPage)
 		policiesPath += fmt.Sprintf("&page=%d", page)
 	} else {
 		if page != 0 {
-			policiesPath += fmt.Sprintf("&page_size=%d", 100)
+			policiesPath += fmt.Sprintf("?page_size=%d", 100)
 			policiesPath += fmt.Sprintf("&page=%d", page)
 		}
 	}
 
 	if socketID != "" {
-		policiesPath += fmt.Sprintf("&socket_id=%s", socketID)
+		policiesPath += fmt.Sprintf("&org_wide=true&socket_id=%s", socketID)
 	}
 
-	policys := []models.Policy{}
-	err = client.Request("GET", policiesPath, &policys, nil)
+	policies := []models.Policy{}
+	fmt.Println(policiesPath)
+	err = client.Request("GET", policiesPath, &policies, nil)
 	if err != nil {
 		log.Fatalf(fmt.Sprintf("Error: %v", err))
 	}
@@ -73,7 +75,11 @@ func policysList(cmd *cobra.Command, args []string) {
 	t := table.NewWriter()
 	t.AppendHeader(table.Row{"Name", "Description", "# Sockets", "Organization Wide"})
 
-	for _, s := range policys {
+	sort.Slice(policies, func(i, j int) bool {
+		return policies[i].OrgWide && !policies[j].OrgWide
+	})
+
+	for _, s := range policies {
 		var socketIDs string
 
 		for _, p := range s.SocketIDs {
