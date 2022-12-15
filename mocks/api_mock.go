@@ -51,9 +51,9 @@ type API_AttachPolicies_Call struct {
 }
 
 // AttachPolicies is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
-//  - policyUUIDs []string
+//   - ctx context.Context
+//   - socketID string
+//   - policyUUIDs []string
 func (_e *API_Expecter) AttachPolicies(ctx interface{}, socketID interface{}, policyUUIDs interface{}) *API_AttachPolicies_Call {
 	return &API_AttachPolicies_Call{Call: _e.mock.On("AttachPolicies", ctx, socketID, policyUUIDs)}
 }
@@ -99,8 +99,8 @@ type API_CreateSocket_Call struct {
 }
 
 // CreateSocket is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socket *models.Socket
+//   - ctx context.Context
+//   - socket *models.Socket
 func (_e *API_Expecter) CreateSocket(ctx interface{}, socket interface{}) *API_CreateSocket_Call {
 	return &API_CreateSocket_Call{Call: _e.mock.On("CreateSocket", ctx, socket)}
 }
@@ -146,8 +146,8 @@ type API_CreateTunnel_Call struct {
 }
 
 // CreateTunnel is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
+//   - ctx context.Context
+//   - socketID string
 func (_e *API_Expecter) CreateTunnel(ctx interface{}, socketID interface{}) *API_CreateTunnel_Call {
 	return &API_CreateTunnel_Call{Call: _e.mock.On("CreateTunnel", ctx, socketID)}
 }
@@ -184,8 +184,8 @@ type API_DeleteSocket_Call struct {
 }
 
 // DeleteSocket is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
+//   - ctx context.Context
+//   - socketID string
 func (_e *API_Expecter) DeleteSocket(ctx interface{}, socketID interface{}) *API_DeleteSocket_Call {
 	return &API_DeleteSocket_Call{Call: _e.mock.On("DeleteSocket", ctx, socketID)}
 }
@@ -231,9 +231,9 @@ type API_DetachPolicies_Call struct {
 }
 
 // DetachPolicies is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
-//  - policyUUIDs []string
+//   - ctx context.Context
+//   - socketID string
+//   - policyUUIDs []string
 func (_e *API_Expecter) DetachPolicies(ctx interface{}, socketID interface{}, policyUUIDs interface{}) *API_DetachPolicies_Call {
 	return &API_DetachPolicies_Call{Call: _e.mock.On("DetachPolicies", ctx, socketID, policyUUIDs)}
 }
@@ -315,7 +315,7 @@ type API_GetOrganizationInfo_Call struct {
 }
 
 // GetOrganizationInfo is a helper method to define mock.On call
-//  - ctx context.Context
+//   - ctx context.Context
 func (_e *API_Expecter) GetOrganizationInfo(ctx interface{}) *API_GetOrganizationInfo_Call {
 	return &API_GetOrganizationInfo_Call{Call: _e.mock.On("GetOrganizationInfo", ctx)}
 }
@@ -361,7 +361,7 @@ type API_GetPoliciesBySocketID_Call struct {
 }
 
 // GetPoliciesBySocketID is a helper method to define mock.On call
-//  - socketID string
+//   - socketID string
 func (_e *API_Expecter) GetPoliciesBySocketID(socketID interface{}) *API_GetPoliciesBySocketID_Call {
 	return &API_GetPoliciesBySocketID_Call{Call: _e.mock.On("GetPoliciesBySocketID", socketID)}
 }
@@ -407,8 +407,8 @@ type API_GetPolicyByName_Call struct {
 }
 
 // GetPolicyByName is a helper method to define mock.On call
-//  - ctx context.Context
-//  - name string
+//   - ctx context.Context
+//   - name string
 func (_e *API_Expecter) GetPolicyByName(ctx interface{}, name interface{}) *API_GetPolicyByName_Call {
 	return &API_GetPolicyByName_Call{Call: _e.mock.On("GetPolicyByName", ctx, name)}
 }
@@ -454,8 +454,8 @@ type API_GetSocket_Call struct {
 }
 
 // GetSocket is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
+//   - ctx context.Context
+//   - socketID string
 func (_e *API_Expecter) GetSocket(ctx interface{}, socketID interface{}) *API_GetSocket_Call {
 	return &API_GetSocket_Call{Call: _e.mock.On("GetSocket", ctx, socketID)}
 }
@@ -501,7 +501,7 @@ type API_GetSockets_Call struct {
 }
 
 // GetSockets is a helper method to define mock.On call
-//  - ctx context.Context
+//   - ctx context.Context
 func (_e *API_Expecter) GetSockets(ctx interface{}) *API_GetSockets_Call {
 	return &API_GetSockets_Call{Call: _e.mock.On("GetSockets", ctx)}
 }
@@ -547,9 +547,9 @@ type API_GetTunnel_Call struct {
 }
 
 // GetTunnel is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
-//  - tunnelID string
+//   - ctx context.Context
+//   - socketID string
+//   - tunnelID string
 func (_e *API_Expecter) GetTunnel(ctx interface{}, socketID interface{}, tunnelID interface{}) *API_GetTunnel_Call {
 	return &API_GetTunnel_Call{Call: _e.mock.On("GetTunnel", ctx, socketID, tunnelID)}
 }
@@ -595,8 +595,8 @@ type API_Login_Call struct {
 }
 
 // Login is a helper method to define mock.On call
-//  - email string
-//  - password string
+//   - email string
+//   - password string
 func (_e *API_Expecter) Login(email interface{}, password interface{}) *API_Login_Call {
 	return &API_Login_Call{Call: _e.mock.On("Login", email, password)}
 }
@@ -633,9 +633,9 @@ type API_UpdateSocket_Call struct {
 }
 
 // UpdateSocket is a helper method to define mock.On call
-//  - ctx context.Context
-//  - socketID string
-//  - socket models.Socket
+//   - ctx context.Context
+//   - socketID string
+//   - socket models.Socket
 func (_e *API_Expecter) UpdateSocket(ctx interface{}, socketID interface{}, socket interface{}) *API_UpdateSocket_Call {
 	return &API_UpdateSocket_Call{Call: _e.mock.On("UpdateSocket", ctx, socketID, socket)}
 }
