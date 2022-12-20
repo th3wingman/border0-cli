@@ -95,6 +95,7 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 	socket.AllowedEmailAddresses = group.AllowedEmailAddresses
 	socket.AllowedEmailDomains = group.AllowedEmailDomains
 	socket.PrivateSocket = group.PrivateSocket
+	socket.ConnectorAuthenticationEnabled = group.ConnectorAuthenticationEnabled
 
 	socket.UpstreamType = socketData.UpstreamType
 	socket.UpstreamUsername = socketData.UpstreamUsername
