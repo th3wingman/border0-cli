@@ -260,12 +260,14 @@ func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, loc
 
 	if !check || apiSocket.UpstreamHttpHostname != localSocket.UpstreamHttpHostname ||
 		apiSocket.UpstreamUsername != localSocket.UpstreamUsername ||
-		apiSocket.UpstreamType != localSocket.UpstreamType {
+		apiSocket.UpstreamType != localSocket.UpstreamType ||
+		apiSocket.ConnectorAuthenticationEnabled != localSocket.ConnectorAuthenticationEnabled {
 
 		apiSocket.AllowedEmailAddresses = localSocket.AllowedEmailAddresses
 		apiSocket.AllowedEmailDomains = localSocket.AllowedEmailDomains
 		apiSocket.UpstreamHttpHostname = localSocket.UpstreamHttpHostname
 		apiSocket.UpstreamUsername = localSocket.UpstreamUsername
+		apiSocket.ConnectorAuthenticationEnabled = localSocket.ConnectorAuthenticationEnabled
 		apiSocket.UpstreamType = ""
 		apiSocket.CloudAuthEnabled = true
 		apiSocket.Tags = localSocket.Tags

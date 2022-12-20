@@ -131,33 +131,38 @@ func (s *Socket) SetupTypeAndUpstreamTypeByPortOrTags() {
 		s.UpstreamType = "http"
 
 		if s.SocketType != "" {
-			if s.SocketType == "mysql" {
-				s.SocketType = "database"
+			switch s.SocketType {
+			case "mysql":
 				s.UpstreamType = "mysql"
-			}
-			if s.SocketType == "ssh" {
-				s.SocketType = "ssh"
-			}
-			if s.SocketType == "http" {
-				s.SocketType = "http"
-			}
-			if s.SocketType == "https" {
+				s.SocketType = "database"
+			case "postgres":
+				s.UpstreamType = "postgres"
+				s.SocketType = "database"
+			case "database":
+				if s.TargetPort == 3306 {
+					s.UpstreamType = "mysql"
+				}
+				if s.TargetPort == 5432 {
+					s.UpstreamType = "postgres"
+				}
+			case "https":
 				s.SocketType = "http"
 				s.UpstreamType = "https"
 			}
-		} else {
 
-			if s.TargetPort == 3306 {
+		} else {
+			switch s.TargetPort {
+			case 3306:
 				s.SocketType = "database"
 				s.UpstreamType = "mysql"
-			}
-			if s.TargetPort == 22 {
+			case 5432:
+				s.SocketType = "database"
+				s.UpstreamType = "postgres"
+			case 22:
 				s.SocketType = "ssh"
-			}
-			if s.TargetPort == 80 {
+			case 80:
 				s.SocketType = "http"
-			}
-			if s.TargetPort == 443 {
+			case 443:
 				s.SocketType = "http"
 				s.UpstreamType = "https"
 			}
