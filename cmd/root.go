@@ -28,6 +28,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const domainSuffix = "border0.io"
+
 var (
 	version                string
 	date                   string
@@ -69,6 +71,7 @@ var (
 	orgwide                bool
 	runcommand             string
 	connectorAuthEnabled   bool
+	orgCustomDomain        string
 )
 
 // rootCmd represents the base command when called without any subcommands

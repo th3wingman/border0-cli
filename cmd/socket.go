@@ -169,6 +169,7 @@ var socketCreateCmd = &cobra.Command{
 			UpstreamType:                   upstreamType,
 			CloudAuthEnabled:               true,
 			ConnectorAuthenticationEnabled: connectorAuthEnabled,
+			OrgCustomDomain:                orgCustomDomain,
 		}
 		err = client.WithVersion(version).Request("POST", "socket", &s, newSocket)
 		if err != nil {
@@ -421,6 +422,8 @@ func init() {
 	socketCreateCmd.Flags().StringVarP(&upstream_type, "upstream_type", "", "", "Upstream type: http, https for http sockets or mysql, postgres for database sockets")
 	socketCreateCmd.Flags().StringVarP(&socketType, "type", "t", "http", "Socket type: http, https, ssh, tls, database")
 	socketCreateCmd.Flags().BoolVarP(&connectorAuthEnabled, "connector_auth", "c", false, "Enables connector authentication")
+	socketCreateCmd.Flags().StringVarP(&orgCustomDomain, "domain", "o", "", "Use custom domain for socket")
+
 	socketCreateCmd.MarkFlagRequired("name")
 
 	socketDeleteCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")

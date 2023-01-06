@@ -68,6 +68,7 @@ type Socket struct {
 	PrivateSocket                  bool              `json:"private_socket"`
 	PolicyNames                    []string          `json:"policy_names,omitempty"`
 	Policies                       []Policy          `json:"policies,omitempty"`
+	OrgCustomDomain                string            `json:"org_custom_domain,omitempty"`
 
 	TargetHostname string         `json:"-"`
 	TargetPort     int            `json:"-"`
