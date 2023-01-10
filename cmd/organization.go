@@ -3,10 +3,11 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
-	"github.com/borderzero/border0-cli/internal/http"
+	border0_http "github.com/borderzero/border0-cli/internal/http"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 )
@@ -23,13 +24,13 @@ var organizationShowCmd = &cobra.Command{
 	Short: "show organization info",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		client, err := http.NewClient()
+		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 
 		org := models.Organization{}
-		err = client.Request("GET", "organization", &org, nil)
+		err = client.Request(http.MethodGet, "organization", &org, nil)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -56,13 +57,13 @@ var domainListCmd = &cobra.Command{
 	Short: "list organization domains",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		client, err := http.NewClient()
+		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 
 		domains := []models.Domain{}
-		err = client.Request("GET", "organizations/customdomains", &domains, nil)
+		err = client.Request(http.MethodGet, "organizations/customdomains", &domains, nil)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -90,7 +91,7 @@ var domainAddCmd = &cobra.Command{
 	Args:  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 	Run: func(cmd *cobra.Command, args []string) {
 
-		client, err := http.NewClient()
+		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -99,7 +100,7 @@ var domainAddCmd = &cobra.Command{
 			Domain: args[0],
 		}
 
-		err = client.Request("POST", "organizations/customdomains", &domain, domain)
+		err = client.Request(http.MethodPost, "organizations/customdomains", &domain, domain)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -123,7 +124,7 @@ var domainRemoveCmd = &cobra.Command{
 	ValidArgsFunction: autocompleteDomain,
 	Run: func(cmd *cobra.Command, args []string) {
 
-		client, err := http.NewClient()
+		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -132,7 +133,7 @@ var domainRemoveCmd = &cobra.Command{
 			Domain: args[0],
 		}
 
-		err = client.Request("DELETE", "organizations/customdomains", &domain, domain)
+		err = client.Request(http.MethodDelete, "organizations/customdomains", &domain, domain)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -148,7 +149,7 @@ var domainUpdateCmd = &cobra.Command{
 	ValidArgsFunction: autocompleteDomain,
 	Run: func(cmd *cobra.Command, args []string) {
 
-		client, err := http.NewClient()
+		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -158,7 +159,7 @@ var domainUpdateCmd = &cobra.Command{
 			Default: defaultDomain,
 		}
 
-		err = client.Request("PUT", "organizations/customdomains", &domain, domain)
+		err = client.Request(http.MethodPut, "organizations/customdomains", &domain, domain)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -178,13 +179,13 @@ var domainUpdateCmd = &cobra.Command{
 func autocompleteDomain(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var domainNames []string
 
-	client, err := http.NewClient()
+	client, err := border0_http.NewClient()
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
 	domains := []models.Domain{}
-	err = client.Request("GET", "organizations/customdomains", &domains, nil)
+	err = client.Request(http.MethodGet, "organizations/customdomains", &domains, nil)
 	if err != nil {
 		log.Fatalf(fmt.Sprintf("Error: %v", err))
 	}
