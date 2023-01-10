@@ -64,13 +64,13 @@ var listOrgs = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"ID", "Name", "Current"})
+		t.AppendHeader(table.Row{"Name", "Subdomain", "Current"})
 
 		for _, s := range orgs {
 			if s.ID == account.Organization.ID {
-				t.AppendRow(table.Row{s.ID, s.Name, "Yes"})
+				t.AppendRow(table.Row{s.Name, s.Subdomain + "." + domainSuffix, "Yes"})
 			} else {
-				t.AppendRow(table.Row{s.ID, s.Name, "No"})
+				t.AppendRow(table.Row{s.Name, s.Subdomain + "." + domainSuffix, "No"})
 			}
 
 		}
