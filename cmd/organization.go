@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/borderzero/border0-cli/cmd/idp"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	border0_http "github.com/borderzero/border0-cli/internal/http"
 	"github.com/jedib0t/go-pretty/table"
@@ -202,6 +203,7 @@ func autocompleteDomain(cmd *cobra.Command, args []string, toComplete string) ([
 func init() {
 	organizationCmd.AddCommand(organizationShowCmd)
 	organizationCmd.AddCommand(domainCmd)
+	organizationCmd.AddCommand(idp.GetIDPCmdRoot())
 	domainCmd.AddCommand(domainListCmd)
 	domainCmd.AddCommand(domainAddCmd)
 	domainCmd.AddCommand(domainRemoveCmd)

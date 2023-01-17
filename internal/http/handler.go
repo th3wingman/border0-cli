@@ -134,8 +134,25 @@ func (c *Client) Request(method string, url string, target interface{}, data int
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-		responseData, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create object (%d) %v", resp.StatusCode, string(responseData))
+		responseData, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			// return just status code if failed to read response body
+			return fmt.Errorf("api returned a non 2xx status code (%d)", resp.StatusCode)
+		}
+
+		type baseError struct {
+			ErrorMessage string `json:"error_message,omitempty"`
+			StatusCode   int    `json:"status_code,omitempty"`
+		}
+
+		var errorResponse baseError
+		if err = json.Unmarshal(responseData, &errorResponse); err != nil {
+			// return status code and raw response (as string) if failed to decode to JSON object
+			return fmt.Errorf("api returned a non 2xx status code (%d) with body: %s", resp.StatusCode, string(responseData))
+		}
+
+		// return status code and api error message if decoding to baseError struct succeeded
+		return fmt.Errorf("api returned a non 2xx status code (%d) with error message: %s", resp.StatusCode, errorResponse.ErrorMessage)
 	}
 
 	if resp.StatusCode == http.StatusNoContent {
