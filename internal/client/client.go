@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -70,7 +69,7 @@ func MTLSLogin(hostname string) (string, jwt.MapClaims, error) {
 		}
 	} else {
 		if _, err := os.Stat(tokenFile); err == nil {
-			content, _ := ioutil.ReadFile(tokenFile)
+			content, _ := os.ReadFile(tokenFile)
 			tokenString := strings.TrimRight(string(content), "\n")
 
 			if CheckIfTokenIsExpired(tokenString) {
@@ -159,7 +158,7 @@ func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, crt
 		return
 	}
 
-	keyPEM, err := ioutil.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		err = fmt.Errorf("error: failed to read key file : %w", err)
 		return
@@ -183,7 +182,7 @@ func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, crt
 		return
 	}
 
-	certPEM, err := ioutil.ReadFile(crtPath)
+	certPEM, err := os.ReadFile(crtPath)
 	if err != nil {
 		err = fmt.Errorf("error: failed to read certificate file : %w", err)
 		return
@@ -223,12 +222,12 @@ func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyP
 	crtPath = filepath.Join(dotDir, socketDNS+".crt")
 	keyPath = filepath.Join(dotDir, socketDNS+".key")
 
-	if err = ioutil.WriteFile(keyPath, []byte(cert.PrivateKey), 0600); err != nil {
+	if err = os.WriteFile(keyPath, []byte(cert.PrivateKey), 0600); err != nil {
 		err = fmt.Errorf("error: failed to write key file : %w", err)
 		return
 	}
 
-	if err = ioutil.WriteFile(crtPath, []byte(cert.Certificate), 0600); err != nil {
+	if err = os.WriteFile(crtPath, []byte(cert.Certificate), 0600); err != nil {
 		err = fmt.Errorf("error: failed to write certificate file : %w", err)
 		return
 	}
@@ -251,7 +250,7 @@ func OrgIDFromToken() (orgID string) {
 	if _, err := os.Stat(tokenfile); os.IsNotExist(err) {
 		return
 	} else {
-		content, _ := ioutil.ReadFile(tokenfile)
+		content, _ := os.ReadFile(tokenfile)
 		if err == nil {
 			tokenString := strings.TrimRight(string(content), "\n")
 			jwtToken, _ := jwt.Parse(tokenString, nil)
@@ -506,7 +505,7 @@ func validSshCert(certFile string, keyFile string) *SSHSignResponse {
 		return nil
 	}
 
-	sshCert, err := ioutil.ReadFile(certFile)
+	sshCert, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil
 	}
@@ -515,7 +514,7 @@ func validSshCert(certFile string, keyFile string) *SSHSignResponse {
 		return nil
 	}
 
-	sshKeyData, err := ioutil.ReadFile(keyFile)
+	sshKeyData, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil
 	}
@@ -587,7 +586,7 @@ func GenSSHKey(token, orgID, hostname string) (*SSHSignResponse, error) {
 
 	// write key
 	keyPem := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: parsed})
-	err = ioutil.WriteFile(sshKeyPath, keyPem, 0600)
+	err = os.WriteFile(sshKeyPath, keyPem, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write ssh key: %v", err)
 	}
@@ -628,7 +627,7 @@ func GenSSHKey(token, orgID, hostname string) (*SSHSignResponse, error) {
 		log.Fatalln("error: failed to decode certificate")
 	}
 
-	err = ioutil.WriteFile(sshCertPath, []byte(cert.SSHCertSigned), 0600)
+	err = os.WriteFile(sshCertPath, []byte(cert.SSHCertSigned), 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write ssh key: %w", err)
 	}
@@ -710,53 +709,14 @@ func Zeroing(buf []byte) {
 	}
 }
 
-func DownloadCertificateChain(hostname string) (certChainPath string, cleanup func(), err error) {
-	var cleanupFuncs []func() error
-	cleanup = func() {
-		for _, fn := range cleanupFuncs {
-			fn()
-		}
-	}
-
+func DownloadCertificateChain(hostname string) (certChainPath string, err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		err = fmt.Errorf("failed to get home dir: %w", err)
 		return
 	}
+
 	certChainPath = filepath.Join(home, ".border0", fmt.Sprintf("%s.chain.crt", hostname))
-	_ = os.Remove(certChainPath)
-
-	file, err := os.OpenFile(certChainPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		err = fmt.Errorf("failed to open file [%s]: %w", certChainPath, err)
-		return
-	}
-	cleanupFuncs = append(cleanupFuncs, file.Close)
-
-	addr := fmt.Sprintf("%s:443", hostname)
-	conn, err := tls.Dial("tcp", addr, &tls.Config{})
-	if err != nil {
-		err = fmt.Errorf("failed to connect to tcp address [%s]: %w", addr, err)
-		return
-	}
-	cleanupFuncs = append(cleanupFuncs, conn.Close)
-
-	// should have 3 certs
-	// - cert for *.border0.io
-	// - intermediate cert issued by "ISRG Root X1" for "Let's Encrypt"
-	// - cross-signed root cert issued by "DST Root CA X3" for "ISRG Root X1"
-	certs := conn.ConnectionState().PeerCertificates
-	for _, cert := range certs {
-		if cert.IsCA && cert.MaxPathLen == -1 {
-			// need to skip the root CA cert, because it's cross-signed
-			// and we need to the self-signed root CA cert in the chain
-			continue
-		}
-		pem.Encode(file, &pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Raw,
-		})
-	}
 
 	// now let's download the self-signed root CA cert from letsencrypt.org
 	httpClient := http.Client{
@@ -771,11 +731,16 @@ func DownloadCertificateChain(hostname string) (certChainPath string, cleanup fu
 		err = fmt.Errorf("failed to download root CA cert: %w", err)
 		return
 	}
-	cleanupFuncs = append(cleanupFuncs, resp.Body.Close)
+	defer resp.Body.Close()
 
-	_, err = io.Copy(file, resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("failed to append root CA cert to the certificate chain file: %w", err)
+		err = fmt.Errorf("failed to download root CA cert: %w", err)
+		return
+	}
+
+	if err = os.WriteFile(certChainPath, bodyBytes, 0600); err != nil {
+		err = fmt.Errorf("failed to write root CA cert to the certificate file: %w", err)
 		return
 	}
 	return
