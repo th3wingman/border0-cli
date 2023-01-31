@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/user"
@@ -60,7 +60,7 @@ func Login(org string) (token string, claims jwt.MapClaims, err error) {
 		return
 	}
 
-	bodyByt, err := ioutil.ReadAll(resp.Body)
+	bodyByt, err := io.ReadAll(resp.Body)
 	if err != nil {
 		err = fmt.Errorf("client device authorization response body could not be read: %s", err)
 		return
@@ -140,9 +140,9 @@ func pollForToken(
 ) (string, error) {
 	var token string
 
-	errUnauthorizedForOrg := fmt.Errorf("Authenticated user is not authorized for organization \"%s\"", org)
-	errUnexpectedStatus := errors.New("Unexpected client device authorization status")
-	errStillWaiting := errors.New("Client device authorization flow not (yet) completed")
+	errUnauthorizedForOrg := fmt.Errorf("authenticated user is not authorized for organization \"%s\"", org)
+	errUnexpectedStatus := errors.New("unexpected client device authorization status")
+	errStillWaiting := errors.New("client device authorization flow not (yet) completed")
 
 	retryFn := func() error {
 		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s%s", api.APIURL(), tokenEndpoint), nil)
@@ -160,7 +160,7 @@ func pollForToken(
 			return errors.New("non 200 back from api")
 		}
 
-		bodyByt, err := ioutil.ReadAll(resp.Body)
+		bodyByt, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("could not read response body for device auth: %s", err)
 		}
@@ -194,7 +194,7 @@ func pollForToken(
 	)
 	if err != nil {
 		if errors.Is(err, errUnauthorizedForOrg) {
-			fmt.Println(fmt.Sprintf("Error: %s", err))
+			fmt.Printf("Error: %s\n", err)
 			os.Exit(1)
 		}
 		if errors.Is(err, errUnexpectedStatus) {
@@ -202,7 +202,7 @@ func pollForToken(
 			os.Exit(1)
 		}
 		if errors.Is(err, errStillWaiting) {
-			fmt.Println(fmt.Sprintf("Error: Device authorization flow timed out after %d seconds", pollIntervalSeconds*pollIntervalMaxAttempts))
+			fmt.Printf("Error: Device authorization flow timed out after %d seconds\n", pollIntervalSeconds*pollIntervalMaxAttempts)
 			os.Exit(1)
 		}
 
@@ -274,7 +274,7 @@ func GetClientToken(homeDir string) (string, error) {
 	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
 		return "", fmt.Errorf("please login first (no token found in " + tokenFile + ")")
 	}
-	content, err := ioutil.ReadFile(tokenFile)
+	content, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return "", err
 	}
