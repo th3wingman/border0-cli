@@ -12,6 +12,7 @@ import (
 var (
 	// flags
 	idpUpdateGoogleWorkspaceName         string
+	idpUpdateGoogleWorkspaceDisplayName  string
 	idpUpdateGoogleWorkspaceLogoURL      string
 	idpUpdateGoogleWorkspaceDomain       string
 	idpUpdateGoogleWorkspaceClientID     string
@@ -40,9 +41,10 @@ func getIDPUpdateGoogleWorkspaceCmdHandler() func(cmd *cobra.Command, args []str
 
 		reqBody := identityProvider{
 			identityProviderSummary: identityProviderSummary{
-				Name:    &idpUpdateGoogleWorkspaceName,
-				Type:    &identityProviderTypeGoogleWorkspace,
-				LogoURL: logo,
+				Name:        &idpUpdateGoogleWorkspaceName,
+				DisplayName: &idpUpdateGoogleWorkspaceDisplayName,
+				Type:        &identityProviderTypeGoogleWorkspace,
+				LogoURL:     logo,
 			},
 			GoogleWorkspaceIdentityProviderConfiguration: &googleConfig{
 				GoogleWorkspaceDomain: &idpUpdateGoogleWorkspaceDomain,

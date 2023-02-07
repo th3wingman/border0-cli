@@ -12,6 +12,7 @@ import (
 var (
 	// flags
 	idpAddOIDCName         string
+	idpAddOIDCDisplayName  string
 	idpAddOIDCLogoURL      string
 	idpAddOIDCDiscoveryURL string
 	idpAddOIDCClientID     string
@@ -40,9 +41,10 @@ func getIDPAddOIDCCmdHandler() func(cmd *cobra.Command, args []string) {
 
 		reqBody := identityProvider{
 			identityProviderSummary: identityProviderSummary{
-				Name:    &idpAddOIDCName,
-				Type:    &identityProviderTypeOIDC,
-				LogoURL: &idpAddOIDCLogoURL,
+				Name:        &idpAddOIDCName,
+				DisplayName: &idpAddOIDCDisplayName,
+				Type:        &identityProviderTypeOIDC,
+				LogoURL:     &idpAddOIDCLogoURL,
 			},
 			OIDCIdentityProviderConfiguation: &oidcConfig{
 				DiscoveryURL: &idpAddOIDCDiscoveryURL,

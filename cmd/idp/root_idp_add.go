@@ -17,6 +17,7 @@ func getIDPAddCmdRoot() *cobra.Command {
 		addIdentityProviderCmdRoot,
 		getIDPAddOIDCCmd(),
 		flag{name: "name", shorthand: "n", target: &idpAddOIDCName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpAddOIDCDisplayName, kind: reflect.String, value: "", usage: "the display name for the new identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpAddOIDCLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "discovery-url", shorthand: "d", target: &idpAddOIDCDiscoveryURL, kind: reflect.String, value: "", usage: "the url where the oidc provider's discovery document is hosted", require: true},
@@ -30,6 +31,7 @@ func getIDPAddCmdRoot() *cobra.Command {
 		addIdentityProviderCmdRoot,
 		getIDPAddSAMLCmd(),
 		flag{name: "name", shorthand: "n", target: &idpAddSAMLName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpAddSAMLDisplayName, kind: reflect.String, value: "", usage: "the display name for the new identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpAddSAMLLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "sign-in-url", shorthand: "u", target: &idpAddSAMLSignInURL, kind: reflect.String, value: "", usage: "sign-in URL for saml provider", require: true},
@@ -46,6 +48,7 @@ func getIDPAddCmdRoot() *cobra.Command {
 		addIdentityProviderCmdRoot,
 		getIDPAddOktaWorkforceCmd(),
 		flag{name: "name", shorthand: "n", target: &idpAddOktaWorkforceName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpAddOktaWorkforceDisplayName, kind: reflect.String, value: "", usage: "the display name for the new identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpAddOktaWorkforceLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "okta-domain", shorthand: "d", target: &idpAddOktaWorkforceDomain, kind: reflect.String, value: "", usage: "the domain of your okta workforce account e.g. \"${namespace}.okta.com\"", require: true},
@@ -58,6 +61,7 @@ func getIDPAddCmdRoot() *cobra.Command {
 		addIdentityProviderCmdRoot,
 		getIDPAddGoogleWorkspaceCmd(),
 		flag{name: "name", shorthand: "n", target: &idpAddGoogleWorkspaceName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpAddGoogleWorkspaceDisplayName, kind: reflect.String, value: "", usage: "the display name for the new identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpAddGoogleWorkspaceLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "workspace-domain", shorthand: "d", target: &idpAddGoogleWorkspaceDomain, kind: reflect.String, value: "", usage: "the domain of your google workspace account", require: true},

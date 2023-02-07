@@ -58,7 +58,7 @@ func getIDPListCmdHandler() func(cmd *cobra.Command, args []string) {
 
 		// init custom providers table
 		custom := table.NewWriter()
-		custom.AppendHeader(table.Row{"Name", "Type", "Enabled"})
+		custom.AppendHeader(table.Row{"Name", "DisplayName", "Type", "Enabled"})
 
 		for _, provider := range resp.List {
 			if provider.Enabled != nil && provider.LogoURL != nil && provider.Name != nil && provider.Type != nil {
@@ -66,10 +66,10 @@ func getIDPListCmdHandler() func(cmd *cobra.Command, args []string) {
 					global.AppendRow(table.Row{*provider.Name, *provider.Enabled})
 					continue
 				}
-				custom.AppendRow(table.Row{*provider.Name, *provider.Type, *provider.Enabled})
+				custom.AppendRow(table.Row{*provider.Name, *provider.DisplayName, *provider.Type, *provider.Enabled})
 			} else {
 				// better than panic or empty fields
-				log.Println("WARNING: Some fields for an identity provider were unexpectedly empty, contact support@border0.com")
+				log.Println(fmt.Sprintf("%s Some fields for an identity provider were unexpectedly empty, contact support@border0.com", warningBanner))
 			}
 		}
 

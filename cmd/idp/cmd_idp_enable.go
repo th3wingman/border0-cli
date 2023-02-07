@@ -32,7 +32,7 @@ func getIDPEnableCmdHandler() func(cmd *cobra.Command, args []string) {
 		}
 
 		if (idpEnableName != "" && (idpEnableGoogle || idpEnableGithub)) ||
-			(idpDisableName == "" && !idpDisableGoogle && !idpDisableGithub) ||
+			(idpEnableName == "" && !idpEnableGoogle && !idpEnableGithub) ||
 			(idpEnableGoogle && idpEnableGithub) {
 			cmd.Help()
 			util.FailPretty("one (and only one) of --google, --github, or --name must set")
