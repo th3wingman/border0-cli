@@ -50,10 +50,11 @@ type samlConfig struct {
 }
 
 type identityProviderSummary struct {
-	Name    *string `json:"name,omitempty"`
-	Type    *string `json:"type,omitempty"`
-	Enabled *bool   `json:"enabled,omitempty"`
-	LogoURL *string `json:"logo_url,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	DisplayName *string `json:"display_name,omitempty"`
+	Type        *string `json:"type,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+	LogoURL     *string `json:"logo_url,omitempty"`
 }
 
 type identityProvider struct {

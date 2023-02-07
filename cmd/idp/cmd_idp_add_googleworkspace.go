@@ -12,6 +12,7 @@ import (
 var (
 	// flags
 	idpAddGoogleWorkspaceName         string
+	idpAddGoogleWorkspaceDisplayName  string
 	idpAddGoogleWorkspaceLogoURL      string
 	idpAddGoogleWorkspaceDomain       string
 	idpAddGoogleWorkspaceClientID     string
@@ -35,9 +36,10 @@ func getIDPAddGoogleWorkspaceCmdHandler() func(cmd *cobra.Command, args []string
 
 		reqBody := identityProvider{
 			identityProviderSummary: identityProviderSummary{
-				Name:    &idpAddGoogleWorkspaceName,
-				Type:    &identityProviderTypeGoogleWorkspace,
-				LogoURL: &idpAddGoogleWorkspaceLogoURL,
+				Name:        &idpAddGoogleWorkspaceName,
+				DisplayName: &idpAddGoogleWorkspaceDisplayName,
+				Type:        &identityProviderTypeGoogleWorkspace,
+				LogoURL:     &idpAddGoogleWorkspaceLogoURL,
 			},
 			GoogleWorkspaceIdentityProviderConfiguration: &googleConfig{
 				GoogleWorkspaceDomain: &idpAddGoogleWorkspaceDomain,

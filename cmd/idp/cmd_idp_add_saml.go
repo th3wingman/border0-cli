@@ -13,6 +13,7 @@ import (
 var (
 	// flags
 	idpAddSAMLName                          string
+	idpAddSAMLDisplayName                   string
 	idpAddSAMLLogoURL                       string
 	idpAddSAMLSignInURL                     string
 	idpAddSAMLCertificateFilename           string
@@ -55,9 +56,10 @@ func getIDPAddSAMLCmdHandler() func(cmd *cobra.Command, args []string) {
 
 		reqBody := identityProvider{
 			identityProviderSummary: identityProviderSummary{
-				Name:    &idpAddSAMLName,
-				Type:    &identityProviderTypeSAML,
-				LogoURL: &idpAddSAMLLogoURL,
+				Name:        &idpAddSAMLName,
+				DisplayName: &idpAddSAMLDisplayName,
+				Type:        &identityProviderTypeSAML,
+				LogoURL:     &idpAddSAMLLogoURL,
 			},
 			SAMLIdentityProviderConfiguration: &samlConfig{
 				SignInURL:                     &idpAddSAMLSignInURL,

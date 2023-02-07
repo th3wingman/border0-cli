@@ -52,6 +52,9 @@ func getIDPShowCmdHandler() func(cmd *cobra.Command, args []string) {
 		if resp.Name != nil {
 			tb.AppendRow(table.Row{"Name", *resp.Name})
 		}
+		if resp.DisplayName != nil {
+			tb.AppendRow(table.Row{"Display Name", *resp.DisplayName})
+		}
 		if resp.Type != nil {
 			tb.AppendRow(table.Row{"Type", *resp.Type})
 		}

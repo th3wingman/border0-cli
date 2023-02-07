@@ -12,6 +12,7 @@ import (
 var (
 	// flags
 	idpAddOktaWorkforceName         string
+	idpAddOktaWorkforceDisplayName  string
 	idpAddOktaWorkforceLogoURL      string
 	idpAddOktaWorkforceDomain       string
 	idpAddOktaWorkforceClientID     string
@@ -35,9 +36,10 @@ func getIDPAddOktaWorkforceCmdHandler() func(cmd *cobra.Command, args []string) 
 
 		reqBody := identityProvider{
 			identityProviderSummary: identityProviderSummary{
-				Name:    &idpAddOktaWorkforceName,
-				Type:    &identityProviderTypeOktaWorkforce,
-				LogoURL: &idpAddOktaWorkforceLogoURL,
+				Name:        &idpAddOktaWorkforceName,
+				DisplayName: &idpAddOktaWorkforceDisplayName,
+				Type:        &identityProviderTypeOktaWorkforce,
+				LogoURL:     &idpAddOktaWorkforceLogoURL,
 			},
 			OktaWorkforceIdentityProviderConfiguration: &oktaConfig{
 				OktaDomain:   &idpAddOktaWorkforceDomain,

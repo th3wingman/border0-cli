@@ -12,6 +12,7 @@ import (
 var (
 	// flags
 	idpUpdateOIDCName         string
+	idpUpdateOIDCDisplayName  string
 	idpUpdateOIDCLogoURL      string
 	idpUpdateOIDCDiscoveryURL string
 	idpUpdateOIDCClientID     string
@@ -41,9 +42,10 @@ func getIDPUpdateOIDCCmdHandler() func(cmd *cobra.Command, args []string) {
 
 		reqBody := identityProvider{
 			identityProviderSummary: identityProviderSummary{
-				Name:    &idpUpdateOIDCName,
-				Type:    &identityProviderTypeOIDC,
-				LogoURL: logo,
+				Name:        &idpUpdateOIDCName,
+				DisplayName: &idpUpdateOIDCDisplayName,
+				Type:        &identityProviderTypeOIDC,
+				LogoURL:     logo,
 			},
 			OIDCIdentityProviderConfiguation: &oidcConfig{
 				DiscoveryURL: &idpUpdateOIDCDiscoveryURL,

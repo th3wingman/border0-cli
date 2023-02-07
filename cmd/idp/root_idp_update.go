@@ -16,7 +16,8 @@ func getIDPUpdateCmdRoot() *cobra.Command {
 	addCommandWithFlags(
 		addIdentityProviderCmdRoot,
 		getIDPUpdateOIDCCmd(),
-		flag{name: "name", shorthand: "n", target: &idpUpdateOIDCName, kind: reflect.String, value: "", usage: "the name of the identity provider to add", require: true},
+		flag{name: "name", shorthand: "n", target: &idpUpdateOIDCName, kind: reflect.String, value: "", usage: "the name of the identity provider to update", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpUpdateOIDCDisplayName, kind: reflect.String, value: "", usage: "the display name for the identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpUpdateOIDCLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "discovery-url", shorthand: "d", target: &idpUpdateOIDCDiscoveryURL, kind: reflect.String, value: "", usage: "the url where the oidc provider's discovery document is hosted", require: false},
@@ -29,7 +30,8 @@ func getIDPUpdateCmdRoot() *cobra.Command {
 	addCommandWithFlags(
 		addIdentityProviderCmdRoot,
 		getIDPUpdateSAMLCmd(),
-		flag{name: "name", shorthand: "n", target: &idpUpdateSAMLName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "name", shorthand: "n", target: &idpUpdateSAMLName, kind: reflect.String, value: "", usage: "the name of the identity provider to update", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpUpdateSAMLDisplayName, kind: reflect.String, value: "", usage: "the display name for the identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpUpdateSAMLLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "sign-in-url", shorthand: "u", target: &idpUpdateSAMLSignInURL, kind: reflect.String, value: "", usage: "sign-in URL for saml provider", require: false},
@@ -45,7 +47,8 @@ func getIDPUpdateCmdRoot() *cobra.Command {
 	addCommandWithFlags(
 		addIdentityProviderCmdRoot,
 		getUpdateOktaWorkforceIdentityProviderCmd(),
-		flag{name: "name", shorthand: "n", target: &idpUpdateOktaWorkforceName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "name", shorthand: "n", target: &idpUpdateOktaWorkforceName, kind: reflect.String, value: "", usage: "the name of the identity provider to update", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpUpdateOktaWorkforceDisplayName, kind: reflect.String, value: "", usage: "the display name for the identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpUpdateOktaWorkforceLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "okta-domain", shorthand: "d", target: &idpUpdateOktaWorkforceDomain, kind: reflect.String, value: "", usage: "the domain of your okta workforce account e.g. \"${namespace}.okta.com\"", require: false},
@@ -57,7 +60,8 @@ func getIDPUpdateCmdRoot() *cobra.Command {
 	addCommandWithFlags(
 		addIdentityProviderCmdRoot,
 		getUpdateGoogleWorkspaceIdentityProviderCmd(),
-		flag{name: "name", shorthand: "n", target: &idpUpdateGoogleWorkspaceName, kind: reflect.String, value: "", usage: "the name for the new identity provider", require: true},
+		flag{name: "name", shorthand: "n", target: &idpUpdateGoogleWorkspaceName, kind: reflect.String, value: "", usage: "the name of the identity provider to update", require: true},
+		flag{name: "display-name", shorthand: "m", target: &idpUpdateGoogleWorkspaceDisplayName, kind: reflect.String, value: "", usage: "the display name for the identity provider", require: false},
 		flag{name: "logo-url", shorthand: "l", target: &idpUpdateGoogleWorkspaceLogoURL, kind: reflect.String, value: "", usage: "the url of the logo to be displayed on the organization's login page for the identity provider", require: false},
 
 		flag{name: "workspace-domain", shorthand: "d", target: &idpUpdateGoogleWorkspaceDomain, kind: reflect.String, value: "", usage: "the domain of your google workspace account", require: false},
