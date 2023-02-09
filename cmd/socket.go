@@ -28,6 +28,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/ssh"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 )
@@ -142,10 +143,42 @@ var socketCreateCmd = &cobra.Command{
 			}
 		}
 
+		var upstream_cert, upstream_key, upstream_ca *string
 		if socketType == "database" {
 			if upstreamType != "mysql" && upstreamType != "postgres" && upstreamType != "" {
 				log.Fatalf("error: --upstream_type should be mysql or postgres, defaults to mysql")
 			}
+
+			if upstream_cert_file != "" {
+				byt, err := os.ReadFile(upstream_cert_file)
+				if err != nil {
+					util.FailPretty("failed to read the upstream certificate file: %s", err)
+				}
+
+				cert := string(byt)
+				upstream_cert = &cert
+			}
+
+			if upstream_key_file != "" {
+				byt, err := os.ReadFile(upstream_key_file)
+				if err != nil {
+					util.FailPretty("failed to read the upstream key file: %s", err)
+				}
+
+				key := string(byt)
+				upstream_key = &key
+			}
+
+			if upstream_ca_file != "" {
+				byt, err := os.ReadFile(upstream_ca_file)
+				if err != nil {
+					util.FailPretty("failed to read the upstream ca file: %s", err)
+				}
+
+				ca := string(byt)
+				upstream_ca = &ca
+			}
+
 		}
 
 		client, err := http.NewClient()
@@ -170,6 +203,9 @@ var socketCreateCmd = &cobra.Command{
 			CloudAuthEnabled:               true,
 			ConnectorAuthenticationEnabled: connectorAuthEnabled,
 			OrgCustomDomain:                orgCustomDomain,
+			UpstreamCert:                   upstream_cert,
+			UpstreamKey:                    upstream_key,
+			UpstreamCa:                     upstream_ca,
 		}
 		err = client.WithVersion(version).Request("POST", "socket", &s, newSocket)
 		if err != nil {
@@ -423,6 +459,9 @@ func init() {
 	socketCreateCmd.Flags().StringVarP(&socketType, "type", "t", "http", "Socket type: http, https, ssh, tls, database")
 	socketCreateCmd.Flags().BoolVarP(&connectorAuthEnabled, "connector_auth", "c", false, "Enables connector authentication")
 	socketCreateCmd.Flags().StringVarP(&orgCustomDomain, "domain", "o", "", "Use custom domain for socket")
+	socketCreateCmd.Flags().StringVarP(&upstream_cert_file, "upstream_certificate_filename", "f", "", "path to file from where to read the upstream client certificate")
+	socketCreateCmd.Flags().StringVarP(&upstream_key_file, "upstream_key_filename", "y", "", "path to file from where to read the upstream client key")
+	socketCreateCmd.Flags().StringVarP(&upstream_ca_file, "upstream_ca_filename", "a", "", "path to file from where to read the upstream ca certificate")
 
 	socketCreateCmd.MarkFlagRequired("name")
 

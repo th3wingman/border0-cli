@@ -3,7 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -337,7 +337,7 @@ var policyEditCmd = &cobra.Command{
 				return
 			}
 			defer jsonFile.Close()
-			data, err = ioutil.ReadAll(jsonFile)
+			data, err = io.ReadAll(jsonFile)
 			if err != nil {
 				fmt.Printf("could not open policy file %s\n", err)
 				return
@@ -434,7 +434,7 @@ var policyAddCmd = &cobra.Command{
 			}
 			defer jsonFile.Close()
 
-			data, err = ioutil.ReadAll(jsonFile)
+			data, err = io.ReadAll(jsonFile)
 			if err != nil {
 				fmt.Printf("⚠️ could not open policy file %s\n", err)
 				return

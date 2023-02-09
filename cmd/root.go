@@ -55,7 +55,6 @@ var (
 	cloudauth_addresses    string
 	cloudauth_domains      string
 	proxyHost              string
-	listener               int
 	upstream_username      string
 	upstream_password      string
 	upstream_http_hostname string
@@ -72,6 +71,9 @@ var (
 	runcommand             string
 	connectorAuthEnabled   bool
 	orgCustomDomain        string
+	upstream_cert_file     string
+	upstream_key_file      string
+	upstream_ca_file       string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -189,9 +191,9 @@ func print_socket(s models.Socket, policies []models.Policy) string {
 	socket_output = socket_output + fmt.Sprintf("\nPolicies:\n%s\n", tp.Render())
 
 	if len(policies) == 0 {
-		socket_output = socket_output + fmt.Sprintf("⚠️ Warning: No policies\n")
-		socket_output = socket_output + fmt.Sprintf("No policies are attached to this socket. This means that no one will be able to connect to this socket.\n")
-		socket_output = socket_output + fmt.Sprintf("To resolve this, attach a Policy, or create an Organization-wide Policy.\n")
+		socket_output = socket_output + "⚠️ Warning: No policies\n"
+		socket_output = socket_output + "No policies are attached to this socket. This means that no one will be able to connect to this socket.\n"
+		socket_output = socket_output + "To resolve this, attach a Policy, or create an Organization-wide Policy.\n"
 	}
 
 	return socket_output

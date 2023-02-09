@@ -59,6 +59,9 @@ type Socket struct {
 	SSHCa                          string            `json:"ssh_ca,omitempty"`
 	UpstreamUsername               string            `json:"upstream_username,omitempty"`
 	UpstreamPassword               string            `json:"upstream_password,omitempty"`
+	UpstreamCert                   *string           `json:"upstream_cert,omitempty"`
+	UpstreamKey                    *string           `json:"upstream_key,omitempty"`
+	UpstreamCa                     *string           `json:"upstream_ca,omitempty"`
 	UpstreamHttpHostname           string            `json:"upstream_http_hostname,omitempty"`
 	UpstreamType                   string            `json:"upstream_type,omitempty"`
 	CloudAuthEnabled               bool              `json:"cloud_authentication_enabled,omitempty"`
