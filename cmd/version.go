@@ -18,7 +18,6 @@ package cmd
 import (
 	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
@@ -83,7 +82,7 @@ var upgradeVersionCmd = &cobra.Command{
             downloaded binary checksum: %s`, checksum, local_checksum)
 		}
 
-		tmpfile, err := ioutil.TempFile("", "border0-"+latest_version)
+		tmpfile, err := os.CreateTemp("", "border0-"+latest_version)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -93,7 +92,7 @@ var upgradeVersionCmd = &cobra.Command{
 
 		defer os.Remove(tmpfile.Name())
 
-		err = ioutil.WriteFile(tmpfile.Name(), latest, 0644)
+		err = os.WriteFile(tmpfile.Name(), latest, 0644)
 		if err != nil {
 			log.Fatalf("Error while writing new file: %v", err)
 		}

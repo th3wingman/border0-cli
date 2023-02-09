@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -131,7 +130,7 @@ var createCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if sshkey != "" {
 			if _, err := os.Stat(sshkey); err == nil {
-				dat, err := ioutil.ReadFile(sshkey)
+				dat, err := os.ReadFile(sshkey)
 				if err != nil {
 					log.Fatalf("Unable to read the file %s, please check file permissions and try again (%v)", sshkey, err)
 				}
