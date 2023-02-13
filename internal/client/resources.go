@@ -501,6 +501,10 @@ func PickHost(inputHost string, socketTypes ...string) (models.ClientResource, e
 		hosts = append(hosts, hostToShow)
 	}
 
+	if len(hosts) < 1 {
+		return models.ClientResource{}, fmt.Errorf("No hosts available to connect to\n")
+	}
+
 	var picked string
 	if err = survey.AskOne(&survey.Select{
 		Message: "choose a host:",
