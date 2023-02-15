@@ -110,9 +110,6 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 	socket.CloudAuthEnabled = true
 
 	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType, socketData.Name)
-	if socket.PrivateSocket {
-		socket.Dnsname = socket.Name
-	}
 	return &socket
 }
 

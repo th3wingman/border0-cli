@@ -104,7 +104,7 @@ var dbeaverCmd = &cobra.Command{
 			"prop.requireSSL=false",
 		}
 
-		if pickedHost.PrivateSocket || info.ConnectorAuthenticationEnabled {
+		if info.ConnectorAuthenticationEnabled {
 			// NOTE: temp fix - do this to bypass the error that complains the mismatch between
 			//       private hostname and the CN in certificate (*.border0.io)
 			params = append(params, "prop.disableSslHostnameVerification=true")

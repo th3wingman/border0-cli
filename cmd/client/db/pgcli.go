@@ -79,7 +79,7 @@ var pgcliCmd = &cobra.Command{
 		}
 
 		sslmode := "verify-full"
-		if pickedHost.PrivateSocket || info.ConnectorAuthenticationEnabled {
+		if info.ConnectorAuthenticationEnabled {
 			sslmode = "verify-ca"
 		}
 

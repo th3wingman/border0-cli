@@ -87,10 +87,6 @@ func (s *NetworkFinder) Find(ctx context.Context, cfg config.Config, state Disco
 
 								socket.Name = socketName
 
-								if socket.PrivateSocket {
-									socket.Dnsname = socket.Name
-								}
-
 								socket.ConnectorAuthenticationEnabled = group.ConnectorAuthenticationEnabled
 								socket.TargetHostname = j.ip
 								socket.TargetPort = int(j.port)

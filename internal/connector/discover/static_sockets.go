@@ -39,10 +39,6 @@ func (s *StaticSocketFinder) Find(ctx context.Context, cfg config.Config, state 
 			socket.CloudAuthEnabled = true
 			socket.PolicyNames = v.Policies
 
-			if socket.PrivateSocket {
-				socket.Dnsname = socket.Name
-			}
-
 			socket.UpstreamType = v.UpstreamType
 		}
 

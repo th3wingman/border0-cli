@@ -110,9 +110,6 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 	name := fmt.Sprintf("%v-%v-%v", socket.SocketType, service.Name, connectorName)
 
 	socket.Name = name
-	if socket.PrivateSocket {
-		socket.Dnsname = name
-	}
 
 	socket.CloudAuthEnabled = true
 	socket.PolicyNames = group.Policies

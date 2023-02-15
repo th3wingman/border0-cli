@@ -379,11 +379,6 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 }
 
 func (c *ConnectorCore) CreateSocketAndTunnel(ctx context.Context, s *models.Socket) (*models.Socket, error) {
-	privateSocket := s.PrivateSocket
-	if s.PrivateSocket {
-		s.PrivateSocket = false
-	}
-
 	if s.Description == "" {
 		s.Description = fmt.Sprintf("created by %s", c.cfg.Connector.Name)
 	}
@@ -401,19 +396,6 @@ func (c *ConnectorCore) CreateSocketAndTunnel(ctx context.Context, s *models.Soc
 	}
 
 	createdSocket.Tunnels = append(createdSocket.Tunnels, *tunnel)
-
-	// if socket is private we should use the name of the socket as a custom domains
-	// to be accessible from the outside
-	if privateSocket {
-		createdSocket.Dnsname = createdSocket.Name
-		createdSocket.CustomDomains = append(createdSocket.CustomDomains, createdSocket.Dnsname)
-		createdSocket.PrivateSocket = true
-		createdSocket.UpstreamType = ""
-		err = c.border0API.UpdateSocket(ctx, createdSocket.SocketID, *createdSocket)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	NewPolicyManager(c.logger, c.border0API).ApplyPolicies(ctx, *createdSocket, s.PolicyNames)
 	createdSocket.PolicyNames = s.PolicyNames
