@@ -86,7 +86,7 @@ func (s *NetworkFinder) Find(ctx context.Context, cfg config.Config, state Disco
 								socket := models.Socket{}
 
 								socket.Name = socketName
-								socket.PrivateSocket = group.PrivateSocket
+
 								if socket.PrivateSocket {
 									socket.Dnsname = socket.Name
 								}

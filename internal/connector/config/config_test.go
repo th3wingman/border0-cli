@@ -57,7 +57,6 @@ func TestParse(t *testing.T) {
 				Group:                 "infra_team",
 				AllowedEmailDomains:   []string{"border0.com"},
 				AllowedEmailAddresses: []string{"border0.com", "some-other-domain.com"},
-				PrivateSocket:         false,
 			},
 		},
 		DockerPlugin: []ConnectorGroups{
@@ -65,7 +64,6 @@ func TestParse(t *testing.T) {
 				Group:                 "docker_team",
 				AllowedEmailDomains:   []string{"border0.com"},
 				AllowedEmailAddresses: []string{"border0.com", "some-other-domain.com"},
-				PrivateSocket:         false,
 			},
 		},
 		NetworkPlugin: []NetworkPlugin{

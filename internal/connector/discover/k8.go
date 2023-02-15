@@ -90,11 +90,6 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 		socket.SocketType = "tls"
 	}
 
-	privateSocketEnabled, ok := service.Annotations["border0.com/privateSocket"]
-	if ok && privateSocketEnabled == "true" || group.PrivateSocket {
-		socket.PrivateSocket = true
-	}
-
 	connectorAuthenticationEnabled, ok := service.Annotations["border0.com/connectorAuthentication"]
 	if ok && connectorAuthenticationEnabled == "true" || group.ConnectorAuthenticationEnabled {
 		socket.ConnectorAuthenticationEnabled = true
