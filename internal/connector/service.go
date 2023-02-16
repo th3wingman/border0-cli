@@ -15,6 +15,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/borderzero/border0-cli/internal/connector/core"
 	"github.com/borderzero/border0-cli/internal/connector/discover"
+	"github.com/borderzero/border0-cli/internal/connector/monitor"
 	"github.com/borderzero/border0-cli/internal/http"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -42,7 +43,7 @@ func (c *ConnectorService) Start() error {
 	}
 
 	//login with accesstoken or username and password
-	border0API.With(api.WithAccessToken(accessToken))
+	border0API.With(api.WithAccessTokenModel(accessToken))
 	//setup the version for border0
 	border0API.With(api.WithVersion(c.version))
 
@@ -89,29 +90,29 @@ func (c *ConnectorService) Start() error {
 	return nil
 }
 
-func (c *ConnectorService) fetchAccessToken(border0API api.API) (string, error) {
+func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.AccessToken, error) {
 	if c.cfg.Credentials.Token != "" {
 		c.logger.Info("using token defined in config file")
 		accessToken := c.cfg.Credentials.Token
 
-		return accessToken, nil
+		return models.NewAccessToken(accessToken, models.CredentialsTypeUser), nil
 	} else if c.cfg.Credentials.GetUsername() != "" && c.cfg.Credentials.Password != "" {
 		c.logger.Info("logging in with username and password")
 
 		resp, err := border0API.Login(c.cfg.Credentials.GetUsername(), c.cfg.Credentials.Password)
 		if err != nil {
-			return "", fmt.Errorf("failed to login: %v", err)
+			return nil, fmt.Errorf("failed to login: %v", err)
 		}
 
-		return resp.Token, nil
+		return models.NewAccessToken(resp.Token, models.CredentialsTypeUser), nil
 	} else {
 		c.logger.Info("using token defined in border0 file")
 		accessToken, err := http.GetToken()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		return accessToken, nil
+		return models.NewAccessToken(accessToken, models.CredentialsTypeToken), nil
 	}
 }
 

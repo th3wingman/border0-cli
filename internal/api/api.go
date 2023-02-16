@@ -9,10 +9,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"golang.org/x/sync/errgroup"
 )
 
 const APIUrl = "https://api.border0.com/api/v1"
@@ -34,7 +38,7 @@ type API interface {
 	AttachPolicies(ctx context.Context, socketID string, policyUUIDs []string) ([]string, error)
 	DetachPolicies(ctx context.Context, socketID string, policyUUIDs []string) ([]string, error)
 	GetPoliciesBySocketID(socketID string) ([]models.Policy, error)
-
+	StartRefreshAccessTokenJob(ctx context.Context)
 	GetAccessToken() string
 }
 
@@ -48,6 +52,12 @@ func WithAccessToken(accessToken string) APIOption {
 	}
 }
 
+func WithAccessTokenModel(accessToken *models.AccessToken) APIOption {
+	return func(h *Border0API) {
+		h.AccessToken = accessToken.AccessToken
+	}
+}
+
 func WithVersion(version string) APIOption {
 	return func(h *Border0API) {
 		h.Version = version
@@ -55,15 +65,17 @@ func WithVersion(version string) APIOption {
 }
 
 type Border0API struct {
-	AccessToken string
-	Version     string
+	AccessToken      string
+	AccessTokenModel *models.AccessToken
+	Version          string
+	mutex            *sync.Mutex
 }
 type ErrorMessage struct {
 	ErrorMessage string `json:"error_message,omitempty"`
 }
 
 func NewAPI(opts ...APIOption) *Border0API {
-	api := Border0API{}
+	api := Border0API{mutex: &sync.Mutex{}}
 
 	for _, opt := range opts {
 		opt(&api)
@@ -80,21 +92,21 @@ func APIURL() string {
 	}
 }
 
-func getToken() (string, error) {
+func getToken() (*models.AccessToken, error) {
 	if os.Getenv("BORDER0_ADMIN_TOKEN") != "" {
-		return os.Getenv("BORDER0_ADMIN_TOKEN"), nil
+		return models.NewAccessToken(os.Getenv("BORDER0_ADMIN_TOKEN"), models.CredentialsTypeToken), nil
 	}
 
 	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
-		return "", errors.New("API: please login first (no token found)")
+		return nil, errors.New("API: please login first (no token found)")
 	}
 	content, err := ioutil.ReadFile(tokenfile())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	tokenString := strings.TrimRight(string(content), "\n")
-	return tokenString, nil
+	return models.NewAccessToken(tokenString, models.CredentialsTypeUser), nil
 }
 
 func tokenfile() string {
@@ -114,15 +126,17 @@ func (a *Border0API) Request(method string, url string, target interface{}, data
 	req, _ := http.NewRequest(method, fmt.Sprintf("%s/%s", APIURL(), url), body)
 
 	//try to find the token in the environment
-	if requireAccessToken && a.AccessToken == "" {
+	if requireAccessToken && a.AccessToken == "" || (a.AccessTokenModel != nil && a.AccessTokenModel.AccessToken == "") {
 		token, _ := getToken()
-		a.AccessToken = token
+		a.AccessTokenModel = token
 	}
 
 	if a.AccessToken != "" {
-		sanitizedAccessToken := strings.Trim(a.AccessToken, "\n")
-		sanitizedAccessToken = strings.Trim(sanitizedAccessToken, " ")
-		req.Header.Add("x-access-token", sanitizedAccessToken)
+		a.AccessTokenModel = models.NewAccessToken(a.AccessToken, models.CredentialsTypeUser)
+	}
+
+	if a.AccessTokenModel != nil && a.AccessTokenModel.AccessToken != "" {
+		req.Header.Add("x-access-token", a.AccessTokenModel.AccessToken)
 	}
 
 	req.Header.Add("x-client-requested-with", "border0")
@@ -351,4 +365,77 @@ func (a *Border0API) GetPoliciesBySocketID(socketID string) ([]models.Policy, er
 	}
 
 	return policies, nil
+}
+
+func (a *Border0API) RefreshAccessToken() (*models.AccessToken, error) {
+	if !a.AccessTokenModel.ShouldRefresh() {
+		return nil, fmt.Errorf("token is not valid to refresh")
+	}
+
+	loginRefresh := models.LoginRefresh{}
+	res := models.TokenForm{}
+
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	err := a.Request(http.MethodPost, "login/refresh", &res, loginRefresh, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// create dir if not exists
+	configPath := filepath.Dir(tokenfile())
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if err := os.Mkdir(configPath, 0700); err != nil {
+			return nil, fmt.Errorf("failed to create directory %s : %s", configPath, err)
+		}
+	}
+
+	f, err := os.Create(tokenfile())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.Chmod(tokenfile(), 0600); err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("%s\n", res.Token))
+	if err != nil {
+		return nil, err
+	}
+
+	return models.NewAccessToken(res.Token, models.CredentialsTypeUser), nil
+}
+
+func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
+	if !a.AccessTokenModel.ShouldRefresh() {
+		fmt.Println("using a static credentials, no need to refresh token")
+		return
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(60 * time.Second):
+				token, err := a.RefreshAccessToken()
+				if err != nil {
+					fmt.Println(err)
+
+					if err.Error() == "token is not valid to refresh" {
+						return err
+					}
+				}
+
+				a.mutex.Lock()
+				a.AccessTokenModel = token
+				a.mutex.Unlock()
+			}
+		}
+	})
 }
