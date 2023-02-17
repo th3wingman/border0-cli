@@ -29,7 +29,6 @@ type SocketConfig struct {
 	UpstreamUser                   string   `mapstructure:"upstream_user"`
 	UpstreamPassword               string   `mapstructure:"upstream_password"`
 	UpstreamType                   string   `mapstructure:"upstream_type"`
-	PrivateSocket                  bool     `mapstructure:"private_socket"`
 	DatabaseCredentials            string   `mapstructure:"database_credentials"`
 	UpstreamHttpHostname           string   `mapstructure:"upstream_http_hostname"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
@@ -59,7 +58,6 @@ type ConnectorGroups struct {
 	Group                          string
 	AllowedEmailAddresses          []string `mapstructure:"allowed_email_addresses"`
 	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
-	PrivateSocket                  bool     `mapstructure:"private_socket"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
 }
@@ -69,7 +67,6 @@ type K8Plugin struct {
 	Namespace                      string
 	AllowedEmailAddresses          []string `mapstructure:"allowed_email_addresses"`
 	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
-	PrivateSocket                  bool     `mapstructure:"private_socket"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
 }
@@ -79,7 +76,6 @@ type NetworkPlugin struct {
 	Group                          string                          `mapstructure:"group"`
 	AllowedEmailAddresses          []string                        `mapstructure:"allowed_email_addresses"`
 	AllowedEmailDomains            []string                        `mapstructure:"allowed_email_domains"`
-	PrivateSocket                  bool                            `mapstructure:"private_socket"`
 	Networks                       map[string]NetworkPluginNetwork `mapstructure:"networks"`
 	Policies                       []string                        `mapstructure:"policies"`
 	ConnectorAuthenticationEnabled bool                            `mapstructure:"connector_authentication"`

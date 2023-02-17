@@ -68,7 +68,6 @@ type Socket struct {
 	ConnectorAuthenticationEnabled bool              `json:"connector_authentication_enabled,omitempty"`
 	Tags                           map[string]string `json:"tags,omitempty"`
 	CustomDomains                  []string          `json:"custom_domains,omitempty"`
-	PrivateSocket                  bool              `json:"private_socket"`
 	PolicyNames                    []string          `json:"policy_names,omitempty"`
 	Policies                       []Policy          `json:"policies,omitempty"`
 	OrgCustomDomain                string            `json:"org_custom_domain,omitempty"`

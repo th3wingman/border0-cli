@@ -141,7 +141,6 @@ func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorG
 	socket.UpstreamUsername = socketData.UpstreamUsername
 	socket.UpstreamPassword = socketData.UpstreamPassword
 
-	socket.PrivateSocket = group.PrivateSocket
 	socket.ConnectorAuthenticationEnabled = group.ConnectorAuthenticationEnabled
 
 	socket.TargetHostname = socketData.Host
@@ -150,9 +149,6 @@ func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorG
 	}
 
 	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType, socketData.Name)
-	if socket.PrivateSocket {
-		socket.Dnsname = socket.Name
-	}
 	socket.CloudAuthEnabled = true
 	return socket
 }
