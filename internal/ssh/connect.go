@@ -66,6 +66,7 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 	c.tunnelID = tunnelID
 
 	c.api.StartRefreshAccessTokenJob(ctx)
+
 	tunnel, err := c.api.GetTunnel(context.Background(), socketID, tunnelID)
 	if err != nil {
 		return fmt.Errorf("error getting tunnel: %v", err)

@@ -52,7 +52,7 @@ func WithAccessToken(accessToken string) APIOption {
 	}
 }
 
-func WithAccessTokenModel(accessToken *models.AccessToken) APIOption {
+func WithCredentials(accessToken *models.Credentials) APIOption {
 	return func(h *Border0API) {
 		h.AccessToken = accessToken.AccessToken
 	}
@@ -65,11 +65,12 @@ func WithVersion(version string) APIOption {
 }
 
 type Border0API struct {
-	AccessToken      string
-	AccessTokenModel *models.AccessToken
-	Version          string
-	mutex            *sync.Mutex
+	AccessToken string
+	Credentials *models.Credentials
+	Version     string
+	mutex       *sync.Mutex
 }
+
 type ErrorMessage struct {
 	ErrorMessage string `json:"error_message,omitempty"`
 }
@@ -92,7 +93,7 @@ func APIURL() string {
 	}
 }
 
-func getToken() (*models.AccessToken, error) {
+func getToken() (*models.Credentials, error) {
 	if os.Getenv("BORDER0_ADMIN_TOKEN") != "" {
 		return models.NewAccessToken(os.Getenv("BORDER0_ADMIN_TOKEN"), models.CredentialsTypeToken), nil
 	}
@@ -126,17 +127,17 @@ func (a *Border0API) Request(method string, url string, target interface{}, data
 	req, _ := http.NewRequest(method, fmt.Sprintf("%s/%s", APIURL(), url), body)
 
 	//try to find the token in the environment
-	if requireAccessToken && a.AccessToken == "" || (a.AccessTokenModel != nil && a.AccessTokenModel.AccessToken == "") {
+	if requireAccessToken && a.AccessToken == "" || (a.Credentials != nil && a.Credentials.AccessToken == "") {
 		token, _ := getToken()
-		a.AccessTokenModel = token
+		a.Credentials = token
 	}
 
 	if a.AccessToken != "" {
-		a.AccessTokenModel = models.NewAccessToken(a.AccessToken, models.CredentialsTypeUser)
+		a.Credentials = models.NewAccessToken(a.AccessToken, models.CredentialsTypeUser)
 	}
 
-	if a.AccessTokenModel != nil && a.AccessTokenModel.AccessToken != "" {
-		req.Header.Add("x-access-token", a.AccessTokenModel.AccessToken)
+	if a.Credentials != nil && a.Credentials.AccessToken != "" {
+		req.Header.Add("x-access-token", a.Credentials.AccessToken)
 	}
 
 	req.Header.Add("x-client-requested-with", "border0")
@@ -367,8 +368,8 @@ func (a *Border0API) GetPoliciesBySocketID(socketID string) ([]models.Policy, er
 	return policies, nil
 }
 
-func (a *Border0API) RefreshAccessToken() (*models.AccessToken, error) {
-	if !a.AccessTokenModel.ShouldRefresh() {
+func (a *Border0API) RefreshAccessToken() (*models.Credentials, error) {
+	if !a.Credentials.ShouldRefresh() {
 		return nil, fmt.Errorf("token is not valid to refresh")
 	}
 
@@ -410,13 +411,12 @@ func (a *Border0API) RefreshAccessToken() (*models.AccessToken, error) {
 }
 
 func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
-	if !a.AccessTokenModel.ShouldRefresh() {
+	if !a.Credentials.ShouldRefresh() {
 		fmt.Println("using a static credentials, no need to refresh token")
 		return
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-
 	g.Go(func() error {
 		for {
 			select {
@@ -431,9 +431,8 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 						return err
 					}
 				}
-
 				a.mutex.Lock()
-				a.AccessTokenModel = token
+				a.Credentials = token
 				a.mutex.Unlock()
 			}
 		}

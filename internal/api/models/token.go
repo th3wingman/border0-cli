@@ -7,21 +7,21 @@ const (
 	CredentialsTypeToken = "Token"
 )
 
-type AccessToken struct {
+type Credentials struct {
 	AccessToken string `json:"access_token"`
 	ExpiresIn   int    `json:"expires_in"`
 	TokenType   string `json:"token_type"`
 }
 
-func (a *AccessToken) ShouldRefresh() bool {
+func (a *Credentials) ShouldRefresh() bool {
 	return a.TokenType == "User"
 }
 
-func NewAccessToken(accessToken string, credentialsType string) *AccessToken {
+func NewAccessToken(accessToken string, credentialsType string) *Credentials {
 	sanitizedAccessToken := strings.Trim(accessToken, "\n")
 	sanitizedAccessToken = strings.Trim(sanitizedAccessToken, " ")
 
-	return &AccessToken{
+	return &Credentials{
 		AccessToken: sanitizedAccessToken,
 		TokenType:   credentialsType,
 	}

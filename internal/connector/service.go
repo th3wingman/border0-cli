@@ -42,7 +42,7 @@ func (c *ConnectorService) Start() error {
 	}
 
 	//login with accesstoken or username and password
-	border0API.With(api.WithAccessTokenModel(accessToken))
+	border0API.With(api.WithCredentials(accessToken))
 	//setup the version for border0
 	border0API.With(api.WithVersion(c.version))
 
@@ -89,7 +89,7 @@ func (c *ConnectorService) Start() error {
 	return nil
 }
 
-func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.AccessToken, error) {
+func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credentials, error) {
 	if c.cfg.Credentials.Token != "" {
 		c.logger.Info("using token defined in config file")
 		accessToken := c.cfg.Credentials.Token
