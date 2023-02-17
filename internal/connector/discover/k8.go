@@ -90,9 +90,9 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 		socket.SocketType = "tls"
 	}
 
-	enabled, ok := service.Annotations["border0.com/privateSocket"]
-	if ok && enabled == "true" || group.PrivateSocket {
-		socket.PrivateSocket = true
+	connectorAuthenticationEnabled, ok := service.Annotations["border0.com/connectorAuthentication"]
+	if ok && connectorAuthenticationEnabled == "true" || group.ConnectorAuthenticationEnabled {
+		socket.ConnectorAuthenticationEnabled = true
 	}
 
 	if _, ok = service.Annotations["border0.com/allowedEmailAddresses"]; ok {
@@ -110,9 +110,6 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 	name := fmt.Sprintf("%v-%v-%v", socket.SocketType, service.Name, connectorName)
 
 	socket.Name = name
-	if socket.PrivateSocket {
-		socket.Dnsname = name
-	}
 
 	socket.CloudAuthEnabled = true
 	socket.PolicyNames = group.Policies

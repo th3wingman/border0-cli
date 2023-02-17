@@ -59,15 +59,18 @@ type Socket struct {
 	SSHCa                          string            `json:"ssh_ca,omitempty"`
 	UpstreamUsername               string            `json:"upstream_username,omitempty"`
 	UpstreamPassword               string            `json:"upstream_password,omitempty"`
+	UpstreamCert                   *string           `json:"upstream_cert,omitempty"`
+	UpstreamKey                    *string           `json:"upstream_key,omitempty"`
+	UpstreamCa                     *string           `json:"upstream_ca,omitempty"`
 	UpstreamHttpHostname           string            `json:"upstream_http_hostname,omitempty"`
 	UpstreamType                   string            `json:"upstream_type,omitempty"`
 	CloudAuthEnabled               bool              `json:"cloud_authentication_enabled,omitempty"`
 	ConnectorAuthenticationEnabled bool              `json:"connector_authentication_enabled,omitempty"`
 	Tags                           map[string]string `json:"tags,omitempty"`
 	CustomDomains                  []string          `json:"custom_domains,omitempty"`
-	PrivateSocket                  bool              `json:"private_socket"`
 	PolicyNames                    []string          `json:"policy_names,omitempty"`
 	Policies                       []Policy          `json:"policies,omitempty"`
+	OrgCustomDomain                string            `json:"org_custom_domain,omitempty"`
 
 	TargetHostname string         `json:"-"`
 	TargetPort     int            `json:"-"`
@@ -131,33 +134,38 @@ func (s *Socket) SetupTypeAndUpstreamTypeByPortOrTags() {
 		s.UpstreamType = "http"
 
 		if s.SocketType != "" {
-			if s.SocketType == "mysql" {
-				s.SocketType = "database"
+			switch s.SocketType {
+			case "mysql":
 				s.UpstreamType = "mysql"
-			}
-			if s.SocketType == "ssh" {
-				s.SocketType = "ssh"
-			}
-			if s.SocketType == "http" {
-				s.SocketType = "http"
-			}
-			if s.SocketType == "https" {
+				s.SocketType = "database"
+			case "postgres":
+				s.UpstreamType = "postgres"
+				s.SocketType = "database"
+			case "database":
+				if s.TargetPort == 3306 {
+					s.UpstreamType = "mysql"
+				}
+				if s.TargetPort == 5432 {
+					s.UpstreamType = "postgres"
+				}
+			case "https":
 				s.SocketType = "http"
 				s.UpstreamType = "https"
 			}
-		} else {
 
-			if s.TargetPort == 3306 {
+		} else {
+			switch s.TargetPort {
+			case 3306:
 				s.SocketType = "database"
 				s.UpstreamType = "mysql"
-			}
-			if s.TargetPort == 22 {
+			case 5432:
+				s.SocketType = "database"
+				s.UpstreamType = "postgres"
+			case 22:
 				s.SocketType = "ssh"
-			}
-			if s.TargetPort == 80 {
+			case 80:
 				s.SocketType = "http"
-			}
-			if s.TargetPort == 443 {
+			case 443:
 				s.SocketType = "http"
 				s.UpstreamType = "https"
 			}

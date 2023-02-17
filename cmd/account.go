@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -64,13 +63,13 @@ var listOrgs = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"ID", "Name", "Current"})
+		t.AppendHeader(table.Row{"Name", "Subdomain", "Current"})
 
 		for _, s := range orgs {
 			if s.ID == account.Organization.ID {
-				t.AppendRow(table.Row{s.ID, s.Name, "Yes"})
+				t.AppendRow(table.Row{s.Name, s.Subdomain + "." + domainSuffix, "Yes"})
 			} else {
-				t.AppendRow(table.Row{s.ID, s.Name, "No"})
+				t.AppendRow(table.Row{s.Name, s.Subdomain + "." + domainSuffix, "No"})
 			}
 
 		}
@@ -131,7 +130,7 @@ var createCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if sshkey != "" {
 			if _, err := os.Stat(sshkey); err == nil {
-				dat, err := ioutil.ReadFile(sshkey)
+				dat, err := os.ReadFile(sshkey)
 				if err != nil {
 					log.Fatalf("Unable to read the file %s, please check file permissions and try again (%v)", sshkey, err)
 				}

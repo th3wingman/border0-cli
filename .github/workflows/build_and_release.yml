@@ -1,0 +1,111 @@
+name: Build and release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - client/**
+      - cmd/**
+      - internal/**
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      ENV: "prod"
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: us-east-2
+          role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
+          role-session-name: BuildAndDeploy4border0cli
+          role-duration-seconds: 1200
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.19.5' # The Go version to download (if necessary) and use.
+      - run: go version
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-boto3
+
+      - name: Print Versions
+        run: |
+           go version
+
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+
+      - name: where am i?
+        run: |
+          pwd
+          ls
+
+      - name: Run Make release
+        run: |
+          make all
+          make release
+          make release-border0
+
+      - name: Invalidate CloudFront cache for download.border0.com
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
+
+      - name: See dist bin directory
+        run: |
+          ls -la bin
+          pwd
+
+  trigger-app-build:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      # cross repo workflow trigger
+      # it tells mysocketio/client repo to run build_and_release.yml workflow, which re-download cli and
+      # packs the latest cli into the desktop app installer bundles, this trigger does not bump the version,
+      # so it only ensures new desktop app downloads include the updated cli binary
+      - name: Trigger client repo to rebuild
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.CLIENT_REPO_ACTIONS_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'mysocketio',
+              repo: 'client',
+              workflow_id: 'build_and_release.yml',
+              ref: 'main'
+            })
+
+      # cross repo workflow trigger
+      # it tells mysocketio/client repo to run bump_version_and_create_pr.yml workflow, which automatically
+      # bump the version in wails.json, and create a PR, this trigger bumps version in desktop app repo, once
+      # the PR is merged, a new build and release will be triggered, existing users will be notified for the
+      # new version, and new downloads will also include the updated cli binary
+      - name: Trigger client repo to create PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.CLIENT_REPO_ACTIONS_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'mysocketio',
+              repo: 'client',
+              workflow_id: 'bump_version_and_create_pr.yml',
+              ref: 'main'
+            })

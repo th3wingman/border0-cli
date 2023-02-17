@@ -94,31 +94,31 @@ func ConnectionsXML(name string, host string, port int, sslCertPath, sslKeyPath,
 
 // Example:
 //
-//     <?xml version="1.0"?>
-//     <data grt_format="2.0">
-//       <value _ptr_="abc123" type="list" content-type="object" content-struct-name="db.mgmt.Connection">
-//         <value type="object" struct-name="db.mgmt.Connection" id="7e4b13cc-a48c-11ec-8ef1-02a8c4b46216" struct-checksum="def456">
-//           <link type="object" struct-name="db.mgmt.Driver" key="driver">com.mysql.rdbms.mysql.driver.native</link>
-//           <value type="string" key="name">db.api.staging.us.border0</value>
-//           <value type="string" key="hostIdentifier">Mysql@db.api.staging.us.border0:30583</value>
-//           <value type="int" key="isDefault">0</value>
-//           <value _ptr_="abc123" type="dict" key="modules"/>
-//           <value _ptr_="abc123" type="dict" key="parameterValues">
-//             <value type="string" key="SQL_MODE"></value>
-//             <value type="string" key="hostName">db.api.staging.us.border0</value>
-//             <value type="string" key="password"></value>
-//             <value type="int" key="port">30583</value>
-//             <value type="string" key="schema">border0</value>
-//             <value type="string" key="sslCA"></value>
-//             <value type="string" key="sslCert">/Users/rollie/.border0/still-voice-9340.border0.io.crt</value>
-//             <value type="string" key="sslCipher"></value>
-//             <value type="string" key="sslKey">/Users/rollie/.border0/still-voice-9340.border0.io.key</value>
-//             <value type="int" key="useSSL">1</value>
-//             <value type="string" key="userName">placeholder</value>
-//           </value>
-//         </value>
-//       </value>
-//     </data>
+//	<?xml version="1.0"?>
+//	<data grt_format="2.0">
+//	  <value _ptr_="abc123" type="list" content-type="object" content-struct-name="db.mgmt.Connection">
+//	    <value type="object" struct-name="db.mgmt.Connection" id="7e4b13cc-a48c-11ec-8ef1-02a8c4b46216" struct-checksum="def456">
+//	      <link type="object" struct-name="db.mgmt.Driver" key="driver">com.mysql.rdbms.mysql.driver.native</link>
+//	      <value type="string" key="name">db.api.staging.us.border0</value>
+//	      <value type="string" key="hostIdentifier">Mysql@db.api.staging.us.border0:30583</value>
+//	      <value type="int" key="isDefault">0</value>
+//	      <value _ptr_="abc123" type="dict" key="modules"/>
+//	      <value _ptr_="abc123" type="dict" key="parameterValues">
+//	        <value type="string" key="SQL_MODE"></value>
+//	        <value type="string" key="hostName">db.api.staging.us.border0</value>
+//	        <value type="string" key="password"></value>
+//	        <value type="int" key="port">30583</value>
+//	        <value type="string" key="schema">border0</value>
+//	        <value type="string" key="sslCA"></value>
+//	        <value type="string" key="sslCert">/Users/rollie/.border0/still-voice-9340.border0.io.crt</value>
+//	        <value type="string" key="sslCipher"></value>
+//	        <value type="string" key="sslKey">/Users/rollie/.border0/still-voice-9340.border0.io.key</value>
+//	        <value type="int" key="useSSL">1</value>
+//	        <value type="string" key="userName">placeholder</value>
+//	      </value>
+//	    </value>
+//	  </value>
+//	</data>
 type xmlDoc struct {
 	XMLName     xml.Name `xml:"data"`
 	GrtFormat   string   `xml:"grt_format,attr"`

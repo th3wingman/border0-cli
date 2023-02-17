@@ -9,7 +9,6 @@ import (
 )
 
 type ClientResource struct {
-	PrivateSocket                  bool     `json:"private_socket,omitempty"`
 	IPAddress                      string   `json:"ip_address,omitempty"`
 	SocketType                     string   `json:"socket_type,omitempty"`
 	SocketName                     string   `json:"socket_name,omitempty"`

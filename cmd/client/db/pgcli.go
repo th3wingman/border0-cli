@@ -19,12 +19,10 @@ var pgcliCmd = &cobra.Command{
 		}
 		hostname = pickedHost.Hostname()
 
-		certChainPath, cleanup, err := client.DownloadCertificateChain(hostname)
+		certChainPath, err := client.DownloadCertificateChain(hostname)
 		if err != nil {
-			cleanup()
 			return err
 		}
-		defer cleanup()
 
 		// Let's read preferences from the config file
 		pref, err := preference.Read()
@@ -81,7 +79,7 @@ var pgcliCmd = &cobra.Command{
 		}
 
 		sslmode := "verify-full"
-		if pickedHost.PrivateSocket || info.ConnectorAuthenticationEnabled {
+		if info.ConnectorAuthenticationEnabled {
 			sslmode = "verify-ca"
 		}
 

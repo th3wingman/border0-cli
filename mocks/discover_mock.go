@@ -56,9 +56,9 @@ type Discover_Find_Call struct {
 }
 
 // Find is a helper method to define mock.On call
-//  - ctx context.Context
-//  - cfg config.Config
-//  - state discover.DiscoverState
+//   - ctx context.Context
+//   - cfg config.Config
+//   - state discover.DiscoverState
 func (_e *Discover_Expecter) Find(ctx interface{}, cfg interface{}, state interface{}) *Discover_Find_Call {
 	return &Discover_Find_Call{Call: _e.mock.On("Find", ctx, cfg, state)}
 }
@@ -131,9 +131,9 @@ type Discover_SkipRun_Call struct {
 }
 
 // SkipRun is a helper method to define mock.On call
-//  - ctx context.Context
-//  - cfg config.Config
-//  - state discover.DiscoverState
+//   - ctx context.Context
+//   - cfg config.Config
+//   - state discover.DiscoverState
 func (_e *Discover_Expecter) SkipRun(ctx interface{}, cfg interface{}, state interface{}) *Discover_SkipRun_Call {
 	return &Discover_SkipRun_Call{Call: _e.mock.On("SkipRun", ctx, cfg, state)}
 }

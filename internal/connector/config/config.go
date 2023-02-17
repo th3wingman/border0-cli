@@ -19,20 +19,20 @@ import (
 var ErrInvalidConnectorName = errors.New("invalid connector name")
 
 type SocketConfig struct {
-	Host                  string
-	Port                  int
-	Name                  string
-	Type                  string
-	Description           string
-	AllowedEmailAddresses []string `mapstructure:"allowed_email_addresses"`
-	AllowedEmailDomains   []string `mapstructure:"allowed_email_domains"`
-	UpstreamUser          string   `mapstructure:"upstream_user"`
-	UpstreamPassword      string   `mapstructure:"upstream_password"`
-	UpstreamType          string   `mapstructure:"upstream_type"`
-	PrivateSocket         bool     `mapstructure:"private_socket"`
-	DatabaseCredentials   string   `mapstructure:"database_credentials"`
-	UpstreamHttpHostname  string   `mapstructure:"upstream_http_hostname"`
-	Policies              []string `mapstructure:"policies"`
+	Host                           string
+	Port                           int
+	Name                           string
+	Type                           string
+	Description                    string
+	AllowedEmailAddresses          []string `mapstructure:"allowed_email_addresses"`
+	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
+	UpstreamUser                   string   `mapstructure:"upstream_user"`
+	UpstreamPassword               string   `mapstructure:"upstream_password"`
+	UpstreamType                   string   `mapstructure:"upstream_type"`
+	DatabaseCredentials            string   `mapstructure:"database_credentials"`
+	UpstreamHttpHostname           string   `mapstructure:"upstream_http_hostname"`
+	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
+	Policies                       []string `mapstructure:"policies"`
 }
 
 type Credentials struct {
@@ -55,30 +55,30 @@ func (c Credentials) GetUsername() string {
 }
 
 type ConnectorGroups struct {
-	Group                 string
-	AllowedEmailAddresses []string `mapstructure:"allowed_email_addresses"`
-	AllowedEmailDomains   []string `mapstructure:"allowed_email_domains"`
-	PrivateSocket         bool     `mapstructure:"private_socket"`
-	Policies              []string `mapstructure:"policies"`
+	Group                          string
+	AllowedEmailAddresses          []string `mapstructure:"allowed_email_addresses"`
+	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
+	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
+	Policies                       []string `mapstructure:"policies"`
 }
 
 type K8Plugin struct {
-	Group                 string
-	Namespace             string
-	AllowedEmailAddresses []string `mapstructure:"allowed_email_addresses"`
-	AllowedEmailDomains   []string `mapstructure:"allowed_email_domains"`
-	PrivateSocket         bool     `mapstructure:"private_socket"`
-	Policies              []string `mapstructure:"policies"`
+	Group                          string
+	Namespace                      string
+	AllowedEmailAddresses          []string `mapstructure:"allowed_email_addresses"`
+	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
+	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
+	Policies                       []string `mapstructure:"policies"`
 }
 
 type NetworkPlugin struct {
-	Scan_interval         int64                           `mapstructure:"scan_interval"`
-	Group                 string                          `mapstructure:"group"`
-	AllowedEmailAddresses []string                        `mapstructure:"allowed_email_addresses"`
-	AllowedEmailDomains   []string                        `mapstructure:"allowed_email_domains"`
-	PrivateSocket         bool                            `mapstructure:"private_socket"`
-	Networks              map[string]NetworkPluginNetwork `mapstructure:"networks"`
-	Policies              []string                        `mapstructure:"policies"`
+	Scan_interval                  int64                           `mapstructure:"scan_interval"`
+	Group                          string                          `mapstructure:"group"`
+	AllowedEmailAddresses          []string                        `mapstructure:"allowed_email_addresses"`
+	AllowedEmailDomains            []string                        `mapstructure:"allowed_email_domains"`
+	Networks                       map[string]NetworkPluginNetwork `mapstructure:"networks"`
+	Policies                       []string                        `mapstructure:"policies"`
+	ConnectorAuthenticationEnabled bool                            `mapstructure:"connector_authentication"`
 }
 
 type NetworkPluginNetwork struct {

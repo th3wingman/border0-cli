@@ -1,11 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net"
+	"io"
 	"net/http"
 	"os"
 	"os/user"
@@ -18,28 +18,96 @@ import (
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/enum"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/fatih/color"
 	jwt "github.com/golang-jwt/jwt"
+	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 )
 
-func Login(orgID string) (token string, claims jwt.MapClaims, err error) {
-	if orgID == "" {
+// Login performs an OAuth2.0 client device authorization flow against the API
+func Login(org string) (token string, claims jwt.MapClaims, err error) {
+	if org == "" {
 		err = errors.New("empty org not allowed")
 		return
 	}
 
-	if token == "" {
-		var listener net.Listener
-		listener, err = net.Listen("tcp", "localhost:")
-		if err != nil {
-			err = errors.New("unable to start local http listener")
-			return
-		}
+	bodyBytes, err := json.Marshal(struct {
+		Organization string `json:"organization"`
+		DeviceOS     string `json:"device_os"`
+	}{
+		Organization: org,
+		DeviceOS:     runtime.GOOS,
+	})
+	if err != nil {
+		err = errors.New("unable to encode JSON request")
+		return
+	}
 
-		localPort := listener.Addr().(*net.TCPAddr).Port
-		url := fmt.Sprintf("%s/client/auth/org/%s?port=%d", api.APIURL(), orgID, localPort)
-		token = Launch(url, listener)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/client/device_authorizations", api.APIURL()), bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		err = errors.New("unable to build new http request object")
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		err = fmt.Errorf("failed to request client device authorization: %s", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("client device authorization request returned non-200 status: %d", resp.StatusCode)
+		return
+	}
+
+	bodyByt, err := io.ReadAll(resp.Body)
+	if err != nil {
+		err = fmt.Errorf("client device authorization response body could not be read: %s", err)
+		return
+	}
+
+	var deviceAuthorizationReponse *struct {
+		Code string `json:"code"`
+
+		AuthorizationEndpoint               string `json:"authorization_endpoint"`
+		AuthorizationEndpointCodeQueryParam string `json:"authorization_endpoint_code_query_param"`
+
+		TokenEndpoint                string `json:"token_endpoint"`
+		TokenEndpointCodeHeader      string `json:"token_endpoint_code_header"`
+		TokenEndpointPollInterval    uint64 `json:"token_endpoint_poll_interval"`
+		TokenEndpointPollMaxAttempts uint64 `json:"token_endpoint_poll_max_attempts"`
+	}
+	if err = json.Unmarshal(bodyByt, &deviceAuthorizationReponse); err != nil {
+		err = fmt.Errorf("client device authorization response body not the correct shape: %s", err)
+		return
+	}
+
+	url := fmt.Sprintf(
+		"%s%s?%s=%s",
+		api.APIURL(),
+		deviceAuthorizationReponse.AuthorizationEndpoint,
+		deviceAuthorizationReponse.AuthorizationEndpointCodeQueryParam,
+		deviceAuthorizationReponse.Code)
+	fmt.Printf("Please navigate to the URL below in order to complete the login process:\n%s\n", url)
+
+	// Try opening the system's browser automatically. The error is ignored because the desired behavior of the
+	// handler is the same regardless of whether opening the browser fails or succeeds -- we still print the URL.
+	// This is desirable because in the event opening the browser succeeds, the customer may still accidentally
+	// close the new tab / browser session, or may want to authenticate in a different browser / session. In the
+	// event that opening the browser fails, the customer may still complete authenticating by navigating to the
+	// URL in a different device.
+	_ = open.Run(url)
+
+	token, err = pollForToken(
+		org,
+		deviceAuthorizationReponse.Code,
+		deviceAuthorizationReponse.TokenEndpoint,
+		deviceAuthorizationReponse.TokenEndpointCodeHeader,
+		deviceAuthorizationReponse.TokenEndpointPollInterval,
+		deviceAuthorizationReponse.TokenEndpointPollMaxAttempts)
+	if err != nil {
+		err = fmt.Errorf("polling for authorized token failed: %s", err)
+		return
 	}
 
 	parsedJWT, err := jwt.Parse(token, nil)
@@ -54,10 +122,101 @@ func Login(orgID string) (token string, claims jwt.MapClaims, err error) {
 		return
 	}
 
+	if err = saveToken(token); err != nil {
+		err = fmt.Errorf("failed to save token: %s", err)
+		return
+	}
+
+	return token, claims, nil
+}
+
+func pollForToken(
+	org string,
+	code string,
+	tokenEndpoint string,
+	tokenEndpointCodeHeader string,
+	pollIntervalSeconds uint64,
+	pollIntervalMaxAttempts uint64,
+) (string, error) {
+	var token string
+
+	errUnauthorizedForOrg := fmt.Errorf("authenticated user is not authorized for organization \"%s\"", org)
+	errUnexpectedStatus := errors.New("unexpected client device authorization status")
+	errStillWaiting := errors.New("client device authorization flow not (yet) completed")
+
+	retryFn := func() error {
+		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s%s", api.APIURL(), tokenEndpoint), nil)
+		if err != nil {
+			return fmt.Errorf("failed to build new request: %s", err)
+		}
+		req.Header.Add(tokenEndpointCodeHeader, code)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed request for client device authorization code status: %s", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return errors.New("non 200 back from api")
+		}
+
+		bodyByt, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("could not read response body for device auth: %s", err)
+		}
+
+		var clientDeviceAuthorizationResponse *struct {
+			Status      string `json:"status,omitempty"`
+			ClientToken string `json:"client_token,omitempty"`
+		}
+		if err := json.Unmarshal(bodyByt, &clientDeviceAuthorizationResponse); err != nil {
+			return fmt.Errorf("could not decode response body onto client device authorization object: %s", err)
+		}
+
+		switch clientDeviceAuthorizationResponse.Status {
+		case "authorized":
+			token = clientDeviceAuthorizationResponse.ClientToken
+			return nil
+		case "not_authorized":
+			return backoff.Permanent(errUnauthorizedForOrg)
+		case "waiting":
+			return errStillWaiting
+		default:
+			return errUnexpectedStatus
+		}
+	}
+
+	err := backoff.Retry(retryFn,
+		backoff.WithMaxRetries(
+			backoff.NewConstantBackOff(time.Duration(pollIntervalSeconds)*time.Second),
+			pollIntervalMaxAttempts,
+		),
+	)
+	if err != nil {
+		if errors.Is(err, errUnauthorizedForOrg) {
+			fmt.Printf("Error: %s\n", err)
+			os.Exit(1)
+		}
+		if errors.Is(err, errUnexpectedStatus) {
+			fmt.Println("Error: An unknown error occured!")
+			os.Exit(1)
+		}
+		if errors.Is(err, errStillWaiting) {
+			fmt.Printf("Error: Device authorization flow timed out after %d seconds\n", pollIntervalSeconds*pollIntervalMaxAttempts)
+			os.Exit(1)
+		}
+
+		// unhandled error cases are returned and eventually logged
+		return "", err
+	}
+
+	return token, nil
+}
+
+func saveToken(token string) error {
 	currentUser, err := user.Current()
 	if err != nil {
-		err = fmt.Errorf("couldn't get currently logged in operating system user: %w", err)
-		return
+		return fmt.Errorf("couldn't get currently logged in operating system user: %w", err)
 	}
 
 	// Write to client token file
@@ -67,28 +226,24 @@ func Login(orgID string) (token string, claims jwt.MapClaims, err error) {
 	configPath := filepath.Dir(tokenFile)
 	if _, err = os.Stat(configPath); os.IsNotExist(err) {
 		if err = os.Mkdir(configPath, 0700); err != nil {
-			err = fmt.Errorf("failed to create directory %s : %w", configPath, err)
-			return
+			return fmt.Errorf("failed to create directory %s : %w", configPath, err)
 		}
 	}
 
 	f, err := os.Create(tokenFile)
 	if err != nil {
-		err = fmt.Errorf("couldn't write token: %w", err)
-		return
+		return fmt.Errorf("couldn't write token: %w", err)
 	}
 	defer f.Close()
 	if err = os.Chmod(tokenFile, 0600); err != nil {
-		err = fmt.Errorf("couldn't change permission for token file: %w", err)
-		return
+		return fmt.Errorf("couldn't change permission for token file: %w", err)
 	}
 
 	if _, err = f.WriteString(fmt.Sprintf("%s\n", token)); err != nil {
-		err = fmt.Errorf("couldn't write token to file: %w", err)
-		return
+		return fmt.Errorf("couldn't write token to file: %w", err)
 	}
 
-	return token, claims, nil
+	return nil
 }
 
 func IsExistingClientTokenValid(homeDir string) (valid bool, token, email string, err error) {
@@ -119,7 +274,7 @@ func GetClientToken(homeDir string) (string, error) {
 	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
 		return "", fmt.Errorf("please login first (no token found in " + tokenFile + ")")
 	}
-	content, err := ioutil.ReadFile(tokenFile)
+	content, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return "", err
 	}
@@ -344,6 +499,10 @@ func PickHost(inputHost string, socketTypes ...string) (models.ClientResource, e
 		hostToShow := res.DomainsToString() + " " + blue.Sprintf("[%s]", strings.Split(res.Description, ";")[0])
 		answers[hostToShow] = res
 		hosts = append(hosts, hostToShow)
+	}
+
+	if len(hosts) < 1 {
+		return models.ClientResource{}, fmt.Errorf("No hosts available to connect to\n")
 	}
 
 	var picked string
