@@ -15,7 +15,6 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/borderzero/border0-cli/internal/connector/core"
 	"github.com/borderzero/border0-cli/internal/connector/discover"
-	"github.com/borderzero/border0-cli/internal/connector/monitor"
 	"github.com/borderzero/border0-cli/internal/http"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
