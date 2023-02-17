@@ -95,7 +95,7 @@ func APIURL() string {
 
 func getToken() (*models.Credentials, error) {
 	if os.Getenv("BORDER0_ADMIN_TOKEN") != "" {
-		return models.NewAccessToken(os.Getenv("BORDER0_ADMIN_TOKEN"), models.CredentialsTypeToken), nil
+		return models.NewCredentials(os.Getenv("BORDER0_ADMIN_TOKEN"), models.CredentialsTypeToken), nil
 	}
 
 	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
@@ -107,7 +107,7 @@ func getToken() (*models.Credentials, error) {
 	}
 
 	tokenString := strings.TrimRight(string(content), "\n")
-	return models.NewAccessToken(tokenString, models.CredentialsTypeUser), nil
+	return models.NewCredentials(tokenString, models.CredentialsTypeUser), nil
 }
 
 func tokenfile() string {
@@ -133,7 +133,7 @@ func (a *Border0API) Request(method string, url string, target interface{}, data
 	}
 
 	if a.AccessToken != "" {
-		a.Credentials = models.NewAccessToken(a.AccessToken, models.CredentialsTypeUser)
+		a.Credentials = models.NewCredentials(a.AccessToken, models.CredentialsTypeUser)
 	}
 
 	if a.Credentials != nil && a.Credentials.AccessToken != "" {
@@ -407,7 +407,7 @@ func (a *Border0API) RefreshAccessToken() (*models.Credentials, error) {
 		return nil, err
 	}
 
-	return models.NewAccessToken(res.Token, models.CredentialsTypeUser), nil
+	return models.NewCredentials(res.Token, models.CredentialsTypeUser), nil
 }
 
 func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
@@ -422,7 +422,7 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(60 * time.Second):
+			case <-time.After(60 * time.Hour):
 				token, err := a.RefreshAccessToken()
 				if err != nil {
 					fmt.Println(err)

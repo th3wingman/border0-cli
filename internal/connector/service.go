@@ -94,7 +94,7 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 		c.logger.Info("using token defined in config file")
 		accessToken := c.cfg.Credentials.Token
 
-		return models.NewAccessToken(accessToken, models.CredentialsTypeUser), nil
+		return models.NewCredentials(accessToken, models.CredentialsTypeUser), nil
 	} else if c.cfg.Credentials.GetUsername() != "" && c.cfg.Credentials.Password != "" {
 		c.logger.Info("logging in with username and password")
 
@@ -103,7 +103,7 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 			return nil, fmt.Errorf("failed to login: %v", err)
 		}
 
-		return models.NewAccessToken(resp.Token, models.CredentialsTypeUser), nil
+		return models.NewCredentials(resp.Token, models.CredentialsTypeUser), nil
 	} else {
 		c.logger.Info("using token defined in border0 file")
 		accessToken, err := http.GetToken()
@@ -111,7 +111,7 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 			return nil, err
 		}
 
-		return models.NewAccessToken(accessToken, models.CredentialsTypeToken), nil
+		return models.NewCredentials(accessToken, models.CredentialsTypeToken), nil
 	}
 }
 

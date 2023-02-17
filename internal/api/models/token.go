@@ -17,7 +17,7 @@ func (a *Credentials) ShouldRefresh() bool {
 	return a.TokenType == "User"
 }
 
-func NewAccessToken(accessToken string, credentialsType string) *Credentials {
+func NewCredentials(accessToken string, credentialsType string) *Credentials {
 	sanitizedAccessToken := strings.Trim(accessToken, "\n")
 	sanitizedAccessToken = strings.Trim(sanitizedAccessToken, " ")
 
