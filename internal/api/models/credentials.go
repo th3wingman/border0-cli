@@ -14,7 +14,7 @@ type Credentials struct {
 }
 
 func (a *Credentials) ShouldRefresh() bool {
-	return a.TokenType == "User"
+	return a.TokenType == CredentialsTypeUser
 }
 
 func NewCredentials(accessToken string, credentialsType string) *Credentials {

@@ -431,9 +431,13 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 						return err
 					}
 				}
-				a.mutex.Lock()
-				a.Credentials = token
-				a.mutex.Unlock()
+
+				func() {
+					a.mutex.Lock()
+					defer a.mutex.Unlock()
+
+					a.Credentials = token
+				}()
 			}
 		}
 	})
