@@ -62,8 +62,8 @@ func (c *ConnectorCore) IsSocketConnected(key string) bool {
 }
 
 func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket) error {
-	session := ssh.NewConnection(c.logger, c.border0API, ssh.WithRetry(3))
-	c.connectedTunnels.Add(socket.ConnectorData.Key(), session)
+	session := ssh.NewConnection(c.logger, ssh.WithRetry(3))
+	c.connectedTunnels.Add(socket.SocketID, session)
 
 	// improve the error handling
 	userID, _, err := http.GetUserIDFromAccessToken(c.border0API.GetAccessToken())
@@ -84,13 +84,6 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	socket = *socketFromApi
 	socket.BuildConnectorDataByTags()
 
-	if len(socket.Tunnels) == 0 {
-		c.logger.Info("tunnel is empty, cannot connect to a tunnel")
-		return err
-	}
-
-	tunnel := socket.Tunnels[0]
-
 	var caCertPool *x509.CertPool
 	if socket.ConnectorAuthenticationEnabled {
 		caCertPool = x509.NewCertPool()
@@ -103,9 +96,9 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 		}
 	}
 
-	err = session.Connect(ctx, *userID, socket.SocketID, tunnel.TunnelID, socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.border0API.GetAccessToken(), "", socket.ConnectorAuthenticationEnabled, caCertPool)
+	err = session.Connect(ctx, *userID, socket.SocketID, "", socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.border0API.GetAccessToken(), "", socket.ConnectorAuthenticationEnabled, caCertPool)
 	if err != nil {
-		c.connectedTunnels.Delete(socket.ConnectorData.Key())
+		c.connectedTunnels.Delete(socket.SocketID)
 		return err
 	}
 
@@ -120,11 +113,12 @@ func (c *ConnectorCore) HandleUpdates(ctx context.Context, sockets []models.Sock
 	}
 
 	for _, socket := range sockets {
-		if !c.IsSocketConnected(socket.ConnectorData.Key()) {
+		if !c.IsSocketConnected(socket.SocketID) {
+			fmt.Println(socket.SocketID)
 			c.logger.Info("found new socket to connect")
 
 			c.connectChan <- connectTunnelData{
-				key:    socket.ConnectorData.Key(),
+				key:    socket.SocketID,
 				socket: socket,
 				action: "connect"}
 		}
@@ -388,14 +382,6 @@ func (c *ConnectorCore) CreateSocketAndTunnel(ctx context.Context, s *models.Soc
 		log.Println(err)
 		return nil, err
 	}
-
-	tunnel, err := c.border0API.CreateTunnel(ctx, createdSocket.SocketID)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-
-	createdSocket.Tunnels = append(createdSocket.Tunnels, *tunnel)
 
 	NewPolicyManager(c.logger, c.border0API).ApplyPolicies(ctx, *createdSocket, s.PolicyNames)
 	createdSocket.PolicyNames = s.PolicyNames
