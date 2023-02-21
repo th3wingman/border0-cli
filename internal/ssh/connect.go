@@ -48,10 +48,11 @@ type Connection struct {
 	tunnelID   string
 	closed     bool
 	numOfRetry int
+	api        api.API
 }
 
-func NewConnection(logger *zap.Logger, opts ...ConnectionOption) *Connection {
-	connection := &Connection{logger: logger}
+func NewConnection(logger *zap.Logger, api api.API, opts ...ConnectionOption) *Connection {
+	connection := &Connection{logger: logger, api: api}
 
 	for _, opt := range opts {
 		opt(connection)
@@ -65,9 +66,11 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 	c.tunnelID = tunnelID
 	var tunnel *models.Tunnel
 
+	c.api.StartRefreshAccessTokenJob(ctx)
+
 	if tunnelID != "" {
 		var err error
-		tunnel, err = api.NewAPI(api.WithAccessToken(accessToken)).GetTunnel(context.Background(), socketID, tunnelID)
+		tunnel, err = c.api.GetTunnel(context.Background(), socketID, tunnelID)
 		if err != nil {
 			return fmt.Errorf("error getting tunnel: %v", err)
 		}
@@ -106,18 +109,6 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 	if auth, err := authWithPrivateKeys(keyFiles, false); err == nil {
 		signers = append(signers, auth...)
 	}
-
-	// Start a thread that refreshes the token
-	// refresh every hour, 3600secs
-	go func() {
-		for {
-			time.Sleep(3600 * time.Second)
-			_, err := border0_http.RefreshLogin()
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
-	}()
 
 	proxyMatch, _ := regexp.Compile("^http(s)?://")
 	var proxyDialer proxy.Dialer

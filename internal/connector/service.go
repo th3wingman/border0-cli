@@ -36,13 +36,13 @@ func (c *ConnectorService) Start() error {
 	ctx := context.Background()
 	border0API := api.NewAPI()
 
-	accessToken, err := c.fetchAccessToken(border0API)
+	creds, err := c.fetchAccessToken(border0API)
 	if err != nil {
 		return err
 	}
 
 	//login with accesstoken or username and password
-	border0API.With(api.WithAccessToken(accessToken))
+	border0API.With(api.WithCredentials(creds))
 	//setup the version for border0
 	border0API.With(api.WithVersion(c.version))
 
@@ -89,29 +89,29 @@ func (c *ConnectorService) Start() error {
 	return nil
 }
 
-func (c *ConnectorService) fetchAccessToken(border0API api.API) (string, error) {
+func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credentials, error) {
 	if c.cfg.Credentials.Token != "" {
 		c.logger.Info("using token defined in config file")
 		accessToken := c.cfg.Credentials.Token
 
-		return accessToken, nil
+		return models.NewCredentials(accessToken, models.CredentialsTypeToken), nil
 	} else if c.cfg.Credentials.GetUsername() != "" && c.cfg.Credentials.Password != "" {
 		c.logger.Info("logging in with username and password")
 
 		resp, err := border0API.Login(c.cfg.Credentials.GetUsername(), c.cfg.Credentials.Password)
 		if err != nil {
-			return "", fmt.Errorf("failed to login: %v", err)
+			return nil, fmt.Errorf("failed to login: %v", err)
 		}
 
-		return resp.Token, nil
+		return models.NewCredentials(resp.Token, models.CredentialsTypeUser), nil
 	} else {
 		c.logger.Info("using token defined in border0 file")
 		accessToken, err := http.GetToken()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		return accessToken, nil
+		return models.NewCredentials(accessToken, models.CredentialsTypeUser), nil
 	}
 }
 

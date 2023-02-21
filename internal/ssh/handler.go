@@ -173,7 +173,7 @@ func SshConnect(userID string, socketID string, tunnelID string, port int, targe
 	var err error
 
 	if tunnelID != "" {
-		tunnel, err = api.NewAPI(api.WithAccessToken(accessToken)).GetTunnel(context.Background(), socketID, tunnelID)
+		tunnel, err = api.NewAPI(api.WithCredentials(models.NewCredentials(accessToken, models.CredentialsTypeUser))).GetTunnel(context.Background(), socketID, tunnelID)
 		if err != nil {
 			return fmt.Errorf("error getting tunnel: %v", err)
 		}
