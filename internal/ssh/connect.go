@@ -63,10 +63,14 @@ func NewConnection(logger *zap.Logger, opts ...ConnectionOption) *Connection {
 func (c *Connection) Connect(ctx context.Context, userID string, socketID string, tunnelID string, port int, targethost string, identityFile string, proxyHost string, version string, localssh, httpserver bool, sshCa string, accessToken, httpdir string, connectorAuthRequired bool, caCertPool *x509.CertPool) error {
 	c.socketID = socketID
 	c.tunnelID = tunnelID
+	var tunnel *models.Tunnel
 
-	tunnel, err := api.NewAPI(api.WithAccessToken(accessToken)).GetTunnel(context.Background(), socketID, tunnelID)
-	if err != nil {
-		return fmt.Errorf("error getting tunnel: %v", err)
+	if tunnelID != "" {
+		var err error
+		tunnel, err = api.NewAPI(api.WithAccessToken(accessToken)).GetTunnel(context.Background(), socketID, tunnelID)
+		if err != nil {
+			return fmt.Errorf("error getting tunnel: %v", err)
+		}
 	}
 
 	sshConfig := &ssh.ClientConfig{
@@ -191,9 +195,20 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 	sshClient := ssh.NewClient(sshCon, channel, req)
 	defer sshClient.Close()
 
-	listener, err := sshClient.Listen("tcp", fmt.Sprintf("localhost:%d", tunnel.LocalPort))
+	done := make(chan bool, 1)
+	defer func() { done <- true }()
+	go KeepAlive(sshClient, done)
+
+	var listenPort int
+	if tunnel == nil {
+		listenPort = 0
+	} else {
+		listenPort = tunnel.LocalPort
+	}
+
+	listener, err := sshClient.Listen("tcp", fmt.Sprintf("localhost:%d", listenPort))
 	if err != nil {
-		c.logger.Error("Listen open port ON remote server error", zap.Int("port", tunnel.LocalPort), zap.Error(err))
+		c.logger.Error("Listen open port ON remote server error", zap.Int("port", listenPort), zap.Error(err))
 		return ErrListenOnPort
 	}
 	defer listener.Close()
@@ -318,10 +333,6 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 			}
 		}()
 	}
-
-	done := make(chan bool, 1)
-	defer func() { done <- true }()
-	go KeepAlive(sshClient, done)
 
 	go func(context.Context) {
 		<-ctx.Done()

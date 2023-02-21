@@ -16,14 +16,8 @@ import (
 
 func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 	socket := factories.SocketFactory.MustCreate().(*models.Socket)
-	tunnel := &models.Tunnel{
-		TunnelID:     "tunnel-id",
-		LocalPort:    100,
-		TunnelServer: "",
-	}
 
 	expectedSocket := *socket
-	expectedSocket.Tunnels = append(expectedSocket.Tunnels, *tunnel)
 	staticSocketPlugins := &discover.StaticSocketFinder{}
 	cfg := validConfig()
 
@@ -45,7 +39,6 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 				socket.PluginName = staticSocketPlugins.Name()
 				socket.BuildConnectorDataAndTags(cfg.Connector.Name)
 				api.EXPECT().CreateSocket(mock.Anything, mock.Anything).Return(socket, nil)
-				api.EXPECT().CreateTunnel(mock.Anything, mock.Anything).Return(tunnel, nil)
 			},
 		},
 	}
