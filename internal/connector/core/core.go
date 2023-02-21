@@ -62,7 +62,7 @@ func (c *ConnectorCore) IsSocketConnected(key string) bool {
 }
 
 func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket) error {
-	session := ssh.NewConnection(c.logger, ssh.WithRetry(3))
+	session := ssh.NewConnection(c.logger, c.border0API, ssh.WithRetry(3))
 	c.connectedTunnels.Add(socket.SocketID, session)
 
 	// improve the error handling
