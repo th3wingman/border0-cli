@@ -42,19 +42,15 @@ type API interface {
 	GetAccessToken() string
 }
 
+var once sync.Once
+
 var APIImpl = (*Border0API)(nil)
 
 type APIOption func(*Border0API)
 
-func WithAccessToken(accessToken string) APIOption {
+func WithCredentials(creds *models.Credentials) APIOption {
 	return func(h *Border0API) {
-		h.AccessToken = accessToken
-	}
-}
-
-func WithCredentials(accessToken *models.Credentials) APIOption {
-	return func(h *Border0API) {
-		h.AccessToken = accessToken.AccessToken
+		h.Credentials = creds
 	}
 }
 
@@ -65,7 +61,6 @@ func WithVersion(version string) APIOption {
 }
 
 type Border0API struct {
-	AccessToken string
 	Credentials *models.Credentials
 	Version     string
 	mutex       *sync.Mutex
@@ -127,13 +122,9 @@ func (a *Border0API) Request(method string, url string, target interface{}, data
 	req, _ := http.NewRequest(method, fmt.Sprintf("%s/%s", APIURL(), url), body)
 
 	//try to find the token in the environment
-	if requireAccessToken && a.AccessToken == "" || (a.Credentials != nil && a.Credentials.AccessToken == "") {
+	if requireAccessToken && a.Credentials == nil || (a.Credentials != nil && a.Credentials.AccessToken == "") {
 		token, _ := getToken()
 		a.Credentials = token
-	}
-
-	if a.AccessToken != "" {
-		a.Credentials = models.NewCredentials(a.AccessToken, models.CredentialsTypeUser)
 	}
 
 	if a.Credentials != nil && a.Credentials.AccessToken != "" {
@@ -297,7 +288,11 @@ func (a *Border0API) Login(email, password string) (*models.LoginResponse, error
 }
 
 func (a *Border0API) GetAccessToken() string {
-	return a.AccessToken
+	if a.Credentials == nil {
+		return ""
+	}
+
+	return a.Credentials.AccessToken
 }
 
 type actionUpdate struct {
@@ -369,6 +364,10 @@ func (a *Border0API) GetPoliciesBySocketID(socketID string) ([]models.Policy, er
 }
 
 func (a *Border0API) RefreshAccessToken() (*models.Credentials, error) {
+	if a.Credentials == nil {
+		return nil, fmt.Errorf("no credentials found")
+	}
+
 	if !a.Credentials.ShouldRefresh() {
 		return nil, fmt.Errorf("token is not valid to refresh")
 	}
@@ -411,34 +410,47 @@ func (a *Border0API) RefreshAccessToken() (*models.Credentials, error) {
 }
 
 func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
+	if a.Credentials == nil {
+		fmt.Println("no credentials found, no need to refresh token")
+		return
+	}
+
 	if !a.Credentials.ShouldRefresh() {
 		fmt.Println("using a static credentials, no need to refresh token")
 		return
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(60 * time.Hour):
-				token, err := a.RefreshAccessToken()
-				if err != nil {
-					fmt.Println(err)
-
-					if err.Error() == "token is not valid to refresh" {
-						return err
+	onceBody := func() {
+		g, ctx := errgroup.WithContext(ctx)
+		g.Go(func() error {
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(10 * time.Second):
+					token, err := a.RefreshAccessToken()
+					if err != nil {
+						if err.Error() == "token is not valid to refresh" {
+							return err
+						}
 					}
+
+					func() {
+						a.mutex.Lock()
+						defer a.mutex.Unlock()
+						a.Credentials = token
+					}()
 				}
-
-				func() {
-					a.mutex.Lock()
-					defer a.mutex.Unlock()
-
-					a.Credentials = token
-				}()
 			}
-		}
-	})
+		})
+
+		// Run the error group in the background
+		go func() {
+			if err := g.Wait(); err != nil {
+				fmt.Println(err)
+			}
+		}()
+	}
+
+	once.Do(onceBody)
 }

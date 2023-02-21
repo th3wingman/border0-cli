@@ -36,13 +36,13 @@ func (c *ConnectorService) Start() error {
 	ctx := context.Background()
 	border0API := api.NewAPI()
 
-	accessToken, err := c.fetchAccessToken(border0API)
+	creds, err := c.fetchAccessToken(border0API)
 	if err != nil {
 		return err
 	}
 
 	//login with accesstoken or username and password
-	border0API.With(api.WithCredentials(accessToken))
+	border0API.With(api.WithCredentials(creds))
 	//setup the version for border0
 	border0API.With(api.WithVersion(c.version))
 
@@ -94,7 +94,7 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 		c.logger.Info("using token defined in config file")
 		accessToken := c.cfg.Credentials.Token
 
-		return models.NewCredentials(accessToken, models.CredentialsTypeUser), nil
+		return models.NewCredentials(accessToken, models.CredentialsTypeToken), nil
 	} else if c.cfg.Credentials.GetUsername() != "" && c.cfg.Credentials.Password != "" {
 		c.logger.Info("logging in with username and password")
 
@@ -111,7 +111,7 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 			return nil, err
 		}
 
-		return models.NewCredentials(accessToken, models.CredentialsTypeToken), nil
+		return models.NewCredentials(accessToken, models.CredentialsTypeUser), nil
 	}
 }
 

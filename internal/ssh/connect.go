@@ -67,6 +67,7 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 	var tunnel *models.Tunnel
 
 	c.api.StartRefreshAccessTokenJob(ctx)
+
 	if tunnelID != "" {
 		var err error
 		tunnel, err = c.api.GetTunnel(context.Background(), socketID, tunnelID)

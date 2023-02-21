@@ -114,7 +114,6 @@ func (c *ConnectorCore) HandleUpdates(ctx context.Context, sockets []models.Sock
 
 	for _, socket := range sockets {
 		if !c.IsSocketConnected(socket.SocketID) {
-			fmt.Println(socket.SocketID)
 			c.logger.Info("found new socket to connect")
 
 			c.connectChan <- connectTunnelData{
