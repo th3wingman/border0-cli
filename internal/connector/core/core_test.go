@@ -37,7 +37,7 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 			border0API: func(api *mocks.API) {
 				api.EXPECT().GetSockets(mock.Anything).Return([]models.Socket{}, nil)
 				socket.PluginName = staticSocketPlugins.Name()
-				socket.BuildConnectorDataAndTags(cfg.Connector.Name)
+				socket.BuildConnectorDataAndTags(cfg.Connector.Name, "")
 				api.EXPECT().CreateSocket(mock.Anything, mock.Anything).Return(socket, nil)
 			},
 		},
@@ -48,7 +48,7 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 			apiMock := &mocks.API{}
 			tt.border0API(apiMock)
 
-			c := NewConnectorCore(zap.NewNop(), tt.cfg, tt.plugin, apiMock)
+			c := NewConnectorCore(zap.NewNop(), tt.cfg, tt.plugin, apiMock, Metadata{})
 
 			sockets, err := c.discovery.Find(context.Background(), tt.cfg, discover.DiscoverState{})
 			if (err != nil) != tt.wantErr {
@@ -65,7 +65,7 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 
 			for i, s := range tt.want {
 				s.PluginName = tt.plugin.Name()
-				s.BuildConnectorDataAndTags(tt.cfg.Connector.Name)
+				s.BuildConnectorDataAndTags(tt.cfg.Connector.Name, "")
 				tt.want[i] = s
 			}
 
