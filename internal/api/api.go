@@ -427,7 +427,7 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case <-time.After(10 * time.Second):
+				case <-time.After(1 * time.Hour):
 					token, err := a.RefreshAccessToken()
 					if err != nil {
 						if err.Error() == "token is not valid to refresh" {
