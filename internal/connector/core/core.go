@@ -37,9 +37,15 @@ type ConnectorCore struct {
 	connectChan   chan connectTunnelData
 	// connectedTunnels map[string]*ssh.Connection
 	connectedTunnels *SyncMap
+
+	metadata Metadata // additionall metadata
 }
 
-func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API) *ConnectorCore {
+type Metadata struct {
+	Principal string // e.g. "token:${token_uuid}" OR "user:${user_uuid}"
+}
+
+func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API, meta Metadata) *ConnectorCore {
 	connectedTunnels := &SyncMap{}
 	connectChan := make(chan connectTunnelData, 5)
 	discoverState := discover.DiscoverState{
@@ -47,7 +53,14 @@ func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.
 		RunsCount: 0,
 	}
 
-	return &ConnectorCore{connectedTunnels: connectedTunnels, connectChan: connectChan, logger: logger, discovery: discovery, cfg: cfg, border0API: border0API, discoverState: discoverState}
+	return &ConnectorCore{
+		connectedTunnels: connectedTunnels,
+		connectChan:      connectChan,
+		logger:           logger, discovery: discovery, cfg: cfg,
+		border0API:    border0API,
+		discoverState: discoverState,
+		metadata:      meta,
+	}
 }
 
 func (c *ConnectorCore) IsSocketConnected(key string) bool {
@@ -172,7 +185,7 @@ func (c *ConnectorCore) DiscoverNewSocketChanges(ctx context.Context, ch chan []
 	}
 
 	for i, s := range sockets {
-		s.BuildConnectorDataAndTags(c.cfg.Connector.Name)
+		s.BuildConnectorDataAndTags(c.cfg.Connector.Name, c.metadata.Principal)
 		sockets[i] = s
 	}
 
@@ -191,7 +204,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 	for i, socket := range discoveredSockets {
 		socket.PluginName = c.discovery.Name()
 		socket.SanitizeName()
-		socket.BuildConnectorData(c.cfg.Connector.Name)
+		socket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
 		socket.Tags = socket.ConnectorData.Tags()
 		socket.SetupTypeAndUpstreamTypeByPortOrTags()
 		localSocketsMap[socket.ConnectorData.Key()] = socket
@@ -355,7 +368,7 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 			}
 
 			createdSocket.PluginName = c.discovery.Name()
-			createdSocket.BuildConnectorData(c.cfg.Connector.Name)
+			createdSocket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
 
 			socketsToConnect = append(socketsToConnect, *createdSocket)
 		} else {

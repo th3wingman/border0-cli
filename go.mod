@@ -28,8 +28,6 @@ require (
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.8.1
-	github.com/takama/daemon v1.0.0
-	github.com/txn2/txeh v1.3.0
 	go.uber.org/zap v1.19.0
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	golang.org/x/net v0.1.0

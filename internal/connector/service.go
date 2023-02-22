@@ -16,6 +16,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector/core"
 	"github.com/borderzero/border0-cli/internal/connector/discover"
 	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -84,9 +85,45 @@ func (c *ConnectorService) Start() error {
 	// always load the static socket plugin
 	plugins = append(plugins, &discover.StaticSocketFinder{})
 
-	c.StartWithPlugins(ctx, c.cfg, border0API, plugins)
+	c.StartWithPlugins(ctx, c.cfg, border0API, plugins, c.buildMetadata(creds.AccessToken))
 
 	return nil
+}
+
+func (c *ConnectorService) buildMetadata(accessToken string) core.Metadata {
+	meta := core.Metadata{}
+
+	token, _, err := new(jwt.Parser).ParseUnverified(accessToken, jwt.MapClaims{})
+	if err != nil {
+		c.logger.Warn("could not parse access token in order to build connector metadata")
+		return meta
+	}
+
+	if token == nil || token.Claims == nil {
+		c.logger.Warn("nil access token or claims, could not build connector metadata")
+		return meta
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		c.logger.Warn("token claims could not be decoded to map")
+		return meta
+	}
+
+	typeClaim, ok := claims["type"].(string)
+	if !ok {
+		c.logger.Warn("token claims did not contain \"type\"")
+		return meta
+	}
+	tokenID, ok := claims["user_id"].(string)
+	if !ok {
+		c.logger.Warn("token claims did not contain \"user_id\"")
+		return meta
+	}
+
+	meta.Principal = fmt.Sprintf("%s:%s", typeClaim, tokenID)
+
+	return meta
 }
 
 func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credentials, error) {
@@ -115,14 +152,14 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 	}
 }
 
-func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Config, border0API api.API, plugins []discover.Discover) error {
+func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Config, border0API api.API, plugins []discover.Discover, metadata core.Metadata) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	g, groupCtx := errgroup.WithContext(ctx)
 
 	for _, discoverPlugin := range plugins {
-		connectorCore := core.NewConnectorCore(c.logger, c.cfg, discoverPlugin, border0API)
+		connectorCore := core.NewConnectorCore(c.logger, c.cfg, discoverPlugin, border0API, metadata)
 
 		socketUpdateCh := make(chan []models.Socket, 1)
 

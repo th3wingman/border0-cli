@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+const (
+	tagKeyManagedBy = "managed_by"
+)
+
 type ConnectorData struct {
 	Name           string
 	Connector      string
@@ -16,6 +20,7 @@ type ConnectorData struct {
 	Ec2Tag         string
 	InstanceId     string
 	PluginName     string
+	ManagedBy      string
 }
 
 func (c *ConnectorData) Tags() map[string]string {
@@ -29,6 +34,10 @@ func (c *ConnectorData) Tags() map[string]string {
 		"policy_group":    c.PolicyGroup,
 		"instance_id":     c.InstanceId,
 		"plugin_name":     c.PluginName,
+	}
+
+	if c.ManagedBy != "" {
+		data[tagKeyManagedBy] = c.ManagedBy
 	}
 
 	return data
@@ -78,6 +87,7 @@ type Socket struct {
 	Ec2Tag         string         `json:"-"`
 	InstanceId     string         `json:"-"`
 	PluginName     string         `json:"-"`
+	ManagedBy      string         `json:"-"`
 	ConnectorData  *ConnectorData `json:"-"`
 }
 
@@ -88,7 +98,7 @@ func (s *Socket) SanitizeName() {
 	s.Name = strings.Replace(socketName, "_", "-", -1)
 }
 
-func (s *Socket) BuildConnectorData(connectorName string) {
+func (s *Socket) BuildConnectorData(connectorName, principal string) {
 	s.ConnectorData = &ConnectorData{
 		Name:           s.Name,
 		Connector:      connectorName,
@@ -99,11 +109,12 @@ func (s *Socket) BuildConnectorData(connectorName string) {
 		Ec2Tag:         s.Ec2Tag,
 		InstanceId:     s.InstanceId,
 		PluginName:     s.PluginName,
+		ManagedBy:      principal,
 	}
 }
 
-func (s *Socket) BuildConnectorDataAndTags(connectorName string) {
-	s.BuildConnectorData(connectorName)
+func (s *Socket) BuildConnectorDataAndTags(connectorName, principal string) {
+	s.BuildConnectorData(connectorName, principal)
 	s.Tags = s.ConnectorData.Tags()
 }
 
@@ -125,6 +136,7 @@ func (s *Socket) BuildConnectorDataByTags() {
 	data.InstanceId = s.Tags["instance_id"]
 	data.PolicyGroup = s.Tags["policy_group"]
 	data.PluginName = s.Tags["plugin_name"]
+	data.ManagedBy = s.Tags[tagKeyManagedBy]
 
 	s.ConnectorData = &data
 }
