@@ -157,6 +157,9 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 		return err
 	}, retriesThreeTimesEveryTwoSeconds)
 
+	// only close the connection when the retries exhausted
+	defer c.Close()
+
 	if err != nil {
 		return fmt.Errorf("error connecting to server: %v", err)
 	}
@@ -167,7 +170,6 @@ func (c *Connection) Connect(ctx context.Context, userID string, socketID string
 func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshConfig *ssh.ClientConfig, tunnel *models.Tunnel, port int, targethost string, localssh, httpserver bool, sshCa, httpdir string, connectorAuthRequired bool, socketID string, caCertPool *x509.CertPool) error {
 	remoteHost := net.JoinHostPort(sshServer(), "22")
 
-	defer c.Close()
 	conn, err := proxyDialer.Dial("tcp", remoteHost)
 	if err != nil {
 		c.logger.Error("dial into remote server error", zap.Error(err))
@@ -325,12 +327,12 @@ func (c *Connection) connect(ctx context.Context, proxyDialer proxy.Dialer, sshC
 		}()
 	}
 
+	c.session = session
+
 	go func(context.Context) {
 		<-ctx.Done()
 		session.Close()
 	}(ctx)
-
-	c.session = session
 
 	if err := session.Wait(); err != nil {
 		c.logger.Info("Session exited", zap.String("error", err.Error()))
