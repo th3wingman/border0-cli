@@ -244,7 +244,6 @@ var notificationListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list organization notifications",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
@@ -320,7 +319,6 @@ var notificationAddCmd = &cobra.Command{
 	Short: "Add organization notification",
 	Args:  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 	Run: func(cmd *cobra.Command, args []string) {
-
 		client, err := border0_http.NewClient()
 		if err != nil {
 			log.Fatalf("error: %v", err)
