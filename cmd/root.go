@@ -42,7 +42,6 @@ var (
 	port                   int
 	hostname               string
 	orgID                  string
-	dnsupdater_homedir     string
 	sshkey                 string
 	protected              bool
 	username               string
