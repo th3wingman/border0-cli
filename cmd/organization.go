@@ -335,7 +335,7 @@ var notificationAddCmd = &cobra.Command{
 		}
 
 		for _, event := range notificationEvents {
-			if event != "login-success" && event != "login-failure" && event != "audit-evetns" {
+			if event != "login-success" && event != "login-failure" && event != "audit-events" {
 				log.Fatalf("error: notification event must be any of login-success, login-failure or audit-events")
 			}
 		}
@@ -488,10 +488,10 @@ func init() {
 	notificationAddCmd.Flags().BoolVarP(&notificationEnabled, "enabled", "e", true, "notification enabled")
 	notificationAddCmd.Flags().StringVarP(&notificationWebhookUrl, "webhook-url", "u", "", "webhook url")
 	notificationAddCmd.Flags().StringSliceVarP(&notificationEmailRecipients, "email-recipient", "r", []string{}, "email recipients, can be specified multiple times")
-	notificationAddCmd.Flags().StringSliceVarP(&notificationEvents, "events", "v", []string{}, "notification events, can be specified multiple times (login-success, login-failure, audit-events)")
+	notificationAddCmd.Flags().StringSliceVarP(&notificationEvents, "event", "v", []string{}, "notification event, can be specified multiple times (login-success, login-failure, audit-events)")
 
 	notificationUpdateCmd.Flags().BoolVarP(&notificationEnabled, "enabled", "e", true, "notification enabled")
 	notificationUpdateCmd.Flags().StringVarP(&notificationWebhookUrl, "webhook-url", "u", "", "webhook url")
 	notificationUpdateCmd.Flags().StringSliceVarP(&notificationEmailRecipients, "email-recipient", "r", []string{}, "email recipients, can be specified multiple times")
-	notificationUpdateCmd.Flags().StringSliceVarP(&notificationEvents, "events", "v", []string{}, "notification events, can be specified multiple times (login-success, login-failure, audit-events)")
+	notificationUpdateCmd.Flags().StringSliceVarP(&notificationEvents, "event", "v", []string{}, "notification event, can be specified multiple times (login-success, login-failure, audit-events)")
 }
