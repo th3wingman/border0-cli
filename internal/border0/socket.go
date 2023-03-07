@@ -9,7 +9,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -31,11 +30,11 @@ import (
 )
 
 const (
-	defaultTunnelHost                     = "tunnel.border0.com"
-	defaultTunnelPort                     = 22
-	defaultSSHTimeout                     = 5 * time.Second
-	tunnelHostEnvVar                      = "BORDER0_TUNNEL"
-	tunnelHostKey                         = "AAAAC3NzaC1lZDI1NTE5AAAAIIyCjIut7ZxhiFj5HEnY8GQP2vSI9DJDcnUzVyUipCgP"
+	defaultTunnelHost = "tunnel.border0.com"
+	defaultTunnelPort = 22
+	defaultSSHTimeout = 5 * time.Second
+	tunnelHostEnvVar  = "BORDER0_TUNNEL"
+	// tunnelHostKey                         = "AAAAC3NzaC1lZDI1NTE5AAAAIIyCjIut7ZxhiFj5HEnY8GQP2vSI9DJDcnUzVyUipCgP"
 	connectorAuthenticationHeader         = "BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"
 	connectorAuthenticationShutdownTime   = 200 * time.Millisecond
 	connectorAuthenticationCertificateOrg = "Border0 Connector"
@@ -136,18 +135,8 @@ func (s *Socket) Listen() (net.Listener, error) {
 	}
 
 	go func() {
-		for {
-			select {
-			case err := <-s.errChan:
-				log.Printf("border0 listener: %v", err)
-				if s.closed {
-					return
-				}
-			case <-time.After(1 * time.Minute):
-				if s.closed {
-					return
-				}
-			}
+		for err := range s.errChan {
+			log.Printf("border0 listener: %v", err)
 		}
 	}()
 
@@ -155,6 +144,7 @@ func (s *Socket) Listen() (net.Listener, error) {
 }
 
 func (s *Socket) tunnelConnect() {
+	defer close(s.errChan)
 	if err := s.generateSSHKeyPair(); err != nil {
 		s.errChan <- err
 		return
@@ -166,21 +156,22 @@ func (s *Socket) tunnelConnect() {
 		return
 	}
 
-	keyBytes, err := base64.StdEncoding.DecodeString(tunnelHostKey)
-	if err != nil {
-		s.errChan <- fmt.Errorf("failed to decode hostkey %v", err)
-		return
-	}
+	// keyBytes, err := base64.StdEncoding.DecodeString(tunnelHostKey)
+	// if err != nil {
+	// 	s.errChan <- fmt.Errorf("failed to decode hostkey %v", err)
+	// 	return
+	// }
 
-	hostKey, err := ssh.ParsePublicKey(keyBytes)
-	if err != nil {
-		s.errChan <- fmt.Errorf("failed to parse hostkey %v", err)
-		return
-	}
+	// hostKey, err := ssh.ParsePublicKey(keyBytes)
+	// if err != nil {
+	// 	s.errChan <- fmt.Errorf("failed to parse hostkey %v", err)
+	// 	return
+	// }
 
 	sshConfig := &ssh.ClientConfig{
-		User:            userID,
-		HostKeyCallback: ssh.FixedHostKey(hostKey),
+		User: userID,
+		// HostKeyCallback: ssh.FixedHostKey(hostKey),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         defaultSSHTimeout,
 		ClientVersion:   "SSH-2.0-Border0-" + s.version,
 	}
@@ -423,7 +414,7 @@ func (s *Socket) Accept() (net.Conn, error) {
 		}
 
 		if err == io.EOF {
-			s.errChan <- fmt.Errorf("listener closed, reconnecting")
+			fmt.Println("listener closed, reconnecting...")
 			<-s.readyChan
 			return s.Accept()
 		} else {
