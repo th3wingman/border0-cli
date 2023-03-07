@@ -22,8 +22,8 @@ import (
 
 const APIUrl = "https://api.border0.com/api/v1"
 
-var ErrUnauthorized = errors.New("unauthorized")
-var ErrNotFound = errors.New("not found")
+var ErrUnauthorized = errors.New("invalid token, please login")
+var ErrNotFound = errors.New("resource not found")
 
 type API interface {
 	GetOrganizationInfo(ctx context.Context) (*models.Organization, error)
@@ -64,9 +64,10 @@ func WithVersion(version string) APIOption {
 }
 
 type Border0API struct {
-	Credentials *models.Credentials
-	Version     string
-	mutex       *sync.Mutex
+	Credentials       *models.Credentials
+	Version           string
+	mutex             *sync.Mutex
+	refreshJobStarted bool
 }
 
 type ErrorMessage struct {
@@ -413,6 +414,12 @@ func (a *Border0API) RefreshAccessToken() (*models.Credentials, error) {
 }
 
 func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
+	if a.refreshJobStarted {
+		return
+	}
+
+	a.refreshJobStarted = true
+
 	if a.Credentials == nil {
 		fmt.Println("no credentials found, no need to refresh token")
 		return
