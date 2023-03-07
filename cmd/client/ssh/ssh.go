@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/borderzero/border0-cli/internal/enum"
-	border0_ssh "github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
@@ -148,7 +146,7 @@ var sshCmd = &cobra.Command{
 			return fmt.Errorf("failed to write ssh key: %w", err)
 		}
 
-		buffer, err := ioutil.ReadFile(fmt.Sprintf("%s/.ssh/%s", home, claims["org_id"]))
+		buffer, err := os.ReadFile(fmt.Sprintf("%s/.ssh/%s", home, claims["org_id"]))
 		if err != nil {
 			return err
 		}
@@ -250,7 +248,7 @@ var sshCmd = &cobra.Command{
 		done := make(chan bool, 1)
 		defer func() { done <- true }()
 
-		go border0_ssh.KeepAlive(sshClient, done)
+		go keepAlive(sshClient, done)
 		if err := session.Wait(); err != nil {
 			// gracefully handle ssh.ExitMissingError. It's returned if a session is torn down cleanly,
 			// but the server sends no confirmation of the exit status
@@ -260,4 +258,47 @@ var sshCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func keepAlive(sshClient *ssh.Client, done chan bool) {
+	t := time.NewTicker(10 * time.Second)
+	max := 4
+	n := 0
+
+	defer t.Stop()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-t.C:
+			aliveChan := make(chan bool, 1)
+
+			go func() {
+				_, _, err := sshClient.SendRequest("keepalive@border0.com", true, nil)
+				if err != nil {
+					aliveChan <- false
+				} else {
+					aliveChan <- true
+				}
+			}()
+
+			select {
+			case <-time.After(5 * time.Second):
+				n++
+			case alive := <-aliveChan:
+				if !alive {
+					n++
+				} else {
+					n = 0
+				}
+			}
+
+			if n >= max {
+				log.Println("ssh keepalive timeout, disconnecting")
+				sshClient.Close()
+				return
+			}
+		}
+	}
 }

@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"log"
@@ -12,9 +11,9 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/borderzero/border0-cli/internal/connector/discover"
-	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -30,6 +29,7 @@ type ConnectorCore struct {
 	cfg        config.Config
 	border0API api.API
 	logger     *zap.Logger
+	version    string
 
 	numberOfRuns int64
 	// connectedSockets map[string]models.Socket
@@ -45,7 +45,7 @@ type Metadata struct {
 	Principal string // e.g. "token:${token_uuid}" OR "user:${user_uuid}"
 }
 
-func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API, meta Metadata) *ConnectorCore {
+func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API, meta Metadata, version string) *ConnectorCore {
 	connectedTunnels := &SyncMap{}
 	connectChan := make(chan connectTunnelData, 5)
 	discoverState := discover.DiscoverState{
@@ -60,6 +60,7 @@ func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.
 		border0API:    border0API,
 		discoverState: discoverState,
 		metadata:      meta,
+		version:       version,
 	}
 }
 
@@ -75,21 +76,14 @@ func (c *ConnectorCore) IsSocketConnected(key string) bool {
 }
 
 func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket) error {
-	session := ssh.NewConnection(c.logger, c.border0API, ssh.WithRetry(3))
-	c.connectedTunnels.Add(socket.SocketID, session)
-
-	// improve the error handling
-	userID, _, err := http.GetUserIDFromAccessToken(c.border0API.GetAccessToken())
+	conn, err := ssh.NewConnection(c.logger, c.border0API, socket.SocketID, c.version)
 	if err != nil {
 		return err
 	}
 
-	org, err := c.border0API.GetOrganizationInfo(ctx)
-	if err != nil {
-		return err
-	}
+	c.connectedTunnels.Add(socket.SocketID, conn)
 
-	//reload socket
+	// reload socket
 	socketFromApi, err := c.border0API.GetSocket(ctx, socket.SocketID)
 	if err != nil {
 		return err
@@ -97,23 +91,14 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	socket = *socketFromApi
 	socket.BuildConnectorDataByTags()
 
-	var caCertPool *x509.CertPool
-	if socket.ConnectorAuthenticationEnabled {
-		caCertPool = x509.NewCertPool()
-		if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
-			log.Fatalf("error: no organization ca certificate found")
-		} else {
-			if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
-				log.Fatalf("error: failed to parse ca certificate")
-			}
-		}
-	}
-
-	err = session.Connect(ctx, *userID, socket.SocketID, "", socket.ConnectorData.Port, socket.ConnectorData.TargetHostname, "", "", "", false, false, org.Certificates["ssh_public_key"], c.border0API.GetAccessToken(), "", socket.ConnectorAuthenticationEnabled, caCertPool)
+	time.Sleep(1 * time.Second)
+	l, err := conn.Socket.Listen()
 	if err != nil {
 		c.connectedTunnels.Delete(socket.SocketID)
 		return err
 	}
+
+	border0.Serve(l, socket.ConnectorData.TargetHostname, socket.ConnectorData.Port)
 
 	return nil
 }
@@ -341,7 +326,7 @@ func (c *ConnectorCore) CheckSocketsToDelete(ctx context.Context, socketsFromApi
 
 			// close tunnel connection before deleting the socket
 			c.connectChan <- connectTunnelData{
-				key:    apiSocket.ConnectorData.Key(),
+				key:    apiSocket.SocketID,
 				socket: apiSocket,
 				action: "disconnect"}
 

@@ -16,16 +16,17 @@ limitations under the License.
 package cmd
 
 import (
-	"crypto/x509"
+	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/borderzero/border0-cli/internal/util"
@@ -87,15 +88,6 @@ var socketCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new socket",
 	Run: func(cmd *cobra.Command, args []string) {
-		if protected {
-			if username == "" {
-				log.Fatalf("error: --username required when using --protected")
-			}
-			if password == "" {
-				log.Fatalf("error: --password required when using --protected")
-			}
-		}
-
 		if name == "" {
 			log.Fatalf("error: empty name not allowed")
 		}
@@ -190,10 +182,7 @@ var socketCreateCmd = &cobra.Command{
 		newSocket := &models.Socket{
 			Name:                           name,
 			Description:                    description,
-			ProtectedSocket:                protected,
 			SocketType:                     socketType,
-			ProtectedUsername:              username,
-			ProtectedPassword:              password,
 			AllowedEmailAddresses:          allowedEmailAddresses,
 			AllowedEmailDomains:            allowedEmailDomains,
 			UpstreamUsername:               upstream_username,
@@ -306,66 +295,18 @@ var socketConnectCmd = &cobra.Command{
 			socketID = args[0]
 		}
 
-		client, err := http.NewClient()
-		if err != nil {
-			log.Fatalf("Error: %v", err)
-		}
-
-		socket := models.Socket{}
-		err = client.Request("GET", "socket/"+socketID, &socket, nil)
+		socket, err := border0.NewSocket(context.Background(), api.NewAPI(api.WithVersion(version)), socketID)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 
-		if port < 1 {
-			if socket.SocketType == "http" {
-				if !httpserver {
-					return fmt.Errorf("error: port not specified")
-				}
-			} else if socket.SocketType == "ssh" {
-				if !localssh {
-					return fmt.Errorf("error: port not specified")
-				}
-			} else {
-				return fmt.Errorf("error: port not specified")
+		socket.WithVersion(version)
+
+		if proxyHost != "" {
+			if err := socket.WithProxy(proxyHost); err != nil {
+				log.Fatalf("error: %v", err)
 			}
 		}
-
-		userID, _, err := http.GetUserID()
-		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
-
-		userIDStr := *userID
-
-		org := models.Organization{}
-		err = client.Request("GET", "organization", &org, nil)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
-
-		var caCertPool *x509.CertPool
-		if socket.ConnectorAuthenticationEnabled {
-			caCertPool = x509.NewCertPool()
-			if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
-				log.Fatalf("error: no organization ca certificate found")
-			} else {
-				if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
-					log.Fatalf("error: failed to parse ca certificate")
-				}
-			}
-		}
-
-		// Handle control + C
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		go func() {
-			for {
-				<-c
-				log.Print("User disconnected...")
-				os.Exit(0)
-			}
-		}()
 
 		SetRlimit()
 
@@ -377,9 +318,24 @@ var socketConnectCmd = &cobra.Command{
 			localssh = false
 		}
 
-		err = ssh.SshConnect(userIDStr, socketID, "", port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir, socket.ConnectorAuthenticationEnabled, caCertPool)
+		l, err := socket.Listen()
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalf("error: %v", err)
+		}
+
+		defer l.Close()
+
+		switch {
+		case httpserver:
+			http.StartLocalHTTPServer(httpserver_dir, l)
+		case localssh:
+			sshServer := ssh.NewServer(socket.Organization.Certificates["ssh_public_key"])
+			sshServer.Serve(l)
+		default:
+			if port < 1 {
+				return fmt.Errorf("error: port not specified")
+			}
+			border0.Serve(l, hostname, port)
 		}
 
 		return nil
@@ -442,16 +398,6 @@ func init() {
 
 	socketCreateCmd.Flags().StringVarP(&name, "name", "n", "", "Socket name")
 	socketCreateCmd.Flags().StringVarP(&description, "description", "r", "", "Socket description")
-	socketCreateCmd.Flags().BoolVarP(&protected, "protected", "p", false, "Protected, default no")
-	socketCreateCmd.Flags().StringVarP(&username, "username", "u", "", "Username, required when protected set to true")
-	socketCreateCmd.Flags().StringVarP(&password, "password", "", "", "Password, required when protected set to true")
-
-	// These are deprecated
-	socketCreateCmd.Flags().StringVarP(&cloudauth_addresses, "allowed_email_addresses", "e", "", "Comma seperated list of allowed Email addresses when using cloudauth")
-	socketCreateCmd.Flags().MarkDeprecated("allowed_email_addresses", "use policies instead")
-	socketCreateCmd.Flags().StringVarP(&cloudauth_domains, "allowed_email_domains", "d", "", "comma seperated list of allowed Email domain (i.e. 'example.com', when using cloudauth")
-	socketCreateCmd.Flags().MarkDeprecated("allowed_email_domains", "use policies instead")
-
 	socketCreateCmd.Flags().StringVarP(&upstream_username, "upstream_username", "j", "", "Upstream username used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_password, "upstream_password", "k", "", "Upstream password used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_http_hostname, "upstream_http_hostname", "", "", "Upstream http hostname")
@@ -537,4 +483,5 @@ func init() {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
 
+	socketConnectCmd.Flags().MarkDeprecated("identity_file", "identity file is no longer used")
 }

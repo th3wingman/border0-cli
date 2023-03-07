@@ -16,14 +16,14 @@ limitations under the License.
 package cmd
 
 import (
-	"crypto/x509"
+	"context"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/jedib0t/go-pretty/table"
@@ -127,55 +127,17 @@ var tunnelConnectCmd = &cobra.Command{
 		if socketID == "" {
 			log.Fatalf("error: invalid socket_id")
 		}
-		if tunnelID == "" {
-			log.Fatalf("error: invalid tunnel_id")
-		}
 
-		client, err := http.NewClient()
-		if err != nil {
-			log.Fatalf("Error: %v", err)
-		}
-
-		socket := models.Socket{}
-		err = client.Request("GET", "socket/"+socketID, &socket, nil)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
-		}
-
-		if port < 1 {
-			if socket.SocketType == "http" {
-				if !httpserver {
-					cmd.Help()
-					log.Fatalf("error: port not specified")
-				}
-			} else if socket.SocketType == "ssh" {
-				if !localssh {
-					cmd.Help()
-					log.Fatalf("error: port not specified")
-				}
-			} else {
-				cmd.Help()
-				log.Fatalf("error: port not specified")
-			}
-		}
-
-		userID, _, err := http.GetUserID()
+		socket, err := border0.NewSocket(context.Background(), api.NewAPI(api.WithVersion(version)), socketID)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 
-		userIDStr := *userID
-
-		// Handle control + C
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		go func() {
-			for {
-				<-c
-				log.Print("User disconnected...")
-				os.Exit(0)
+		if proxyHost != "" {
+			if err := socket.WithProxy(proxyHost); err != nil {
+				log.Fatalf("error: %v", err)
 			}
-		}()
+		}
 
 		SetRlimit()
 
@@ -187,27 +149,24 @@ var tunnelConnectCmd = &cobra.Command{
 			localssh = false
 		}
 
-		org := models.Organization{}
-		err = client.Request("GET", "organization", &org, nil)
+		l, err := socket.Listen()
 		if err != nil {
-			log.Fatalf(fmt.Sprintf("Error: %v", err))
+			log.Fatalf("error: %v", err)
 		}
 
-		var caCertPool *x509.CertPool
-		if socket.ConnectorAuthenticationEnabled {
-			caCertPool = x509.NewCertPool()
-			if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
-				log.Fatalf("error: no organization ca certificate found")
-			} else {
-				if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
-					log.Fatalf("error: failed to parse ca certificate")
-				}
+		defer l.Close()
+
+		switch {
+		case httpserver:
+			http.StartLocalHTTPServer(httpserver_dir, l)
+		case localssh:
+			sshServer := ssh.NewServer(socket.Organization.Certificates["ssh_public_key"])
+			sshServer.Serve(l)
+		default:
+			if port < 1 {
+				log.Fatalf("error: port not specified")
 			}
-		}
-
-		err = ssh.SshConnect(userIDStr, socketID, tunnelID, port, hostname, identityFile, proxyHost, version, httpserver, localssh, org.Certificates["ssh_public_key"], "", httpserver_dir, socket.ConnectorAuthenticationEnabled, caCertPool)
-		if err != nil {
-			fmt.Println(err)
+			border0.Serve(l, hostname, port)
 		}
 	},
 }
@@ -245,6 +204,7 @@ func init() {
 	tunnelCmd.AddCommand(tunnelCreateCmd)
 	tunnelCmd.AddCommand(tunnelDeleteCmd)
 	tunnelCmd.AddCommand(tunnelConnectCmd)
+	tunnelCmd.Deprecated = "managing static tunnels is no longer needed, tunnels are dynamic now"
 
 	tunnelDeleteCmd.Flags().StringVarP(&tunnelID, "tunnel_id", "t", "", "Tunnel ID")
 	tunnelDeleteCmd.Flags().StringVarP(&socketID, "socket_id", "s", "", "Socket ID")
@@ -277,7 +237,6 @@ func init() {
 	tunnelConnectCmd.Flags().StringVarP(&proxyHost, "proxy", "", "", "Proxy host used for connection to border0")
 	tunnelConnectCmd.Flags().BoolVarP(&localssh, "localssh", "", false, "Start a local SSH server to accept SSH sessions on this host")
 	tunnelConnectCmd.Flags().BoolVarP(&localssh, "sshserver", "l", false, "Start a local SSH server to accept SSH sessions on this host")
-	tunnelConnectCmd.MarkFlagRequired("tunnel_id")
 	tunnelConnectCmd.MarkFlagRequired("socket_id")
 	tunnelConnectCmd.Flags().MarkDeprecated("localssh", "use --sshserver instead")
 	tunnelConnectCmd.Flags().BoolVarP(&httpserver, "httpserver", "", false, "Start a local http server to accept http connections on this host")
@@ -289,4 +248,7 @@ func init() {
 	tunnelConnectCmd.RegisterFlagCompletionFunc("tunnel_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getTunnels(toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
+
+	tunnelConnectCmd.Flags().MarkDeprecated("identity_file", "identity file is no longer used")
+
 }

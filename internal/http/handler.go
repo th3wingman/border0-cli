@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -134,7 +134,7 @@ func (c *Client) Request(method string, url string, target interface{}, data int
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-		responseData, err := ioutil.ReadAll(resp.Body)
+		responseData, err := io.ReadAll(resp.Body)
 		if err != nil {
 			// return just status code if failed to read response body
 			return fmt.Errorf("api returned a non 2xx status code (%d)", resp.StatusCode)
@@ -253,7 +253,7 @@ func CreateDeviceAuthorization() (string, error) {
 	}
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		responseData, _ := ioutil.ReadAll(resp.Body)
+		responseData, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("unauthorized %v", string(responseData))
 	}
 
@@ -342,8 +342,8 @@ func SaveTokenInDisk(accessToken string) error {
 	return nil
 }
 
-func Register(name, email, password, sshkey string) error {
-	form := models.RegisterForm{Name: name, Email: email, Password: password, Sshkey: sshkey}
+func Register(name, email, password string) error {
+	form := models.RegisterForm{Name: name, Email: email, Password: password}
 	buf, err := json.Marshal(form)
 	if err != nil {
 		return err
@@ -357,7 +357,7 @@ func Register(name, email, password, sshkey string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		responseData, _ := ioutil.ReadAll(resp.Body)
+		responseData, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to register user %d\n%v", resp.StatusCode, string(responseData))
 	}
 	return nil
@@ -373,7 +373,7 @@ func GetLatestVersion() (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("version check failed. Failed to get latest version (%d)", resp.StatusCode)
 	}
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -423,7 +423,7 @@ func GetLatestBinary(osname string, osarch string) (string, []byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", nil, fmt.Errorf("failed to get latest checksum version (%d)", resp.StatusCode)
 	}
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", nil, err
 	}
@@ -443,7 +443,7 @@ func GetLatestBinary(osname string, osarch string) (string, []byte, error) {
 		return "", nil, fmt.Errorf("failed to get latest version (%d)", resp.StatusCode)
 	}
 
-	bodyBytes, err2 := ioutil.ReadAll(resp.Body)
+	bodyBytes, err2 := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", nil, err2
 	}
@@ -458,7 +458,7 @@ func GetToken() (string, error) {
 	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
 		return "", errors.New("please login first (no token found)")
 	}
-	content, err := ioutil.ReadFile(tokenfile())
+	content, err := os.ReadFile(tokenfile())
 	if err != nil {
 		return "", err
 	}

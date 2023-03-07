@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -159,7 +160,7 @@ func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Conf
 	g, groupCtx := errgroup.WithContext(ctx)
 
 	for _, discoverPlugin := range plugins {
-		connectorCore := core.NewConnectorCore(c.logger, c.cfg, discoverPlugin, border0API, metadata)
+		connectorCore := core.NewConnectorCore(c.logger, c.cfg, discoverPlugin, border0API, metadata, c.version)
 
 		socketUpdateCh := make(chan []models.Socket, 1)
 
@@ -187,6 +188,7 @@ func (c *ConnectorService) StartSocketWorker(ctx context.Context, connectorCore 
 			case sockets := <-socketUpdateCh:
 				c.logger.Info("receiving an update")
 				connectorCore.HandleUpdates(ctx, sockets)
+				fmt.Printf("number of gorutines: %d\n", runtime.NumGoroutine())
 			case <-ctx.Done():
 				return errors.New("context canceled")
 			}
