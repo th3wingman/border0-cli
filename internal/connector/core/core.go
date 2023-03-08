@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,12 +32,10 @@ type ConnectorCore struct {
 	logger     *zap.Logger
 	version    string
 
-	numberOfRuns int64
-	// connectedSockets map[string]models.Socket
-	discoverState discover.DiscoverState
-	connectChan   chan connectTunnelData
-	// connectedTunnels map[string]*ssh.Connection
-	connectedTunnels *SyncMap
+	numberOfRuns     int64
+	discoverState    discover.DiscoverState
+	connectChan      chan connectTunnelData
+	connectedTunnels sync.Map
 
 	metadata Metadata // additionall metadata
 }
@@ -46,7 +45,7 @@ type Metadata struct {
 }
 
 func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API, meta Metadata, version string) *ConnectorCore {
-	connectedTunnels := &SyncMap{}
+	connectedTunnels := sync.Map{}
 	connectChan := make(chan connectTunnelData, 5)
 	discoverState := discover.DiscoverState{
 		State:     make(map[string]interface{}),
@@ -65,7 +64,7 @@ func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.
 }
 
 func (c *ConnectorCore) IsSocketConnected(key string) bool {
-	session, ok := c.connectedTunnels.Get(key)
+	session, ok := c.connectedTunnels.Load(key)
 	if ok {
 		if session.(*ssh.Connection).IsClosed() {
 			return false
@@ -81,7 +80,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 		return err
 	}
 
-	c.connectedTunnels.Add(socket.SocketID, conn)
+	c.connectedTunnels.Store(socket.SocketID, conn)
 
 	// reload socket
 	socketFromApi, err := c.border0API.GetSocket(ctx, socket.SocketID)
@@ -143,7 +142,7 @@ func (c *ConnectorCore) TunnelConnectJob(ctx context.Context, group *errgroup.Gr
 				}
 
 				if tunnelConnectData.action == "disconnect" {
-					if session, ok := c.connectedTunnels.Get(tunnelConnectData.key); ok {
+					if session, ok := c.connectedTunnels.Load(tunnelConnectData.key); ok {
 						session.(*ssh.Connection).Close()
 					}
 				}
@@ -216,10 +215,16 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 		}
 	}
 
+	connectedTunnelsSize := 0
+	c.connectedTunnels.Range(func(_, _ interface{}) bool {
+		connectedTunnelsSize++
+		return true
+	})
+
 	logger.Info("sockets found",
 		zap.Int("local connector sockets", len(discoveredSockets)),
 		zap.Int("api sockets", len(socketsFromApi)),
-		zap.Int("connected sockets", c.connectedTunnels.Len()))
+		zap.Int("connected sockets", connectedTunnelsSize))
 
 	if err := c.CheckSocketsToDelete(ctx, socketApiMap, localSocketsMap); err != nil {
 		return nil, err
@@ -231,8 +236,37 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 		return nil, errC
 	}
 
+	if err := c.checkTunnelConnections(ctx, socketApiMap); err != nil {
+		logger.Error("error checking tunnel connections", zap.Error(err))
+		return nil, err
+	}
+
 	logger.Info("number of sockets to connect: ", zap.Int("sockets to connect", len(socketsToConnect)))
 	return socketsToConnect, nil
+}
+
+func (c *ConnectorCore) checkTunnelConnections(ctx context.Context, socketApiMap map[string]models.Socket) error {
+
+	c.connectedTunnels.Range(func(socketID, _ interface{}) bool {
+		var found bool
+		for _, socket := range socketApiMap {
+			if socket.SocketID == socketID {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			c.logger.Info("socket not local, disconnecting", zap.String("socket_id", socketID.(string)))
+			c.connectChan <- connectTunnelData{
+				key:    socketID.(string),
+				action: "disconnect"}
+		}
+
+		return true
+	})
+
+	return nil
 }
 
 func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, localSocket models.Socket) (*models.Socket, error) {
@@ -315,7 +349,7 @@ func (c *ConnectorCore) CheckSocketsToDelete(ctx context.Context, socketApiMap m
 				}
 				localSocketsMap[apiSocket.ConnectorData.Key()] = *createdSocket
 				delete(socketApiMap, apiSocket.ConnectorData.Key())
-				socketApiMap[apiSocket.ConnectorData.Key()] = *createdSocket
+				socketApiMap[createdSocket.ConnectorData.Key()] = *createdSocket
 			}
 		} else if apiSocket.ConnectorData.Connector == c.cfg.Connector.Name && apiSocket.ConnectorData.PluginName == c.discovery.Name() {
 			c.logger.Info("socket does not exists locally, deleting the socket ",

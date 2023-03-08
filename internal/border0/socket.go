@@ -444,7 +444,11 @@ func (s *Socket) Close() error {
 	s.closed = true
 	s.stopChan <- true
 
-	return s.listener.Close()
+	if s.listener != nil {
+		return s.listener.Close()
+	}
+
+	return nil
 }
 
 func (s *Socket) authenticateConnector(c net.Conn) (bool, error) {
