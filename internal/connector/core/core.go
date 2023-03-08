@@ -204,7 +204,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 	}
 
 	socketApiMap := make(map[string]models.Socket)
-	for i, socket := range socketsFromApi {
+	for _, socket := range socketsFromApi {
 		socket.BuildConnectorDataByTags()
 		// filter api sockets by connector name
 		if socket.ConnectorData != nil && socket.ConnectorData.Key() != "" {
@@ -214,9 +214,6 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 
 			socketApiMap[socket.ConnectorData.Key()] = socket
 		}
-
-		// update socket in the list
-		socketsFromApi[i] = socket
 	}
 
 	logger.Info("sockets found",
@@ -224,7 +221,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 		zap.Int("api sockets", len(socketsFromApi)),
 		zap.Int("connected sockets", c.connectedTunnels.Len()))
 
-	if err := c.CheckSocketsToDelete(ctx, socketsFromApi, localSocketsMap); err != nil {
+	if err := c.CheckSocketsToDelete(ctx, socketApiMap, localSocketsMap); err != nil {
 		return nil, err
 	}
 
@@ -287,7 +284,7 @@ func (c *ConnectorCore) RecreateSocket(ctx context.Context, socketID string, loc
 		return nil, err
 	}
 
-	createdSocket, err := c.CreateSocketAndTunnel(ctx, &localSocket)
+	createdSocket, err := c.CreateSocket(ctx, &localSocket)
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +293,8 @@ func (c *ConnectorCore) RecreateSocket(ctx context.Context, socketID string, loc
 	return createdSocket, nil
 }
 
-func (c *ConnectorCore) CheckSocketsToDelete(ctx context.Context, socketsFromApi []models.Socket, localSocketsMap map[string]models.Socket) error {
-	for _, apiSocket := range socketsFromApi {
+func (c *ConnectorCore) CheckSocketsToDelete(ctx context.Context, socketApiMap map[string]models.Socket, localSocketsMap map[string]models.Socket) error {
+	for _, apiSocket := range socketApiMap {
 		//skip not connector sockets
 		if apiSocket.ConnectorData != nil && apiSocket.ConnectorData.Key() == "" {
 			continue
@@ -317,6 +314,8 @@ func (c *ConnectorCore) CheckSocketsToDelete(ctx context.Context, socketsFromApi
 					return err
 				}
 				localSocketsMap[apiSocket.ConnectorData.Key()] = *createdSocket
+				delete(socketApiMap, apiSocket.ConnectorData.Key())
+				socketApiMap[apiSocket.ConnectorData.Key()] = *createdSocket
 			}
 		} else if apiSocket.ConnectorData.Connector == c.cfg.Connector.Name && apiSocket.ConnectorData.PluginName == c.discovery.Name() {
 			c.logger.Info("socket does not exists locally, deleting the socket ",
@@ -347,7 +346,7 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 		if apiSocket, ok := socketsFromApiMap[localSocket.ConnectorData.Key()]; !ok {
 			log.Printf("creating a socket: %s", localSocket.Name)
 
-			createdSocket, err := c.CreateSocketAndTunnel(ctx, &localSocket)
+			createdSocket, err := c.CreateSocket(ctx, &localSocket)
 			if err != nil {
 				return nil, err
 			}
@@ -369,7 +368,7 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 	return socketsToConnect, nil
 }
 
-func (c *ConnectorCore) CreateSocketAndTunnel(ctx context.Context, s *models.Socket) (*models.Socket, error) {
+func (c *ConnectorCore) CreateSocket(ctx context.Context, s *models.Socket) (*models.Socket, error) {
 	if s.Description == "" {
 		s.Description = fmt.Sprintf("created by %s", c.cfg.Connector.Name)
 	}

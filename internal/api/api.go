@@ -426,7 +426,6 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 	}
 
 	if !a.Credentials.ShouldRefresh() {
-		fmt.Println("using a static credentials, no need to refresh token")
 		return
 	}
 

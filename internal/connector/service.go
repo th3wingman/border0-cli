@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"runtime"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -188,7 +187,6 @@ func (c *ConnectorService) StartSocketWorker(ctx context.Context, connectorCore 
 			case sockets := <-socketUpdateCh:
 				c.logger.Info("receiving an update")
 				connectorCore.HandleUpdates(ctx, sockets)
-				fmt.Printf("number of gorutines: %d\n", runtime.NumGoroutine())
 			case <-ctx.Done():
 				return errors.New("context canceled")
 			}
