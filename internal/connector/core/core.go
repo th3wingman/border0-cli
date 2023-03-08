@@ -81,6 +81,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	}
 
 	c.connectedTunnels.Store(socket.SocketID, conn)
+	defer c.connectedTunnels.Delete(socket.SocketID)
 
 	// reload socket
 	socketFromApi, err := c.border0API.GetSocket(ctx, socket.SocketID)
@@ -93,7 +94,6 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	time.Sleep(1 * time.Second)
 	l, err := conn.Socket.Listen()
 	if err != nil {
-		c.connectedTunnels.Delete(socket.SocketID)
 		return err
 	}
 

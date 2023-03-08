@@ -407,6 +407,10 @@ func (s *Socket) keepAlive(client *ssh.Client, done chan bool) {
 }
 
 func (s *Socket) Accept() (net.Conn, error) {
+	if s.listener == nil {
+		return nil, fmt.Errorf("no listener")
+	}
+
 	c, err := s.listener.Accept()
 	if err != nil {
 		if s.closed {
@@ -443,6 +447,7 @@ func (s *Socket) Addr() net.Addr {
 func (s *Socket) Close() error {
 	s.closed = true
 	s.stopChan <- true
+	defer close(s.readyChan)
 
 	if s.listener != nil {
 		return s.listener.Close()
