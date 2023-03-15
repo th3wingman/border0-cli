@@ -38,6 +38,8 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 		return nil, err
 	}
 
+	defer cli.Close()
+
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
 	s.Logger.Debug("found containers", zap.Any("containers", containers))
 

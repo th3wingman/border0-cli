@@ -19,7 +19,7 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-func newServer(ca string) *ssh.Server {
+func NewServer(ca string) *ssh.Server {
 	handler := ssh.Handler(func(s ssh.Session) {
 		user, err := user.Lookup(s.User())
 		if err != nil {
