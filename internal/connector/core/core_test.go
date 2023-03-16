@@ -48,7 +48,7 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 			apiMock := &mocks.API{}
 			tt.border0API(apiMock)
 
-			c := NewConnectorCore(zap.NewNop(), tt.cfg, tt.plugin, apiMock, Metadata{})
+			c := NewConnectorCore(zap.NewNop(), tt.cfg, tt.plugin, apiMock, Metadata{}, "")
 
 			sockets, err := c.discovery.Find(context.Background(), tt.cfg, discover.DiscoverState{})
 			if (err != nil) != tt.wantErr {

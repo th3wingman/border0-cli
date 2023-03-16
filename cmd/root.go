@@ -42,15 +42,12 @@ var (
 	port                   int
 	hostname               string
 	orgID                  string
-	sshkey                 string
-	protected              bool
-	username               string
 	socketID               string
 	tunnelID               string
 	policyName             string
 	policyDescription      string
 	policyFile             string
-	identityFile           string
+	identityFile           string //deprecated
 	cloudauth_addresses    string
 	cloudauth_domains      string
 	proxyHost              string
@@ -151,14 +148,6 @@ func print_socket(s models.Socket, policies []models.Policy) string {
 		tc.AppendRow(table.Row{strings.Join(s.AllowedEmailAddresses, "\n"), strings.Join(s.AllowedEmailDomains, "\n")})
 		tc.SetStyle(table.StyleLight)
 		socket_output = socket_output + fmt.Sprintf("\nCloud Authentication, login details:\n%s\n", tc.Render())
-	}
-
-	if s.ProtectedSocket {
-		tp := table.NewWriter()
-		tp.AppendHeader(table.Row{"Username", "Password"})
-		tp.AppendRow(table.Row{s.ProtectedUsername, s.ProtectedPassword})
-		tp.SetStyle(table.StyleLight)
-		socket_output = socket_output + fmt.Sprintf("\nProtected Socket:\n%s\n", tp.Render())
 	}
 
 	if s.SocketType == "http" || s.SocketType == "https" {

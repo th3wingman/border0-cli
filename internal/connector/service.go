@@ -159,7 +159,7 @@ func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Conf
 	g, groupCtx := errgroup.WithContext(ctx)
 
 	for _, discoverPlugin := range plugins {
-		connectorCore := core.NewConnectorCore(c.logger, c.cfg, discoverPlugin, border0API, metadata)
+		connectorCore := core.NewConnectorCore(c.logger, c.cfg, discoverPlugin, border0API, metadata, c.version)
 
 		socketUpdateCh := make(chan []models.Socket, 1)
 

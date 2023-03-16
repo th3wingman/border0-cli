@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,13 +16,14 @@ import (
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/golang-jwt/jwt"
 	"golang.org/x/sync/errgroup"
 )
 
 const APIUrl = "https://api.border0.com/api/v1"
 
-var ErrUnauthorized = errors.New("unauthorized")
-var ErrNotFound = errors.New("not found")
+var ErrUnauthorized = errors.New("invalid token, please login")
+var ErrNotFound = errors.New("resource not found")
 
 type API interface {
 	GetOrganizationInfo(ctx context.Context) (*models.Organization, error)
@@ -40,6 +41,8 @@ type API interface {
 	GetPoliciesBySocketID(socketID string) ([]models.Policy, error)
 	StartRefreshAccessTokenJob(ctx context.Context)
 	GetAccessToken() string
+	SignSSHKey(ctx context.Context, socketID string, key []byte) (string, error)
+	GetUserID() (string, error)
 }
 
 var once sync.Once
@@ -61,9 +64,10 @@ func WithVersion(version string) APIOption {
 }
 
 type Border0API struct {
-	Credentials *models.Credentials
-	Version     string
-	mutex       *sync.Mutex
+	Credentials       *models.Credentials
+	Version           string
+	mutex             *sync.Mutex
+	refreshJobStarted bool
 }
 
 type ErrorMessage struct {
@@ -96,7 +100,7 @@ func getToken() (*models.Credentials, error) {
 	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
 		return nil, errors.New("API: please login first (no token found)")
 	}
-	content, err := ioutil.ReadFile(tokenfile())
+	content, err := os.ReadFile(tokenfile())
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +154,7 @@ func (a *Border0API) Request(method string, url string, target interface{}, data
 	}
 
 	if resp.StatusCode == 429 {
-		responseData, _ := ioutil.ReadAll(resp.Body)
+		responseData, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("rate limit error: %v", string(responseData))
 	}
 
@@ -410,13 +414,18 @@ func (a *Border0API) RefreshAccessToken() (*models.Credentials, error) {
 }
 
 func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
+	if a.refreshJobStarted {
+		return
+	}
+
+	a.refreshJobStarted = true
+
 	if a.Credentials == nil {
 		fmt.Println("no credentials found, no need to refresh token")
 		return
 	}
 
 	if !a.Credentials.ShouldRefresh() {
-		fmt.Println("using a static credentials, no need to refresh token")
 		return
 	}
 
@@ -453,4 +462,53 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 	}
 
 	once.Do(onceBody)
+}
+
+func (a *Border0API) SignSSHKey(ctx context.Context, socketID string, key []byte) (string, error) {
+	newCsr := &models.SshCsr{
+		SSHPublicKey: strings.TrimRight(string(key), "\n"),
+	}
+
+	url := fmt.Sprintf("socket/%s/signkey", socketID)
+
+	var cert *models.SshCsr
+	err := a.Request("POST", url, &cert, newCsr, true)
+	if err != nil {
+		return "", err
+	}
+
+	if cert.SSHSignedCert == "" {
+		return "", fmt.Errorf("error: Unable to get signed key from Server")
+	}
+
+	return cert.SSHSignedCert, nil
+}
+
+func (a *Border0API) GetUserID() (string, error) {
+	if a.Credentials == nil || (a.Credentials != nil && a.Credentials.AccessToken == "") {
+		token, _ := getToken()
+		a.Credentials = token
+	}
+
+	token, _ := jwt.Parse(a.Credentials.AccessToken, nil)
+	if token == nil {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	tokenUserId, ok := claims["user_id"]
+	if !ok {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	tokenUserIdStr, ok := tokenUserId.(string)
+	if !ok {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	return strings.ReplaceAll(tokenUserIdStr, "-", ""), nil
 }

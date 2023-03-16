@@ -60,9 +60,6 @@ type Socket struct {
 	Name                           string            `json:"name,omitempty"`
 	Description                    string            `json:"description,omitempty"`
 	SocketType                     string            `json:"socket_type,omitempty"`
-	ProtectedSocket                bool              `json:"protected_socket"`
-	ProtectedUsername              string            `json:"protected_username"`
-	ProtectedPassword              string            `json:"protected_password"`
 	AllowedEmailAddresses          []string          `json:"cloud_authentication_email_allowed_addressses,omitempty"`
 	AllowedEmailDomains            []string          `json:"cloud_authentication_email_allowed_domains,omitempty"`
 	SSHCa                          string            `json:"ssh_ca,omitempty"`

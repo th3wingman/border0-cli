@@ -53,6 +53,7 @@ var connectorStartCmd = &cobra.Command{
 			}
 		}
 
+		SetRlimit()
 		if err := connector.NewConnectorService(*cfg, log, version).Start(); err != nil {
 			log.Error("failed to start connector", zap.String("error", err.Error()))
 		}
@@ -63,12 +64,12 @@ var connectorStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "stop the connector",
 	Run: func(cmd *cobra.Command, args []string) {
-		connector.NewConnectorService(*config.NewConfig(), nil, "").Stop()
+		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
 	},
 }
 
 func init() {
-	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "", "", "setup configuration for connector command")
+	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "setup configuration for connector command")
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	rootCmd.AddCommand(connectorCmd)

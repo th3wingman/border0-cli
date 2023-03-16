@@ -17,7 +17,7 @@ package cmd
 
 import (
 	"bufio"
-	"crypto/x509"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -26,7 +26,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/prometheus/procfs"
@@ -133,14 +135,14 @@ var runCmd = &cobra.Command{
 
 func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, cleanupDone chan bool) {
 	socketId := ""
+	border0API := api.NewAPI(api.WithVersion(version))
+
 	go func() {
 		// This will make sure we cleanup the socket as soon as we get something on the quitChannel
 		<-quitChannelSsh
 		if socketId != "" {
-			client, _ := http.NewClient()
-			err := client.Request("DELETE", "socket/"+socketId, nil, nil)
-			if err != nil {
-				log.Printf("error: %v", err)
+			if err := border0API.DeleteSocket(context.Background(), socketId); err != nil {
+				log.Fatalf("failed to cleunup socket: %s", err)
 			}
 		}
 		// And let our parent know we're done with the clean up
@@ -159,84 +161,57 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 		}
 
 		_ = backoff.RetryNotify(func() error {
-			client, err := http.NewClient()
-			if err != nil {
-				//log.Printf("Error: %v", err)
-				return err
-				//continue
-			}
 			hostname, err := os.Hostname()
 			if err != nil {
 				hostname = "unknown-container"
 			}
-			connection := &models.Socket{
+
+			socketToCreate := &models.Socket{
 				Name:                           "ssh-" + hostname,
 				Description:                    "border0 systems stats " + hostname,
 				SocketType:                     "ssh",
 				CloudAuthEnabled:               true,
 				ConnectorAuthenticationEnabled: connectorAuthEnabled,
 			}
-			c := models.Socket{}
-			err = client.WithVersion(version).Request("POST", "connect", &c, connection)
-			if err != nil {
-				//log.Printf("Error: %v", err)
-				//continue
-				return err
-			}
-			socketId = c.SocketID
 
-			// Now also get all Org wide Policies
-			orgWidePolicies := []models.Policy{}
-			err = client.Request("GET", "policies/?org_wide=true", &orgWidePolicies, nil)
-
+			socketFromAPI, err := border0API.CreateSocket(context.Background(), socketToCreate)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create socket: %s", err)
 			}
 
-			fmt.Print(print_socket(c, orgWidePolicies))
+			socketId = socketFromAPI.SocketID
 
-			userID, _, err := http.GetUserID()
+			policies, err := border0API.GetPoliciesBySocketID(socketFromAPI.SocketID)
 			if err != nil {
-				//log.Printf("error: %v", err)
-				return err
-				//continue
+				log.Fatalf("failed to get policies: %s", err)
 			}
 
-			userIDStr := *userID
-			time.Sleep(1 * time.Second)
-
+			fmt.Print(print_socket(*socketFromAPI, policies))
 			SetRlimit()
-			localsshServer := true
 
-			org := models.Organization{}
-			err = client.Request("GET", "organization", &org, nil)
+			socket, err := border0.NewSocket(context.Background(), api.NewAPI(api.WithVersion(version)), socketFromAPI.SocketID)
 			if err != nil {
-				//log.Printf("Error: %v", err)
-				return err
-				//continue
+				return fmt.Errorf("failed to create socket: %s", err)
 			}
 
-			var caCertPool *x509.CertPool
-			if c.ConnectorAuthenticationEnabled {
-				caCertPool = x509.NewCertPool()
-				if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
-					return fmt.Errorf("error: no organization ca certificate found")
-				} else {
-					if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
-						return fmt.Errorf("error: failed to parse ca certificate")
-					}
+			socket.WithVersion(version)
+
+			if proxyHost != "" {
+				if err := socket.WithProxy(proxyHost); err != nil {
+					log.Fatalf("error: %v", err)
 				}
 			}
 
-			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, false, localsshServer, org.Certificates["ssh_public_key"], "", httpserver_dir, c.ConnectorAuthenticationEnabled, caCertPool)
+			l, err := socket.Listen()
 			if err != nil {
-				//fmt.Println(err)
-				//continue
-				return err
+				log.Fatalf("error: %v", err)
 			}
 
-			// Sleep for 2 second before reconnecting
-			time.Sleep(2 * time.Second)
+			defer l.Close()
+
+			sshServer := ssh.NewServer(socket.Organization.Certificates["ssh_public_key"])
+			err = sshServer.Serve(l)
+
 			return err
 		}, retriesTentimesWithBackoff, notify)
 
@@ -246,14 +221,14 @@ func createSocketStartTunnel(cmd *cobra.Command, quitChannelSsh chan bool, clean
 
 func createHTTPSocketStartTunnel(cmd *cobra.Command, quitChannelHttp chan bool, cleanupDone chan bool) {
 	socketId := ""
+	border0API := api.NewAPI(api.WithVersion(version))
+
 	go func() {
 		// This will make sure we cleanup the socket as soon as we get something on the quitChannel
 		<-quitChannelHttp
 		if socketId != "" {
-			client, _ := http.NewClient()
-			err := client.Request("DELETE", "socket/"+socketId, nil, nil)
-			if err != nil {
-				log.Printf("error: %v", err)
+			if err := border0API.DeleteSocket(context.Background(), socketId); err != nil {
+				log.Fatalf("failed to cleunup socket: %s", err)
 			}
 		}
 		// And let our parent know we're done with the clean up
@@ -274,82 +249,55 @@ func createHTTPSocketStartTunnel(cmd *cobra.Command, quitChannelHttp chan bool, 
 		}
 
 		_ = backoff.RetryNotify(func() error {
-			client, err := http.NewClient()
-			if err != nil {
-				//log.Printf("Error: %v", err)
-				//continue
-				return err
-			}
 			hostname, err := os.Hostname()
 			if err != nil {
 				hostname = "unknown-container"
 			}
-			connection := &models.Socket{
+			socketToCreate := &models.Socket{
 				Name:                           "status-" + hostname,
 				Description:                    "border0 systems stats " + hostname,
 				SocketType:                     "http",
 				CloudAuthEnabled:               true,
 				ConnectorAuthenticationEnabled: connectorAuthEnabled,
 			}
-			c := models.Socket{}
-			err = client.WithVersion(version).Request("POST", "connect", &c, connection)
-			if err != nil {
-				//log.Printf("Error: %v", err)
-				//continue
-				return err
-			}
-			socketId = c.SocketID
 
-			// Now also get all Org wide Policies
-			orgWidePolicies := []models.Policy{}
-			err = client.Request("GET", "policies/?org_wide=true", &orgWidePolicies, nil)
-
+			socketFromAPI, err := border0API.CreateSocket(context.Background(), socketToCreate)
 			if err != nil {
-				log.Fatalf("Error: %v", err)
+				return fmt.Errorf("failed to create socket: %s", err)
 			}
 
-			fmt.Print(print_socket(c, orgWidePolicies))
+			socketId = socketFromAPI.SocketID
 
-			userID, _, err := http.GetUserID()
+			policies, err := border0API.GetPoliciesBySocketID(socketFromAPI.SocketID)
 			if err != nil {
-				//log.Printf("error: %v", err)
-				//continue
-				return err
+				log.Fatalf("failed to get policies: %s", err)
 			}
 
-			userIDStr := *userID
-			time.Sleep(1 * time.Second)
+			fmt.Print(print_socket(*socketFromAPI, policies))
 
 			SetRlimit()
-			httpserver = true
-			httpserver_dir = "/tmp/border0stats"
 
-			org := models.Organization{}
-			err = client.Request("GET", "organization", &org, nil)
+			socket, err := border0.NewSocket(context.Background(), api.NewAPI(api.WithVersion(version)), socketFromAPI.SocketID)
 			if err != nil {
-				//log.Printf("Error: %v", err)
-				//continue
-				return err
+				return fmt.Errorf("failed to create socket: %s", err)
 			}
 
-			var caCertPool *x509.CertPool
-			if c.ConnectorAuthenticationEnabled {
-				caCertPool = x509.NewCertPool()
-				if caCert, ok := org.Certificates["mtls_certificate"]; !ok {
-					return fmt.Errorf("error: no organization ca certificate found")
-				} else {
-					if ok := caCertPool.AppendCertsFromPEM([]byte(caCert)); !ok {
-						return fmt.Errorf("error: failed to parse ca certificate")
-					}
+			socket.WithVersion(version)
+
+			if proxyHost != "" {
+				if err := socket.WithProxy(proxyHost); err != nil {
+					log.Fatalf("error: %v", err)
 				}
 			}
 
-			ssh.SshConnect(userIDStr, c.SocketID, c.Tunnels[0].TunnelID, port, hostname, identityFile, proxyHost, version, httpserver, false, org.Certificates["ssh_public_key"], "", httpserver_dir, c.ConnectorAuthenticationEnabled, caCertPool)
+			l, err := socket.Listen()
 			if err != nil {
-				//fmt.Println(err)
-				//continue
-				return err
+				log.Fatalf("error: %v", err)
 			}
+
+			defer l.Close()
+
+			http.StartLocalHTTPServer("/tmp/border0stats", l)
 
 			return err
 		}, retriesTentimesWithBackoff, notify)
