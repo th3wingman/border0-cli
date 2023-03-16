@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -14,7 +13,6 @@ import (
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
-	"github.com/borderzero/border0-cli/internal/cloudsql"
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/borderzero/border0-cli/internal/connector/discover"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
@@ -102,50 +100,17 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 		return err
 	}
 
-	var sqlAuthProxy bool
-	var handlerConfig sqlauthproxy.Config
+	var handlerConfig *sqlauthproxy.Config
 	if socket.SocketType == "database" {
-		upstreamTLS := true
-		if socket.ConnectorLocalData.UpstreamTLS != nil {
-			upstreamTLS = *socket.ConnectorLocalData.UpstreamTLS
+		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(socket)
+		if err != nil {
+			return fmt.Errorf("failed to create config for socket: %s", err)
 		}
-
-		handlerConfig = sqlauthproxy.Config{
-			Hostname:         socket.ConnectorData.TargetHostname,
-			Port:             socket.ConnectorData.Port,
-			RdsIam:           socket.ConnectorLocalData.RdsIAMAuth,
-			Username:         socket.ConnectorLocalData.UpstreamUsername,
-			Password:         socket.ConnectorLocalData.UpstreamPassword,
-			UpstreamType:     socket.UpstreamType,
-			AwsRegion:        socket.ConnectorLocalData.AWSRegion,
-			UpstreamCAFile:   socket.ConnectorLocalData.UpstreamCACertFile,
-			UpstreamCertFile: socket.ConnectorLocalData.UpstreamCertFile,
-			UpstreamKeyFile:  socket.ConnectorLocalData.UpstreamKeyFile,
-			UpstreamTLS:      upstreamTLS,
-		}
-
-		if socket.ConnectorLocalData.CloudSQLConnector {
-			if socket.ConnectorLocalData.CloudSQLInstance == "" {
-				return fmt.Errorf("cloudsql instance is not defined")
-			}
-
-			ctx := context.Background()
-			dialer, err := cloudsql.NewDialer(ctx, socket.ConnectorLocalData.CloudSQLInstance, socket.ConnectorLocalData.GoogleCredentialsFile, socket.ConnectorLocalData.CloudSQLIAMAuth)
-			if err != nil {
-				return fmt.Errorf("failed to create dialer for cloudSQL: %s", err)
-			}
-
-			handlerConfig.DialerFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return dialer.Dial(ctx, socket.ConnectorLocalData.CloudSQLInstance)
-			}
-		}
-
-		sqlAuthProxy = true
 	}
 
 	switch {
-	case sqlAuthProxy:
-		if err := sqlauthproxy.Serve(l, handlerConfig); err != nil {
+	case handlerConfig != nil:
+		if err := sqlauthproxy.Serve(l, *handlerConfig); err != nil {
 			return err
 		}
 	default:
