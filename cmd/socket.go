@@ -122,15 +122,6 @@ var socketCreateCmd = &cobra.Command{
 			log.Fatalf("error: --type should be either http, https, ssh, database or tls")
 		}
 
-		if socketType == "database" {
-			if upstream_username == "" {
-				log.Fatalln("Upstream Username required for database sockets")
-			}
-			if upstream_password == "" {
-				log.Fatalln("Upstream Password required for database sockets")
-			}
-		}
-
 		upstreamType := strings.ToLower(upstream_type)
 		if socketType == "http" || socketType == "https" {
 			if upstreamType != "http" && upstreamType != "https" && upstreamType != "" {
