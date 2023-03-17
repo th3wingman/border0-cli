@@ -301,6 +301,7 @@ func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, loc
 	}
 
 	if !check || apiSocket.UpstreamHttpHostname != localSocket.UpstreamHttpHostname ||
+		(apiSocket.UpstreamUsername != nil && *apiSocket.UpstreamUsername != "") || (apiSocket.UpstreamPassword != nil && *apiSocket.UpstreamPassword != "") ||
 		apiSocket.UpstreamType != localSocket.UpstreamType ||
 		apiSocket.ConnectorAuthenticationEnabled != localSocket.ConnectorAuthenticationEnabled {
 
@@ -311,6 +312,8 @@ func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, loc
 		apiSocket.UpstreamType = ""
 		apiSocket.CloudAuthEnabled = true
 		apiSocket.Tags = localSocket.Tags
+		*apiSocket.UpstreamPassword = ""
+		*apiSocket.UpstreamUsername = ""
 
 		_, err := NewPolicyManager(c.logger, c.border0API).ApplyPolicies(ctx, apiSocket, localSocket.PolicyNames)
 		if err != nil {
@@ -429,8 +432,8 @@ func (c *ConnectorCore) CreateSocket(ctx context.Context, s *models.Socket) (*mo
 	}
 
 	//remove sensitive data
-	s.UpstreamUsername = ""
-	s.UpstreamPassword = ""
+	s.UpstreamUsername = nil
+	s.UpstreamPassword = nil
 	s.UpstreamCert = nil
 	s.UpstreamKey = nil
 	s.UpstreamCa = nil

@@ -79,8 +79,8 @@ type Socket struct {
 	AllowedEmailAddresses          []string          `json:"cloud_authentication_email_allowed_addressses,omitempty"`
 	AllowedEmailDomains            []string          `json:"cloud_authentication_email_allowed_domains,omitempty"`
 	SSHCa                          string            `json:"ssh_ca,omitempty"`
-	UpstreamUsername               string            `json:"upstream_username,omitempty"`
-	UpstreamPassword               string            `json:"upstream_password,omitempty"`
+	UpstreamUsername               *string           `json:"upstream_username,omitempty"`
+	UpstreamPassword               *string           `json:"upstream_password,omitempty"`
 	UpstreamCert                   *string           `json:"upstream_cert,omitempty"`
 	UpstreamKey                    *string           `json:"upstream_key,omitempty"`
 	UpstreamCa                     *string           `json:"upstream_ca,omitempty"`
