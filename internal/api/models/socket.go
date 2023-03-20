@@ -23,6 +23,22 @@ type ConnectorData struct {
 	ManagedBy      string
 }
 
+type ConnectorLocalData struct {
+	UpstreamUsername      string
+	UpstreamPassword      string
+	UpstreamCertFile      string
+	UpstreamKeyFile       string
+	UpstreamCACertFile    string
+	UpstreamTLS           *bool
+	SqlAuthProxy          bool
+	RdsIAMAuth            bool
+	AWSRegion             string
+	CloudSQLConnector     bool
+	CloudSQLIAMAuth       bool
+	CloudSQLInstance      string
+	GoogleCredentialsFile string
+}
+
 func (c *ConnectorData) Tags() map[string]string {
 	data := map[string]string{
 		"name":            c.Name,
@@ -63,8 +79,8 @@ type Socket struct {
 	AllowedEmailAddresses          []string          `json:"cloud_authentication_email_allowed_addressses,omitempty"`
 	AllowedEmailDomains            []string          `json:"cloud_authentication_email_allowed_domains,omitempty"`
 	SSHCa                          string            `json:"ssh_ca,omitempty"`
-	UpstreamUsername               string            `json:"upstream_username,omitempty"`
-	UpstreamPassword               string            `json:"upstream_password,omitempty"`
+	UpstreamUsername               *string           `json:"upstream_username,omitempty"`
+	UpstreamPassword               *string           `json:"upstream_password,omitempty"`
 	UpstreamCert                   *string           `json:"upstream_cert,omitempty"`
 	UpstreamKey                    *string           `json:"upstream_key,omitempty"`
 	UpstreamCa                     *string           `json:"upstream_ca,omitempty"`
@@ -78,14 +94,26 @@ type Socket struct {
 	Policies                       []Policy          `json:"policies,omitempty"`
 	OrgCustomDomain                string            `json:"org_custom_domain,omitempty"`
 
-	TargetHostname string         `json:"-"`
-	TargetPort     int            `json:"-"`
-	PolicyGroup    string         `json:"-"`
-	Ec2Tag         string         `json:"-"`
-	InstanceId     string         `json:"-"`
-	PluginName     string         `json:"-"`
-	ManagedBy      string         `json:"-"`
-	ConnectorData  *ConnectorData `json:"-"`
+	TargetHostname     string              `json:"-"`
+	TargetPort         int                 `json:"-"`
+	PolicyGroup        string              `json:"-"`
+	Ec2Tag             string              `json:"-"`
+	InstanceId         string              `json:"-"`
+	PluginName         string              `json:"-"`
+	ManagedBy          string              `json:"-"`
+	ConnectorData      *ConnectorData      `json:"-"`
+	ConnectorLocalData *ConnectorLocalData `json:"-"`
+
+	UpstreamCertFile      string `json:"-"`
+	UpstreamKeyFile       string `json:"-"`
+	UpstreamCACertFile    string `json:"-"`
+	UpstreamTLS           *bool  `json:"-"`
+	RdsIAMAuth            bool   `json:"-"`
+	AWSRegion             string `json:"-"`
+	CloudSQLConnector     bool   `json:"-"`
+	CloudSQLIAMAuth       bool   `json:"-"`
+	CloudSQLInstance      string `json:"-"`
+	GoogleCredentialsFile string `json:"-"`
 }
 
 func (s *Socket) SanitizeName() {

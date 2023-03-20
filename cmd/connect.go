@@ -46,15 +46,6 @@ var connectCmd = &cobra.Command{
 			log.Fatalf("error: --type should be either http, https, database, ssh or tls")
 		}
 
-		if socketType == "database" {
-			if upstream_username == "" {
-				log.Fatalln("Upstream Username required for database sockets")
-			}
-			if upstream_password == "" {
-				log.Fatalln("Upstream Password required for database sockets")
-			}
-		}
-
 		upstreamType := strings.ToLower(upstream_type)
 		if socketType == "http" || socketType == "https" {
 			if upstreamType != "http" && upstreamType != "https" && upstreamType != "" {
@@ -72,8 +63,8 @@ var connectCmd = &cobra.Command{
 			Name:                           name,
 			Description:                    description,
 			SocketType:                     socketType,
-			UpstreamUsername:               upstream_username,
-			UpstreamPassword:               upstream_password,
+			UpstreamUsername:               &upstream_username,
+			UpstreamPassword:               &upstream_password,
 			UpstreamHttpHostname:           upstream_http_hostname,
 			UpstreamType:                   upstreamType,
 			CloudAuthEnabled:               true,
