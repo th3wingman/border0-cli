@@ -28,19 +28,20 @@ jobs:
         run: |
           docker buildx create --use
           docker buildx build \
-          --platform linux/amd64,linux/arm64 \
+          --platform linux/amd64,linux/arm64,linux/arm \
           -t ghcr.io/${{ github.actor }}/border0:latest \
           -t ghcr.io/${{ github.actor }}/border0:${{ github.ref_name }} \
           --push .
+          docker buildx ls
 
 
-      - name: Build and push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.actor }}/border0:latest
-            ghcr.io/${{ github.actor }}/border0:${{ github.ref_name }}
+      # - name: Build and push
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: .
+      #     file: ./Dockerfile
+      #     push: true
+      #     tags: |
+      #       ghcr.io/${{ github.actor }}/border0:latest
+      #       ghcr.io/${{ github.actor }}/border0:${{ github.ref_name }}
 
