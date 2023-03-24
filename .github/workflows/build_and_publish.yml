@@ -8,6 +8,10 @@ on:
     #   - client/**
     #   - cmd/**
     #   - internal/**
+permissions:
+  id-token: write
+  contents: write
+  packages: write
 
 jobs:
   build-and-publish:
