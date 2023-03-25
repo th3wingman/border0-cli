@@ -30,12 +30,12 @@ jobs:
           docker buildx create --use
           docker buildx build \
           --platform linux/amd64,linux/arm64,linux/arm \
-          -t ghcr.io/${{ github.actor }}/connector:latest \
-          -t ghcr.io/${{ github.actor }}/connector:${{ github.ref_name }} \
-          -t ghcr.io/${{ github.actor }}/cli:latest \
-          -t ghcr.io/${{ github.actor }}/cli:${{ github.ref_name }} \
-          -t ghcr.io/${{ github.actor }}/border0:latest \
-          -t ghcr.io/${{ github.actor }}/border0:${{ github.ref_name }} \
+          -t ghcr.io/${{ github.repository_owner }}/connector:latest \
+          -t ghcr.io/${{ github.repository_owner }}/connector:${{ github.ref_name }} \
+          -t ghcr.io/${{ github.repository_owner }}/cli:latest \
+          -t ghcr.io/${{ github.repository_owner }}/cli:${{ github.ref_name }} \
+          -t ghcr.io/${{ github.repository_owner }}/border0:latest \
+          -t ghcr.io/${{ github.repository_owner }}/border0:${{ github.ref_name }} \
           --push .
           docker buildx ls
 
@@ -47,6 +47,6 @@ jobs:
       #     file: ./Dockerfile
       #     push: true
       #     tags: |
-      #       ghcr.io/${{ github.actor }}/border0:latest
-      #       ghcr.io/${{ github.actor }}/border0:${{ github.ref_name }}
+      #       ghcr.io/${{ github.repository_owner }}/border0:latest
+      #       ghcr.io/${{ github.repository_owner }}/border0:${{ github.ref_name }}
 
