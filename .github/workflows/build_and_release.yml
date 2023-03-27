@@ -82,13 +82,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure the image tag variables
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if [[ "$BRANCH" == "main" ]] ; then RELEASE="latest" ; else RELEASE="rc" ; fi
+          echo -e "RELEASE=${RELEASE}\nBRANCH=${BRANCH}" >> $GITHUB_ENV
+
       - name: Build and push
         run: |
           docker buildx create --use
           docker buildx build \
-          --platform darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,linux/arm \
+          --platform windows/amd64,darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,linux/arm \
           -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION} \
-          -t ghcr.io/${{ github.repository_owner }}/border0:latest \
+          -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH} \
+          -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
           --push .
           docker buildx ls
 
