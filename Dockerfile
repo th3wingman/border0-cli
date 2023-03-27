@@ -1,5 +1,6 @@
 FROM --platform=$BUILDPLATFORM alpine
 ARG TARGETOS TARGETARCH
-COPY ./bin/mysocketctl_${TARGETOS}_${TARGETARCH} /usr/local/bin/border0
-RUN chmod ogu+x /usr/local/bin/border0
-CMD ["border0", "version", "show"]
+COPY ./bin/mysocketctl_${TARGETOS}_${TARGETARCH} /border0
+RUN chmod ogu+x /border0
+ENTRYPOINT [ "/border0" ]
+CMD ["help"]
