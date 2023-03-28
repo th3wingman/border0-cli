@@ -77,6 +77,8 @@ var (
 	rdsIAM                  bool
 	awsRegion               string
 	upstream_tls            bool
+	upstream_identify_file  string
+	awsEC2Target            string
 )
 
 // rootCmd represents the base command when called without any subcommands
