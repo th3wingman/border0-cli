@@ -16,6 +16,7 @@ import (
 	"github.com/aws/session-manager-plugin/src/datachannel"
 	"github.com/aws/session-manager-plugin/src/log"
 	"github.com/aws/session-manager-plugin/src/message"
+	"github.com/borderzero/border0-cli/internal/api/models"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -34,6 +35,22 @@ type ProxyConfig struct {
 	windowWidth     int
 	windowHeight    int
 	session         *ShellSession
+}
+
+func BuildProxyConfig(socket models.Socket) *ProxyConfig {
+	if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" &&
+		socket.ConnectorLocalData.UpstreamIdentifyFile == "" && socket.ConnectorLocalData.AWSEC2Target == "" {
+		return nil
+	}
+
+	return &ProxyConfig{
+		Hostname:     socket.ConnectorData.TargetHostname,
+		Port:         socket.ConnectorData.Port,
+		Username:     socket.ConnectorLocalData.UpstreamUsername,
+		Password:     socket.ConnectorLocalData.UpstreamPassword,
+		IdentityFile: socket.ConnectorLocalData.UpstreamIdentifyFile,
+		AwsEC2Target: socket.ConnectorLocalData.AWSEC2Target,
+	}
 }
 
 func Proxy(l net.Listener, c ProxyConfig) error {

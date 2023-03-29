@@ -15,6 +15,7 @@ type SocketDataTag struct {
 	UpstreamUsername string `mapstructure:"upstream_username"`
 	UpstreamPassword string `mapstructure:"upstream_password"`
 	UpstreamType     string `mapstructure:"upstream_type"`
+	AwsSsm           bool   `mapstructure:"awsssm"`
 }
 
 // Parse the tag and transform it into a structured data called SocketDataTag
@@ -40,7 +41,16 @@ func parseLabels(tag string) SocketDataTag {
 	}
 
 	data := SocketDataTag{}
-	mapstructure.Decode(labels, &data)
+	config := &mapstructure.DecoderConfig{
+		WeaklyTypedInput: true,
+		Result:           &data,
+	}
 
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		return data
+	}
+
+	decoder.Decode(labels)
 	return data
 }

@@ -109,6 +109,11 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 		socket.TargetHostname = *instance.PrivateIpAddress
 	}
 
+	if socket.SocketType == "ssh" && socketData.AwsSsm {
+		socket.AWSEC2Target = socket.InstanceId
+		socket.ConnectorLocalData.AWSEC2Target = socket.InstanceId
+	}
+
 	socket.PolicyNames = group.Policies
 	socket.CloudAuthEnabled = true
 

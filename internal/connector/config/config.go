@@ -37,13 +37,16 @@ type SocketConfig struct {
 	UpstreamCertFile      string `mapstructure:"upstream_certificate_file"`
 	UpstreamKeyFile       string `mapstructure:"upstream_key_file"`
 	UpstreamCACertFile    string `mapstructure:"upstream_ca_file"`
+	UpstreamIdentifyFile  string `mapstructure:"upstream_identity_file"`
 	UpstreamTLS           *bool  `mapstructure:"upstream_tls,omitempty"`
 	RdsIAMAuth            bool   `mapstructure:"rds_iam_auth"`
 	AWSRegion             string `mapstructure:"aws_region"`
+	AWSEC2Target          string `mapstructure:"aws_ec2_target"`
 	CloudSQLConnector     bool   `mapstructure:"cloudsql_connector"`
 	CloudSQLIAMAuth       bool   `mapstructure:"cloudsql_iam_auth"`
 	CloudSQLInstance      string `mapstructure:"cloudsql_instance"`
 	GoogleCredentialsFile string `mapstructure:"google_credentials_file"`
+	SSHServer             bool   `mapstructure:"sshserver"`
 }
 
 type Credentials struct {
