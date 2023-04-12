@@ -110,12 +110,11 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 
 	var sshProxyConfig *ssh.ProxyConfig
 	if socket.SocketType == "ssh" {
-		sshProxyConfig = ssh.BuildProxyConfig(socket)
+		sshProxyConfig = ssh.BuildProxyConfig(socket, c.cfg.Connector.AwsRegion, c.cfg.Connector.AwsProfile)
 	}
 
 	switch {
 	case socket.ConnectorLocalData.SSHServer && socket.SocketType == "ssh":
-		fmt.Printf("Starting SSH server with cert %s\n", conn.Socket.Organization.Certificates["ssh_public_key"])
 		sshServer := ssh.NewServer(conn.Socket.Organization.Certificates["ssh_public_key"])
 		if err := sshServer.Serve(l); err != nil {
 			return err

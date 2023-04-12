@@ -74,6 +74,10 @@ type ConnectorGroups struct {
 	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
+	AwsSsmEnabled                  bool     `mapstructure:"aws_ssm_enabled"`
+	UpstreamUsername               string   `mapstructure:"upstream_username"`
+	UpstreamPassword               string   `mapstructure:"upstream_password"`
+	UpstreamIdentifyFile           string   `mapstructure:"upstream_identity_file"`
 }
 
 type K8Plugin struct {

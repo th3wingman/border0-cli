@@ -15,7 +15,6 @@ type SocketDataTag struct {
 	UpstreamUsername string `mapstructure:"upstream_username"`
 	UpstreamPassword string `mapstructure:"upstream_password"`
 	UpstreamType     string `mapstructure:"upstream_type"`
-	AwsSsm           bool   `mapstructure:"awsssm"`
 }
 
 // Parse the tag and transform it into a structured data called SocketDataTag

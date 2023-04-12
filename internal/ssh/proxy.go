@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/session-manager-plugin/src/datachannel"
@@ -35,9 +36,11 @@ type ProxyConfig struct {
 	windowWidth     int
 	windowHeight    int
 	session         *ShellSession
+	AWSRegion       string
+	AWSProfile      string
 }
 
-func BuildProxyConfig(socket models.Socket) *ProxyConfig {
+func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) *ProxyConfig {
 	if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" &&
 		socket.ConnectorLocalData.UpstreamIdentifyFile == "" && socket.ConnectorLocalData.AWSEC2Target == "" {
 		return nil
@@ -50,6 +53,8 @@ func BuildProxyConfig(socket models.Socket) *ProxyConfig {
 		Password:     socket.ConnectorLocalData.UpstreamPassword,
 		IdentityFile: socket.ConnectorLocalData.UpstreamIdentifyFile,
 		AwsEC2Target: socket.ConnectorLocalData.AWSEC2Target,
+		AWSRegion:    AWSRegion,
+		AWSProfile:   AWSProfile,
 	}
 }
 
@@ -57,10 +62,24 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 	var handler func(net.Conn, ProxyConfig)
 
 	if c.AwsEC2Target != "" {
-		awsConfig, err := config.LoadDefaultConfig(context.TODO())
+		var awsConfig aws.Config
+		var err error
+
+		if c.AWSProfile == "" {
+			awsConfig, err = config.LoadDefaultConfig(context.TODO())
+		} else {
+			awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+				config.WithSharedConfigProfile(c.AWSProfile))
+		}
+
 		if err != nil {
 			return fmt.Errorf("failed to load aws config: %s", err)
 		}
+
+		if c.AWSRegion != "" {
+			awsConfig.Region = c.AWSRegion
+		}
+
 		c.ssmClient = ssm.NewFromConfig(awsConfig)
 		handler = handelSSMclient
 	} else {
