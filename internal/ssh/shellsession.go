@@ -29,8 +29,6 @@ type ShellSession struct {
 }
 
 func (s *ShellSession) Initialize(log log.T, sessionVar *ShellSession) {
-	// s = sessionVar
-	// s.sshChannel = s.SessionProperties.(ShellSessionProperties).sshChannel
 	s.DataChannel.RegisterOutputStreamHandler(s.ProcessStreamMessagePayload, true)
 	s.DataChannel.GetWsChannel().SetOnMessage(
 		func(input []byte) {
