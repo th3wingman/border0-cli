@@ -242,7 +242,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 		Target: &config.AwsEC2Target,
 	})
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to start ssm session: %s", err)
+		fmt.Printf("sshauthproxy: failed to start ssm session: %s\n", err)
 		return
 	}
 
@@ -259,7 +259,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 	sessionLogger := log.Logger(false, "border0")
 
 	if err = s.OpenDataChannel(sessionLogger); err != nil {
-		fmt.Printf("sshauthproxy: failed to execute ssm session: %s", err)
+		fmt.Printf("sshauthproxy: failed to execute ssm session: %s\n", err)
 		return
 	}
 
@@ -270,7 +270,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 
 	s.Initialize(sessionLogger, &s)
 	if s.SetSessionHandlers(sessionLogger); err != nil {
-		fmt.Printf("sshauthproxy: failed to execute ssm session: %s", err)
+		fmt.Printf("sshauthproxy: failed to execute ssm session: %s\n", err)
 	}
 }
 
@@ -279,13 +279,13 @@ func handleSSHclient(conn net.Conn, config ProxyConfig) {
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to accept ssh connection: %s", err)
+		fmt.Printf("sshauthproxy: failed to accept ssh connection: %s\n", err)
 		return
 	}
 
 	go ssh.DiscardRequests(reqs)
 	if err := handleChannels(sshConn, chans, config); err != nil {
-		fmt.Printf("sshauthproxy: failed to handle channels: %s", err)
+		fmt.Printf("sshauthproxy: failed to handle channels: %s\n", err)
 		return
 	}
 }
@@ -314,7 +314,7 @@ func handleChannels(sshConn *ssh.ServerConn, chans <-chan ssh.NewChannel, config
 		select {
 		case newChannel := <-chans:
 			if newChannel == nil {
-				return fmt.Errorf("proxy channel closed")
+				return nil
 			}
 
 			go handleChannel(ctx, cancel, newChannel, sshClientConn)

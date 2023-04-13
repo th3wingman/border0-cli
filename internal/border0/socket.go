@@ -39,6 +39,7 @@ const (
 	connectorAuthenticationShutdownTime   = 200 * time.Millisecond
 	connectorAuthenticationCertificateOrg = "Border0 Connector"
 	connectorAuthenticationCertificateTTL = 24 * 365 * 10 * time.Hour
+	connectorAuthenticationTimeout        = 10 * time.Second
 	proxyHostRegex                        = "^http(s)?://"
 )
 
@@ -54,19 +55,31 @@ type Socket struct {
 	tunnelHost                       string
 	errChan                          chan error
 	readyChan                        chan bool
-	stopChan                         chan bool
 	listener                         net.Listener
 	Organization                     *models.Organization
 	proxyHost                        *url.URL
-	closed                           bool
 	version                          string
 	hostKey                          ssh.PublicKey
+	acceptChan                       chan connWithError
+	context                          context.Context
+	cancel                           context.CancelFunc
+}
+
+type connWithError struct {
+	conn net.Conn
+	err  error
 }
 
 type sshKeyPair struct {
 	privateKey []byte
 	publicKey  []byte
 }
+
+type border0NetError string
+
+func (e border0NetError) Error() string   { return "Border0 network error " + string(e) }
+func (e border0NetError) Timeout() bool   { return false }
+func (e border0NetError) Temporary() bool { return true }
 
 func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socket, error) {
 	socketFromApi, err := border0API.GetSocket(ctx, nameOrID)
@@ -88,8 +101,8 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 		tunnelHost:                     getTunnelHost(),
 		errChan:                        make(chan error),
 		readyChan:                      make(chan bool),
-		stopChan:                       make(chan bool, 1),
 		Organization:                   org,
+		acceptChan:                     make(chan connWithError),
 	}, nil
 }
 
@@ -117,8 +130,8 @@ func (s *Socket) WithProxy(proxyHost string) error {
 }
 
 func (s *Socket) Listen() (net.Listener, error) {
-
-	s.border0API.StartRefreshAccessTokenJob(context.Background())
+	s.context, s.cancel = context.WithCancel(context.Background())
+	s.border0API.StartRefreshAccessTokenJob(s.context)
 
 	if s.ConnectorAuthenticationEnabled {
 		tlsConfig, err := s.generateConnectorAuthenticationTLSConfig()
@@ -134,12 +147,59 @@ func (s *Socket) Listen() (net.Listener, error) {
 	select {
 	case err := <-s.errChan:
 		return nil, err
+	case <-s.context.Done():
+		return nil, s.context.Err()
 	case <-s.readyChan:
 	}
 
 	go func() {
-		for err := range s.errChan {
-			log.Printf("border0 listener: %v", err)
+		for {
+			select {
+			case err := <-s.errChan:
+				log.Printf("border0 listener: %v", err)
+			case <-s.context.Done():
+				return
+			}
+		}
+	}()
+
+	newConn := make(chan net.Conn)
+	go func() {
+		for {
+			conn, err := s.listener.Accept()
+			if err != nil {
+				select {
+				case <-s.context.Done():
+					return
+				default:
+				}
+				if err == io.EOF {
+					log.Print("listener closed, reconnecting...")
+					<-s.readyChan
+					continue
+				} else {
+					log.Printf("error accepting connecting %s", err)
+					continue
+				}
+			}
+
+			newConn <- conn
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case conn := <-newConn:
+				if s.ConnectorAuthenticationEnabled {
+					go s.acceptConnectorAuth(conn)
+				} else {
+					s.acceptChan <- connWithError{conn, nil}
+				}
+			case <-s.context.Done():
+				s.listener.Close()
+				return
+			}
 		}
 	}()
 
@@ -179,7 +239,7 @@ func (s *Socket) tunnelConnect() {
 		sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(s.sshSigner)}
 
 		if err = s.sshConnect(sshConfig, ebackoff); err != nil {
-			fmt.Printf("failed to connect to server (%s), retrying...\n", err)
+			s.errChan <- fmt.Errorf("failed to connect to server: %s", err)
 			return err
 		}
 
@@ -193,10 +253,6 @@ func (s *Socket) tunnelConnect() {
 }
 
 func (s *Socket) sshConnect(config *ssh.ClientConfig, b backoff.BackOff) error {
-	if s.closed {
-		return backoff.Permanent(fmt.Errorf("socket is closed"))
-	}
-
 	var dialer proxy.Dialer
 	var err error
 
@@ -227,10 +283,10 @@ func (s *Socket) sshConnect(config *ssh.ClientConfig, b backoff.BackOff) error {
 	client := ssh.NewClient(sshCon, channel, req)
 	defer client.Close()
 
-	done := make(chan bool, 1)
-	defer func() { done <- true }()
+	ctx, cancel := context.WithCancel(s.context)
+	defer cancel()
 
-	go s.keepAlive(client, done)
+	go s.keepAlive(ctx, client)
 
 	s.listener, err = client.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -264,11 +320,12 @@ func (s *Socket) sshConnect(config *ssh.ClientConfig, b backoff.BackOff) error {
 		defer close(sessionStoppedChan)
 
 		err := session.Wait()
+		cancel()
 		sessionStoppedChan <- err
 	}()
 
 	select {
-	case <-s.stopChan:
+	case <-s.context.Done():
 		return nil
 	case err := <-sessionStoppedChan:
 		if err != nil {
@@ -362,7 +419,7 @@ func getTunnelHost() string {
 	}
 }
 
-func (s *Socket) keepAlive(client *ssh.Client, done chan bool) {
+func (s *Socket) keepAlive(ctx context.Context, client *ssh.Client) {
 	t := time.NewTicker(10 * time.Second)
 	max := 4
 	n := 0
@@ -371,7 +428,7 @@ func (s *Socket) keepAlive(client *ssh.Client, done chan bool) {
 
 	for {
 		select {
-		case <-done:
+		case <-ctx.Done():
 			return
 		case <-t.C:
 			aliveChan := make(chan bool, 1)
@@ -386,6 +443,8 @@ func (s *Socket) keepAlive(client *ssh.Client, done chan bool) {
 			}()
 
 			select {
+			case <-ctx.Done():
+				return
 			case <-time.After(5 * time.Second):
 				n++
 			case alive := <-aliveChan:
@@ -410,33 +469,30 @@ func (s *Socket) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("no listener")
 	}
 
-	c, err := s.listener.Accept()
+	r := <-s.acceptChan
+	return r.conn, r.err
+}
+
+func (s *Socket) acceptConnectorAuth(conn net.Conn) {
+	ctx, cancel := context.WithTimeout(context.Background(), connectorAuthenticationTimeout)
+	defer cancel()
+
+	ok, err := s.authenticateConnector(ctx, conn)
 	if err != nil {
-		if s.closed {
-			return nil, err
-		}
-
-		if err == io.EOF {
-			fmt.Println("listener closed, reconnecting...")
-			<-s.readyChan
-			return s.Accept()
-		} else {
-			return nil, err
-		}
+		conn.Close()
+		log.Printf("failed to authenticate connector %s", err)
+		s.acceptChan <- connWithError{nil, border0NetError(fmt.Sprintf("failed to authenticate connector: %s", err))}
+		return
 	}
 
-	if s.ConnectorAuthenticationEnabled {
-		ok, err := s.authenticateConnector(c)
-		if !ok {
-			return nil, fmt.Errorf("failed to authenticate connector")
-		}
-
-		if err != nil {
-			return nil, err
-		}
+	if !ok {
+		conn.Close()
+		log.Print("failed to authenticate connector")
+		s.acceptChan <- connWithError{nil, border0NetError("failed to authenticate connector")}
+		return
 	}
 
-	return c, nil
+	s.acceptChan <- connWithError{conn, nil}
 }
 
 func (s *Socket) Addr() net.Addr {
@@ -444,9 +500,7 @@ func (s *Socket) Addr() net.Addr {
 }
 
 func (s *Socket) Close() error {
-	s.closed = true
-	s.stopChan <- true
-	defer close(s.readyChan)
+	s.cancel()
 
 	if s.listener != nil {
 		return s.listener.Close()
@@ -455,14 +509,31 @@ func (s *Socket) Close() error {
 	return nil
 }
 
-func (s *Socket) authenticateConnector(c net.Conn) (bool, error) {
-	tlsConn := tls.Server(c, s.ConnectorAuthenticationTLSConfig)
-	if err := tlsConn.Handshake(); err != nil {
-		return false, fmt.Errorf("client tls handshake failed: %s", err)
-	}
+func (s *Socket) authenticateConnector(ctx context.Context, conn net.Conn) (bool, error) {
+	tlsConn := tls.Server(conn, s.ConnectorAuthenticationTLSConfig)
 
-	if _, err := c.Write([]byte(connectorAuthenticationHeader)); err != nil {
-		return false, fmt.Errorf("failed to complete handshake: %s", err)
+	authChan := make(chan error, 1)
+	go func() {
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			authChan <- fmt.Errorf("client tls handshake failed: %s", err)
+			return
+		}
+
+		if _, err := conn.Write([]byte(connectorAuthenticationHeader)); err != nil {
+			authChan <- fmt.Errorf("failed to write header: %s", err)
+			return
+		}
+
+		authChan <- nil
+	}()
+
+	select {
+	case err := <-authChan:
+		if err != nil {
+			return false, err
+		}
+	case <-ctx.Done():
+		return false, fmt.Errorf("client handshake failed: %s", ctx.Err())
 	}
 
 	log.Printf("client %s authenticated", tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName)
@@ -566,5 +637,10 @@ func Serve(l net.Listener, hostname string, port int) error {
 }
 
 func (s *Socket) IsClosed() bool {
-	return s.closed
+	select {
+	case <-s.context.Done():
+		return true
+	default:
+		return false
+	}
 }
