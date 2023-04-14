@@ -1,14 +1,2 @@
 connector:
-   name: "my-awesome-connector"
-
-# credentials:
-#    user: my-aweseome-email@border0.com
-#    password: AVeryLongAndSecurePassword
-#    # token: AVeryLongAndSecurePasswordThingyTokenLikeStuffGeneratedInThePortal
-
-sockets:
-   - webserver-connector-xps13:
-      port: 8000
-      type: http
-      host: 127.0.0.1
-      policies: [my-policy]
+   name: "connector"

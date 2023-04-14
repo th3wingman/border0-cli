@@ -85,7 +85,7 @@ jobs:
         run: |
           docker buildx create --use
           docker buildx build \
-          --platform linux/amd64,linux/arm64,linux/arm \
+          --platform darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,linux/arm \
           -t ghcr.io/${{ github.repository_owner }}/border0:latest \
           -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION} \
           --push .

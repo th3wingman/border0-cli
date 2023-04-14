@@ -1,9 +1,10 @@
-FROM --platform=$BUILDPLATFORM alpine
+# FROM --platform=$BUILDPLATFORM alpine
+FROM scratch
 ARG TARGETOS TARGETARCH
-RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM wit h TARGETOS:$TARGETOS TARGETARCH:$TARGETARCH " > /log
-RUN echo "https://download.border0.com/$TARGETOS_$TARGETARCH/border0 /usr/local/bin/border0"
-
-ADD https://download.border0.com/${TARGETOS}_${TARGETARCH}/border0 /usr/local/bin/border0
-#COPY ./bin/mysocketctl_$TARGETOS_$TARGETARCH /usr/local/bin/border0
-RUN chmod ogu+x /usr/local/bin/border0
-CMD ["border0", "version", "show"]
+ENV UMASK=022
+ADD https://download.border0.com/${TARGETOS}_${TARGETARCH}/border0 /border0
+ENV UMASK=177
+#COPY ./bin/mysocketctl_$TARGETOS_$TARGETARCH /border0
+# RUN chmod ogu+x /border0
+ENTRYPOINT [ "/border0" ]
+CMD ["help"]

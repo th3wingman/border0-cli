@@ -30,10 +30,6 @@ jobs:
           docker buildx create --use
           docker buildx build \
           --platform darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,linux/arm \
-          -t ghcr.io/${{ github.repository_owner }}/connector:latest \
-          -t ghcr.io/${{ github.repository_owner }}/connector:${{ github.ref_name }} \
-          -t ghcr.io/${{ github.repository_owner }}/cli:latest \
-          -t ghcr.io/${{ github.repository_owner }}/cli:${{ github.ref_name }} \
           -t ghcr.io/${{ github.repository_owner }}/border0:latest \
           -t ghcr.io/${{ github.repository_owner }}/border0:${{ github.ref_name }} \
           --push .
