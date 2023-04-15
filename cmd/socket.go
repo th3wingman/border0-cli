@@ -356,8 +356,28 @@ var socketConnectCmd = &cobra.Command{
 			sqlAuthProxy = true
 		}
 
+		var sshAuthProxy bool
+		var sshProxyConfig ssh.ProxyConfig
+		if socket.SocketType == "ssh" && (upstream_username != "" || upstream_password != "" || upstream_identify_file != "" || awsEC2Target != "") {
+			sshProxyConfig = ssh.ProxyConfig{
+				Hostname:     hostname,
+				Port:         port,
+				Username:     upstream_username,
+				Password:     upstream_password,
+				IdentityFile: upstream_identify_file,
+				AwsEC2Target: awsEC2Target,
+			}
+			sshAuthProxy = true
+		}
+
 		if socket.SocketType != "database" && cloudSqlConnector {
 			cloudSqlConnector = false
+		}
+
+		if socket.SocketType == "ssh" && !localssh && !sshAuthProxy {
+			if port < 1 {
+				port = 22
+			}
 		}
 
 		l, err := socket.Listen()
@@ -372,7 +392,6 @@ var socketConnectCmd = &cobra.Command{
 			if err := http.StartLocalHTTPServer(httpserver_dir, l); err != nil {
 				return err
 			}
-
 		case localssh:
 			sshServer := ssh.NewServer(socket.Organization.Certificates["ssh_public_key"])
 			if err := sshServer.Serve(l); err != nil {
@@ -384,6 +403,10 @@ var socketConnectCmd = &cobra.Command{
 			}
 		case cloudSqlConnector:
 			if err := cloudsql.Serve(l, cloudSqlInstance, cloudSqlCredentialsFile, cloudSqlIAM); err != nil {
+				return err
+			}
+		case sshAuthProxy:
+			if err := ssh.Proxy(l, sshProxyConfig); err != nil {
 				return err
 			}
 		default:
@@ -547,6 +570,8 @@ func init() {
 	socketConnectCmd.Flags().StringVarP(&upstream_key_file, "upstream_key_filename", "y", "", "path to file from where to read the upstream client key")
 	socketConnectCmd.Flags().StringVarP(&upstream_ca_file, "upstream_ca_filename", "a", "", "path to file from where to read the upstream ca certificate")
 	socketConnectCmd.Flags().BoolVarP(&upstream_tls, "upstream_tls", "", true, "Use TLS for upstream connection")
+	socketConnectCmd.Flags().StringVarP(&upstream_identify_file, "upstream_identity_file", "", "", "Upstream identity file")
+	socketConnectCmd.Flags().StringVarP(&awsEC2Target, "aws_ec2_target", "", "", "Aws EC2 target identifier")
 
 	socketConnectCmd.RegisterFlagCompletionFunc("socket_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp

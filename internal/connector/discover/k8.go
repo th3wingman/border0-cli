@@ -107,6 +107,20 @@ func (s *K8Discover) buildSocket(connectorName string, group config.K8Plugin, se
 		socket.AllowedEmailDomains = group.AllowedEmailDomains
 	}
 
+	if socket.SocketType == "ssh" {
+		if group.UpstreamUsername != "" {
+			socket.ConnectorLocalData.UpstreamUsername = group.UpstreamUsername
+		}
+
+		if group.UpstreamPassword != "" {
+			socket.ConnectorLocalData.UpstreamPassword = group.UpstreamPassword
+		}
+
+		if group.UpstreamIdentifyFile != "" {
+			socket.ConnectorLocalData.UpstreamIdentifyFile = group.UpstreamIdentifyFile
+		}
+	}
+
 	name := fmt.Sprintf("%v-%v-%v", socket.SocketType, service.Name, connectorName)
 
 	socket.Name = name

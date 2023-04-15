@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/borderzero/border0-cli/internal/api/models"
@@ -73,7 +73,7 @@ func (s *Ec2Discover) Find(ctx context.Context, cfg config.Config, state Discove
 						socketData := parseLabels(*t.Value)
 
 						if socketData.Group == group.Group {
-							socket := s.buildSocket(cfg.Connector.Name, group, socketData, *ti, instanceName)
+							socket := s.buildSocket(cfg.Connector, group, socketData, *ti, instanceName)
 							sockets = append(sockets, *socket)
 						}
 					}
@@ -85,7 +85,7 @@ func (s *Ec2Discover) Find(ctx context.Context, cfg config.Config, state Discove
 	return sockets, nil
 }
 
-func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGroups, socketData SocketDataTag, instance ec2.Instance, instanceName string) *models.Socket {
+func (s *Ec2Discover) buildSocket(connector config.Connector, group config.ConnectorGroups, socketData SocketDataTag, instance ec2.Instance, instanceName string) *models.Socket {
 	socket := models.Socket{}
 	socket.TargetPort, _ = strconv.Atoi(socketData.Port)
 	socket.PolicyGroup = group.Group
@@ -109,10 +109,28 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 		socket.TargetHostname = *instance.PrivateIpAddress
 	}
 
+	if socket.SocketType == "ssh" {
+		if group.AwsSsmEnabled {
+			socket.ConnectorLocalData.AWSEC2Target = socket.InstanceId
+		}
+
+		if group.UpstreamUsername != "" {
+			socket.ConnectorLocalData.UpstreamUsername = group.UpstreamUsername
+		}
+
+		if group.UpstreamPassword != "" {
+			socket.ConnectorLocalData.UpstreamPassword = group.UpstreamPassword
+		}
+
+		if group.UpstreamIdentifyFile != "" {
+			socket.ConnectorLocalData.UpstreamIdentifyFile = group.UpstreamIdentifyFile
+		}
+	}
+
 	socket.PolicyNames = group.Policies
 	socket.CloudAuthEnabled = true
 
-	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType, socketData.Name)
+	socket.Name = buildSocketName(instanceName, connector.Name, socket.SocketType, socketData.Name)
 	return &socket
 }
 

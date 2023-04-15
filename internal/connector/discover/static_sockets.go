@@ -44,13 +44,16 @@ func (s *StaticSocketFinder) Find(ctx context.Context, cfg config.Config, state 
 				UpstreamCertFile:      v.UpstreamCertFile,
 				UpstreamKeyFile:       v.UpstreamKeyFile,
 				UpstreamCACertFile:    v.UpstreamCACertFile,
+				UpstreamIdentifyFile:  v.UpstreamIdentifyFile,
 				UpstreamTLS:           v.UpstreamTLS,
 				RdsIAMAuth:            v.RdsIAMAuth,
 				AWSRegion:             v.AWSRegion,
+				AWSEC2Target:          v.AWSEC2Target,
 				CloudSQLConnector:     v.CloudSQLConnector,
 				CloudSQLIAMAuth:       v.CloudSQLIAMAuth,
 				CloudSQLInstance:      v.CloudSQLInstance,
 				GoogleCredentialsFile: v.GoogleCredentialsFile,
+				SSHServer:             v.SSHServer,
 			}
 		}
 
