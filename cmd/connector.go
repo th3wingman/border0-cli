@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector"
@@ -20,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/takama/daemon"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v2"
 )
 
 // connectorCmd represents the connector service
@@ -214,6 +217,7 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 
 			// Now we generate a basic Yaml
 			// create multilie string
+			socketName := fmt.Sprintf("%s", myHostname)
 			yaml := fmt.Sprintf(`---
 connector:
     name: "%s-cntr"
@@ -222,10 +226,10 @@ credentials:
     token: %s
 
 sockets:
-    - ssh-%s:
+    - %s:
         type: ssh
         sshserver: true
- `, myHostname, t.Token, myHostname)
+ `, myHostname, t.Token, socketName)
 
 			// Now we write the file
 			f, err := os.Create(configPath)
@@ -244,8 +248,33 @@ sockets:
 				return result, err
 			}
 			// Also start the service
-			fmt.Println(result)
-			return service.Start()
+			fmt.Println("\n", result)
+			startResult, err := service.Start()
+			if err != nil {
+				return startResult, err
+			}
+			fmt.Println(startResult)
+			// now do a loop and wait for the socket to be created, sleep 1s between each loop
+			// and then print the socket url
+			// lets wait for 5 seconds
+			socket := models.Socket{}
+
+			for i := 0; i < 10; i++ {
+				// lets check if the socket exists
+				err = client.Request("GET", "socket/"+socketName, &socket, nil)
+				if err == nil {
+					// socket exists
+					break
+				}
+				fmt.Println("Waiting for socket to be created...")
+				time.Sleep(2 * time.Second)
+			}
+			// now lets get the socket
+
+			socketURL := fmt.Sprintf("https://client.border0.com/#/ssh/%s", socket.Dnsname)
+			printThis := fmt.Sprintf("\n🚀 Service started successfully. You can now connect to this machine using the following url: \n%s", socketURL)
+			fmt.Println(printThis)
+			return "", err
 
 		case "remove":
 			result, err := service.Stop()
@@ -267,12 +296,36 @@ sockets:
 
 			// Check if the user wants to remove the config file
 			if strings.ToLower(text) == "y" {
+
+				// letpasre the yaml file and get the socket name
+				// lets read the config file
+				yamlFile, err := ioutil.ReadFile("/etc/border0.yaml")
+				if err != nil {
+					fmt.Println("Error reading the config file:", err)
+				}
+				// lets parse the yaml file
+				var config models.Config
+				err = yaml.Unmarshal(yamlFile, &config)
+				if err != nil {
+					fmt.Println("Error parsing the config file:", err)
+				}
+				// lets get the socket name
+				socketName := config.Sockets[0].Name
+				// lets remove the socket
+				err = client.Request("DELETE", "socket/"+socketName, nil, nil)
+				if err != nil {
+					fmt.Println("Error removing the socket:", err)
+				} else {
+					fmt.Println("Socket removed successfully")
+				}
 				err := os.Remove("/etc/border0.yaml")
 				if err != nil {
 					fmt.Println("Error removing the config file:", err)
 				} else {
 					fmt.Println("Config file removed successfully")
 				}
+				// now also remove the socket
+
 			}
 			return result, err
 		case "start":
