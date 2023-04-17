@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -22,7 +22,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/takama/daemon"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v2"
 )
 
 // connectorCmd represents the connector service
@@ -136,7 +135,7 @@ func copyFile(src, dst, username string) error {
 
 func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 
-	usage := fmt.Sprintf("Usage: %s %s %s install | remove | start | stop | status", os.Args[0], os.Args[1], os.Args[2])
+	usage := fmt.Sprintf("Usage: %s %s %s install | unremove ", os.Args[0], os.Args[1], os.Args[2])
 
 	// if received any kind of command, do it
 
@@ -215,9 +214,66 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 
 			}
 
-			// Now we generate a basic Yaml
-			// create multilie string
+			//now write the randString fucntion
+			randString := func(n int) string {
+				var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+				b := make([]rune, n)
+				for i := range b {
+					b[i] = letters[rand.Intn(len(letters))]
+				}
+				return string(b)
+			}
+			// staging with setting the new socket name
 			socketName := fmt.Sprintf("%s", myHostname)
+			// function to check if the socket name exists
+			socketExists := func(name string) bool {
+				err := client.Request("GET", "socket/"+name, &models.Socket{}, nil)
+				return err == nil
+			}
+
+			// now we check if the socketName socket exists
+			err = client.Request("GET", "socket/"+socketName, &models.Socket{}, nil)
+			if err == nil {
+				// lets ask the use for input if we should delete the socket
+				reader := bufio.NewReader(os.Stdin)
+				fmt.Printf("Socket %s already exists. Do you want to delete it? [y/n]: ", socketName)
+				text, _ := reader.ReadString('\n')
+				text = strings.TrimSpace(text)
+				if text != "y" {
+					// ask user to provide a new socket name
+					fmt.Printf("Please provide a new socket name, eg: my-awsm-%s-cntr:", myHostname)
+					text, _ := reader.ReadString('\n')
+					text = strings.TrimSpace(text)
+					socketName = text
+					// lets check if the socket exists
+					for {
+						// check if the socketName socket exists
+						if !socketExists(socketName) {
+							break
+						}
+						// ask the user for input to provide a new socket name
+						fmt.Printf("Socket %s already exists. Please provide a new socket name, e.g., my-other-awsm-%s-cntr: ", socketName, myHostname)
+						text, _ := reader.ReadString('\n')
+						text = strings.TrimSpace(text)
+
+						if text != "" {
+							socketName = text
+						} else {
+							// lets generate a random socket name
+							socketName = fmt.Sprintf("%s-%s", myHostname, randString(4))
+							fmt.Printf("Looks like you do not want to provide a socket name, I will generate one for you: %s\n", socketName)
+						}
+					}
+				} else {
+					// lets delete the socket
+					err = client.Request("DELETE", "socket/"+socketName, nil, nil)
+					if err != nil {
+						return "", err
+					}
+				}
+			}
+
+			// Now we generate a basic Yaml
 			yaml := fmt.Sprintf(`---
 connector:
     name: "%s-cntr"
@@ -239,6 +295,10 @@ sockets:
 			defer f.Close()
 			_, err = f.WriteString(yaml)
 			if err != nil {
+				return "", err
+			}
+			// now we set the permissions to 0600
+			if err := os.Chmod(configPath, 0600); err != nil {
 				return "", err
 			}
 
@@ -276,7 +336,7 @@ sockets:
 			fmt.Println(printThis)
 			return "", err
 
-		case "remove":
+		case "uninstall":
 			result, err := service.Stop()
 			if err == nil {
 				fmt.Println(result)
@@ -297,27 +357,6 @@ sockets:
 			// Check if the user wants to remove the config file
 			if strings.ToLower(text) == "y" {
 
-				// letpasre the yaml file and get the socket name
-				// lets read the config file
-				yamlFile, err := ioutil.ReadFile("/etc/border0.yaml")
-				if err != nil {
-					fmt.Println("Error reading the config file:", err)
-				}
-				// lets parse the yaml file
-				var config models.Config
-				err = yaml.Unmarshal(yamlFile, &config)
-				if err != nil {
-					fmt.Println("Error parsing the config file:", err)
-				}
-				// lets get the socket name
-				socketName := config.Sockets[0].Name
-				// lets remove the socket
-				err = client.Request("DELETE", "socket/"+socketName, nil, nil)
-				if err != nil {
-					fmt.Println("Error removing the socket:", err)
-				} else {
-					fmt.Println("Socket removed successfully")
-				}
 				err := os.Remove("/etc/border0.yaml")
 				if err != nil {
 					fmt.Println("Error removing the config file:", err)
@@ -402,10 +441,52 @@ var connectorStopCmd = &cobra.Command{
 	},
 }
 
+var connectorUnInstallCmd = &cobra.Command{
+	Use:   "install",
+	Short: "install the connector service on the machine",
+	Run: func(cmd *cobra.Command, args []string) {
+		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
+		// put the install code here
+
+	},
+}
+var connectorInstallCmd = &cobra.Command{
+	Use:   "uninstall",
+	Short: "uninstall the connector service from the machine",
+	Run: func(cmd *cobra.Command, args []string) {
+		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
+		// put the uninstall code here
+
+		deamonType := daemon.SystemDaemon
+		if runtime.GOOS == "darwin" {
+			// GlobalDaemon is a system daemon that runs as the root user and stores its
+			// property list in the global LaunchDaemons directory. In other words,
+			// system-wide daemons provided by the administrator. Valid for macOS only.
+			deamonType = daemon.GlobalDaemon
+		}
+
+		srv, err := daemon.New(service_name, service_description, deamonType, service_dependencies...)
+		if err != nil {
+			log.Println("Error: ", err)
+			os.Exit(1)
+		}
+		service := &Service{srv}
+		status, err := service.Manage("uninstall")
+		if err != nil {
+			log.Println(status, "\nError: ", err)
+			os.Exit(1)
+		}
+		fmt.Println(status)
+
+	},
+}
+
 func init() {
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "setup configuration for connector command")
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
+	connectorCmd.AddCommand(connectorInstallCmd)
+	connectorCmd.AddCommand(connectorUnInstallCmd)
 	connectorCmd.AddCommand(conenctorServiceCmd)
 	rootCmd.AddCommand(connectorCmd)
 }
