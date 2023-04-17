@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,20 +25,20 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/takama/daemon"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v2"
 )
 
 // connectorCmd represents the connector service
 var connectorCmd = &cobra.Command{
 	Use:   "connector",
-	Short: "connector wrapper",
+	Short: "Border0 Connector commands section, we can manage our connector functionality here",
 }
-
-// var stdlog, errlog *log.Logger
 
 const (
 	// for Service
 	service_name        = "border0_connector"
 	service_description = "border0.com Service"
+	service_config_path = "/etc/"
 )
 
 type Service struct {
@@ -44,38 +47,75 @@ type Service struct {
 
 var service_dependencies = []string{}
 
-// conenctorServiceCmd represents the conenctor service command
-var conenctorServiceCmd = &cobra.Command{
-	Use:   "service",
-	Short: "Install, Remove, Start and Stop the border0 connector service",
+type TemplateConnectorConfig struct {
+	Connector struct {
+		Name string `yaml:"name"`
+	} `yaml:"connector"`
+	Credentials struct {
+		Token string `yaml:"token"`
+	} `yaml:"credentials"`
+	Sockets []map[string]Socket `yaml:"sockets"`
+}
 
-	Run: func(cmd *cobra.Command, args []string) {
+type Socket struct {
+	Type      string `yaml:"type"`
+	SSHServer bool   `yaml:"sshserver"`
+}
 
-		// Default type is SystemDaemon
-		// SystemDaemon is a system daemon that runs as the root user. In other words,
-		// system-wide daemons provided by the administrator. Valid for FreeBSD, Linux
-		// and Windows only.
-		deamonType := daemon.SystemDaemon
-		if runtime.GOOS == "darwin" {
-			// GlobalDaemon is a system daemon that runs as the root user and stores its
-			// property list in the global LaunchDaemons directory. In other words,
-			// system-wide daemons provided by the administrator. Valid for macOS only.
-			deamonType = daemon.GlobalDaemon
-		}
+type CurrentConnectorConfig struct {
+	Sockets []map[string]Socket `yaml:"sockets"`
+}
 
-		srv, err := daemon.New(service_name, service_description, deamonType, service_dependencies...)
-		if err != nil {
-			log.Println("Error: ", err)
-			os.Exit(1)
+func displayServiceStatus(serviceName string) {
+	system := runtime.GOOS
+
+	var output []byte
+	var err error
+
+	if system == "linux" || system == "darwin" {
+		output, err = exec.Command("systemctl", "show", serviceName, "--no-page").Output()
+	} else if system == "windows" {
+		output, err = exec.Command("sc", "queryex", serviceName).Output()
+	} else {
+		fmt.Printf("Unsupported platform: %s\n", system)
+		return
+	}
+
+	if err != nil {
+		fmt.Printf("The %s service could not be found.\n", serviceName)
+		return
+	}
+
+	status := strings.TrimSpace(string(output))
+
+	if system == "linux" || system == "darwin" {
+		lines := strings.Split(status, "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "ActiveState=") {
+				activeState := strings.TrimPrefix(line, "ActiveState=")
+				if activeState == "active" {
+					fmt.Printf("The %s service is currently running.\n", serviceName)
+				} else {
+					fmt.Printf("The %s service is not running.\n", serviceName)
+				}
+			} else if strings.HasPrefix(line, "MainPID=") {
+				fmt.Println(line)
+			}
 		}
-		service := &Service{srv}
-		status, err := service.Manage(cmd)
-		if err != nil {
-			log.Println(status, "\nError: ", err)
-			os.Exit(1)
+	} else if system == "windows" {
+		lines := strings.Split(status, "\r\n")
+		for _, line := range lines {
+			if strings.Contains(line, "STATE") {
+				if strings.Contains(line, "RUNNING") {
+					fmt.Printf("The %s service is currently running.\n", serviceName)
+				} else {
+					fmt.Printf("The %s service is not running.\n", serviceName)
+				}
+			} else if strings.Contains(line, "PID") {
+				fmt.Println(line)
+			}
 		}
-		fmt.Println(status)
-	},
+	}
 }
 
 func copyFile(src, dst, username string) error {
@@ -135,12 +175,12 @@ func copyFile(src, dst, username string) error {
 
 func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 
-	usage := fmt.Sprintf("Usage: %s %s %s install | unremove ", os.Args[0], os.Args[1], os.Args[2])
+	usage := fmt.Sprintf("Usage: %s %s %s install | uninstall ", os.Args[0], os.Args[1], os.Args[2])
 
 	// if received any kind of command, do it
 
-	if len(os.Args) > 3 {
-		command := os.Args[3]
+	if len(os.Args) > 2 {
+		command := os.Args[2]
 		switch command {
 		case "install":
 			// first do border0 login and fetch the admin token
@@ -165,12 +205,17 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 				return "", err
 			}
 
+			now := time.Now()
+			oneYearLater := now.AddDate(1, 0, 0)
+			oneYearFromNow := int(oneYearLater.Unix())
+
+			tokenName := fmt.Sprintf("Connector on %s host", myHostname)
 			// s := models.Socket{}
 			t := models.Token{}
 			newToken := &models.Token{
-				Name:      myHostname + "-cntr",
+				Name:      tokenName,
 				Role:      "connector",
-				ExpiresAt: 0,
+				ExpiresAt: oneYearFromNow,
 			}
 			err = client.WithVersion(version).Request("POST", "organizations/tokens", &t, newToken)
 			if err != nil {
@@ -182,7 +227,7 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 				log.Fatal(err)
 			}
 			homedir := u.HomeDir
-			configPath := "/etc/border0.yaml"
+			configPath := filepath.Join(service_config_path, "border0.yaml")
 			// check if current user has sudo permissions
 			// Also check for sudo users
 			username := os.Getenv("SUDO_USER")
@@ -216,15 +261,16 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 
 			//now write the randString fucntion
 			randString := func(n int) string {
-				var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+				r := rand.New(rand.NewSource(time.Now().UnixNano()))
+				var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
 				b := make([]rune, n)
 				for i := range b {
-					b[i] = letters[rand.Intn(len(letters))]
+					b[i] = letters[r.Intn(len(letters))]
 				}
 				return string(b)
 			}
 			// staging with setting the new socket name
-			socketName := fmt.Sprintf("%s", myHostname)
+			socketName := strings.ToLower(myHostname)
 			// function to check if the socket name exists
 			socketExists := func(name string) bool {
 				err := client.Request("GET", "socket/"+name, &models.Socket{}, nil)
@@ -234,58 +280,47 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 			// now we check if the socketName socket exists
 			err = client.Request("GET", "socket/"+socketName, &models.Socket{}, nil)
 			if err == nil {
-				// lets ask the use for input if we should delete the socket
+				// ask user to provide a new socket name
+				fmt.Printf("Socket '%s' already exists.\n", socketName)
+				socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+				fmt.Printf("Provide a new socket name, eg: '%s'? :", socketName)
 				reader := bufio.NewReader(os.Stdin)
-				fmt.Printf("Socket %s already exists. Do you want to delete it? [y/n]: ", socketName)
 				text, _ := reader.ReadString('\n')
 				text = strings.TrimSpace(text)
-				if text != "y" {
-					// ask user to provide a new socket name
-					fmt.Printf("Please provide a new socket name, eg: my-awsm-%s-cntr:", myHostname)
-					text, _ := reader.ReadString('\n')
+				if len(text) != 0 {
 					text = strings.TrimSpace(text)
-					socketName = text
-					// lets check if the socket exists
-					for {
-						// check if the socketName socket exists
-						if !socketExists(socketName) {
-							break
-						}
-						// ask the user for input to provide a new socket name
-						fmt.Printf("Socket %s already exists. Please provide a new socket name, e.g., my-other-awsm-%s-cntr: ", socketName, myHostname)
-						text, _ := reader.ReadString('\n')
-						text = strings.TrimSpace(text)
-
-						if text != "" {
-							socketName = text
-						} else {
-							// lets generate a random socket name
-							socketName = fmt.Sprintf("%s-%s", myHostname, randString(4))
-							fmt.Printf("Looks like you do not want to provide a socket name, I will generate one for you: %s\n", socketName)
-						}
+					text = strings.ToLower(text) // Convert the input text to lowercase
+					validInput := regexp.MustCompile(`^[a-zA-Z0-9-]{3,}$`)
+					if !validInput.MatchString(text) {
+						fmt.Printf("I got '%v', that looks invalid. Using randomized name.\n", socketName)
+					} else {
+						socketName = text
 					}
+				}
+				// let's check if the socket already exists
+				if !socketExists(socketName) {
+					fmt.Printf("Using '%s' as socket name.\n", socketName)
 				} else {
-					// lets delete the socket
-					err = client.Request("DELETE", "socket/"+socketName, nil, nil)
-					if err != nil {
-						return "", err
-					}
+					fmt.Println("Generating randomized name.")
+					socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
 				}
 			}
 
-			// Now we generate a basic Yaml
-			yaml := fmt.Sprintf(`---
-connector:
-    name: "%s-cntr"
+			// we are going to generate out template connector config yaml file
+			config := TemplateConnectorConfig{}
+			config.Connector.Name = fmt.Sprintf("%s-cntr", myHostname)
+			config.Credentials.Token = t.Token
 
-credentials:
-    token: %s
+			sshServerSocket := Socket{
+				Type:      "ssh",
+				SSHServer: true,
+			}
+			config.Sockets = append(config.Sockets, map[string]Socket{socketName: sshServerSocket})
 
-sockets:
-    - %s:
-        type: ssh
-        sshserver: true
- `, myHostname, t.Token, socketName)
+			yamlData, err := yaml.Marshal(&config)
+			if err != nil {
+				log.Fatalf("Error marshaling YAML data: %v", err)
+			}
 
 			// Now we write the file
 			f, err := os.Create(configPath)
@@ -293,7 +328,7 @@ sockets:
 				return "", err
 			}
 			defer f.Close()
-			_, err = f.WriteString(yaml)
+			_, err = f.WriteString(string(yamlData))
 			if err != nil {
 				return "", err
 			}
@@ -346,9 +381,42 @@ sockets:
 				return result, err
 			}
 
-			// ask the user if we should remove the config file in /etc/border0.yaml
+			client, err := http.NewClient()
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			configPath := filepath.Join(service_config_path, "border0.yaml")
+			data, err := ioutil.ReadFile(configPath)
+			if err != nil {
+				log.Fatalf("Error reading YAML file: %v", err)
+			}
+
+			var currentConfig CurrentConnectorConfig
+			err = yaml.Unmarshal(data, &currentConfig)
+			if err != nil {
+				log.Fatalf("Error unmarshaling YAML data: %v", err)
+			}
+
+			for _, socketMap := range currentConfig.Sockets {
+				for socketName, socket := range socketMap {
+					if socket.SSHServer {
+						fmt.Printf("Found socket with sshserver flag: `%s`", socketName)
+						// now we delete the socket
+						err := client.Request("DELETE", "socket/"+socketName, nil, nil)
+						if err != nil {
+							fmt.Println(" ...error deleting socket:", err)
+						} else {
+							fmt.Println(" ...socket deleted successfully")
+						}
+
+					}
+				}
+			}
+
+			// ask the user if we should remove the config file in configPath
 			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Do you want to remove the config file in /etc/border0.yaml? [y/N]: ")
+			fmt.Printf("Do you want to remove the '%s' config file? [y/N]: ", configPath)
 			text, _ := reader.ReadString('\n')
 
 			// Remove the newline character at the end of the input
@@ -357,7 +425,7 @@ sockets:
 			// Check if the user wants to remove the config file
 			if strings.ToLower(text) == "y" {
 
-				err := os.Remove("/etc/border0.yaml")
+				err := os.Remove(configPath)
 				if err != nil {
 					fmt.Println("Error removing the config file:", err)
 				} else {
@@ -367,20 +435,6 @@ sockets:
 
 			}
 			return result, err
-		case "start":
-			return service.Start()
-		case "stop":
-			return service.Stop()
-		case "restart":
-			resultFromStop, err := service.Stop()
-			if err != nil {
-				return resultFromStop, err
-			}
-			resultFromStart, err := service.Start()
-			result := resultFromStop + "\n" + resultFromStart
-			return result, err
-		case "status":
-			return service.Status()
 		default:
 			return usage, nil
 		}
@@ -391,7 +445,7 @@ sockets:
 
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "start the connector",
+	Short: "start ad-hoc connector",
 	Run: func(cmd *cobra.Command, args []string) {
 		log, _ := logging.BuildProduction()
 		defer log.Sync()
@@ -435,7 +489,7 @@ var connectorStartCmd = &cobra.Command{
 
 var connectorStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop the connector",
+	Short: "stop ad-hoc connector process",
 	Run: func(cmd *cobra.Command, args []string) {
 		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
 	},
@@ -445,8 +499,27 @@ var connectorUnInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "install the connector service on the machine",
 	Run: func(cmd *cobra.Command, args []string) {
-		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
 		// put the install code here
+		deamonType := daemon.SystemDaemon
+		if runtime.GOOS == "darwin" {
+			// GlobalDaemon is a system daemon that runs as the root user and stores its
+			// property list in the global LaunchDaemons directory. In other words,
+			// system-wide daemons provided by the administrator. Valid for macOS only.
+			deamonType = daemon.GlobalDaemon
+		}
+
+		srv, err := daemon.New(service_name, service_description, deamonType, service_dependencies...)
+		if err != nil {
+			log.Println("Error: ", err)
+			os.Exit(1)
+		}
+		service := &Service{srv}
+		status, err := service.Manage(cmd)
+		if err != nil {
+			log.Println(status, "\nError: ", err)
+			os.Exit(1)
+		}
+		fmt.Println(status)
 
 	},
 }
@@ -454,7 +527,6 @@ var connectorInstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "uninstall the connector service from the machine",
 	Run: func(cmd *cobra.Command, args []string) {
-		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
 		// put the uninstall code here
 
 		deamonType := daemon.SystemDaemon
@@ -471,7 +543,7 @@ var connectorInstallCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		service := &Service{srv}
-		status, err := service.Manage("uninstall")
+		status, err := service.Manage(cmd)
 		if err != nil {
 			log.Println(status, "\nError: ", err)
 			os.Exit(1)
@@ -481,12 +553,22 @@ var connectorInstallCmd = &cobra.Command{
 	},
 }
 
+// now we create connector status command
+
+var connectorStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "display the connector service status",
+	Run: func(cmd *cobra.Command, args []string) {
+		displayServiceStatus(service_name)
+	},
+}
+
 func init() {
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "setup configuration for connector command")
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
+	connectorCmd.AddCommand(connectorStatusCmd)
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
-	connectorCmd.AddCommand(conenctorServiceCmd)
 	rootCmd.AddCommand(connectorCmd)
 }
