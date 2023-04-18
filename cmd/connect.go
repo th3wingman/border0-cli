@@ -84,7 +84,7 @@ var connectCmd = &cobra.Command{
 
 		fmt.Print(print_socket(*socketFromAPI, policies))
 
-		ch := make(chan os.Signal)
+		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 		go func() {
 			<-ch

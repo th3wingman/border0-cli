@@ -30,13 +30,16 @@ type ConnectorLocalData struct {
 	UpstreamKeyFile       string
 	UpstreamCACertFile    string
 	UpstreamTLS           *bool
+	UpstreamIdentifyFile  string
 	SqlAuthProxy          bool
 	RdsIAMAuth            bool
 	AWSRegion             string
+	AWSEC2Target          string
 	CloudSQLConnector     bool
 	CloudSQLIAMAuth       bool
 	CloudSQLInstance      string
 	GoogleCredentialsFile string
+	SSHServer             bool
 }
 
 func (c *ConnectorData) Tags() map[string]string {
@@ -107,13 +110,16 @@ type Socket struct {
 	UpstreamCertFile      string `json:"-"`
 	UpstreamKeyFile       string `json:"-"`
 	UpstreamCACertFile    string `json:"-"`
+	UpstreamIdentifyFile  string `json:"-"`
 	UpstreamTLS           *bool  `json:"-"`
 	RdsIAMAuth            bool   `json:"-"`
 	AWSRegion             string `json:"-"`
+	AWSEC2Target          string `json:"-"`
 	CloudSQLConnector     bool   `json:"-"`
 	CloudSQLIAMAuth       bool   `json:"-"`
 	CloudSQLInstance      string `json:"-"`
 	GoogleCredentialsFile string `json:"-"`
+	SSHServer             bool   `json:"-"`
 }
 
 func (s *Socket) SanitizeName() {

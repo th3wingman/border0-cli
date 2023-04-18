@@ -37,13 +37,16 @@ type SocketConfig struct {
 	UpstreamCertFile      string `mapstructure:"upstream_certificate_file"`
 	UpstreamKeyFile       string `mapstructure:"upstream_key_file"`
 	UpstreamCACertFile    string `mapstructure:"upstream_ca_file"`
+	UpstreamIdentifyFile  string `mapstructure:"upstream_identity_file"`
 	UpstreamTLS           *bool  `mapstructure:"upstream_tls,omitempty"`
 	RdsIAMAuth            bool   `mapstructure:"rds_iam_auth"`
 	AWSRegion             string `mapstructure:"aws_region"`
+	AWSEC2Target          string `mapstructure:"aws_ec2_target"`
 	CloudSQLConnector     bool   `mapstructure:"cloudsql_connector"`
 	CloudSQLIAMAuth       bool   `mapstructure:"cloudsql_iam_auth"`
 	CloudSQLInstance      string `mapstructure:"cloudsql_instance"`
 	GoogleCredentialsFile string `mapstructure:"google_credentials_file"`
+	SSHServer             bool   `mapstructure:"sshserver"`
 }
 
 type Credentials struct {
@@ -71,6 +74,10 @@ type ConnectorGroups struct {
 	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
+	AwsSsmEnabled                  bool     `mapstructure:"aws_ssm_enabled"`
+	UpstreamUsername               string   `mapstructure:"upstream_username"`
+	UpstreamPassword               string   `mapstructure:"upstream_password"`
+	UpstreamIdentifyFile           string   `mapstructure:"upstream_identity_file"`
 }
 
 type K8Plugin struct {
@@ -80,6 +87,9 @@ type K8Plugin struct {
 	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
+	UpstreamUsername               string   `mapstructure:"upstream_username"`
+	UpstreamPassword               string   `mapstructure:"upstream_password"`
+	UpstreamIdentifyFile           string   `mapstructure:"upstream_identity_file"`
 }
 
 type NetworkPlugin struct {

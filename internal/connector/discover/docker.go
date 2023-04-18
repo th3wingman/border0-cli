@@ -152,6 +152,20 @@ func (s *DockerFinder) buildSocket(connectorName string, group config.ConnectorG
 		socket.TargetHostname = ipAddress
 	}
 
+	if socket.SocketType == "ssh" {
+		if group.UpstreamUsername != "" {
+			socket.ConnectorLocalData.UpstreamUsername = group.UpstreamUsername
+		}
+
+		if group.UpstreamPassword != "" {
+			socket.ConnectorLocalData.UpstreamPassword = group.UpstreamPassword
+		}
+
+		if group.UpstreamIdentifyFile != "" {
+			socket.ConnectorLocalData.UpstreamIdentifyFile = group.UpstreamIdentifyFile
+		}
+	}
+
 	socket.Name = buildSocketName(instanceName, connectorName, socket.SocketType, socketData.Name)
 	socket.CloudAuthEnabled = true
 
