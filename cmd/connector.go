@@ -173,281 +173,6 @@ func copyFile(src, dst, username string) error {
 	return nil
 }
 
-func (service *Service) Manage(cmd *cobra.Command) (string, error) {
-
-	usage := fmt.Sprintf("Usage: %s %s %s install | uninstall ", os.Args[0], os.Args[1], os.Args[2])
-
-	// if received any kind of command, do it
-
-	if len(os.Args) > 2 {
-		command := os.Args[2]
-		switch command {
-		case "install":
-			// first do border0 login and fetch the admin token
-			// then use the token to fetch the connector token
-			// then use the connector token to generate the config file
-
-			// check if the user is root
-			if os.Geteuid() != 0 {
-				log.Printf("You need to run this command as root or with sudo")
-				os.Exit(1)
-			}
-
-			loginCmd.Run(cmd, []string{})
-
-			client, err := http.NewClient()
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-
-			myHostname, err := os.Hostname()
-			if err != nil {
-				return "", err
-			}
-
-			now := time.Now()
-			oneYearLater := now.AddDate(1, 0, 0)
-			oneYearFromNow := int(oneYearLater.Unix())
-
-			tokenName := fmt.Sprintf("Connector on %s host", myHostname)
-			// s := models.Socket{}
-			t := models.Token{}
-			newToken := &models.Token{
-				Name:      tokenName,
-				Role:      "connector",
-				ExpiresAt: oneYearFromNow,
-			}
-			err = client.WithVersion(version).Request("POST", "organizations/tokens", &t, newToken)
-			if err != nil {
-				log.Fatalf(fmt.Sprintf("Error: %v", err))
-			}
-
-			u, err := user.Current()
-			if err != nil {
-				log.Fatal(err)
-			}
-			homedir := u.HomeDir
-			// check if service_config_path exists and create it if not
-			if _, err := os.Stat(service_config_path); os.IsNotExist(err) {
-				os.MkdirAll(service_config_path, 0755)
-			}
-
-			configPath := filepath.Join(service_config_path, "border0.yaml")
-			// check if current user has sudo permissions
-			// Also check for sudo users
-			username := os.Getenv("SUDO_USER")
-			if username != "" {
-				// we are in sudo mode
-				if runtime.GOOS == "darwin" {
-					// This is because of:
-					// https://github.com/golang/go/issues/24383
-					// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
-					// So we'll just hard code for MACOS
-					homedir = "/Users/" + username
-					configPath = filepath.Join(homedir, "border0.yaml")
-				} else {
-					u, err = user.Lookup(username)
-					if err != nil {
-						log.Fatal(err)
-					}
-					homedir = u.HomeDir
-				}
-				// now copy the newly created token file to user's home directory
-				// lets determine the token file path
-				userTokenFile := fmt.Sprintf("%s/.border0/token", homedir)
-				// lets copy the token file
-				// err = copyFile(tokenFile, userTokenFile)
-				err := copyFile(http.TokenFilePath(), userTokenFile, username)
-				if err != nil {
-					fmt.Println("Error:", err)
-				}
-
-			}
-
-			//now write the randString fucntion
-			randString := func(n int) string {
-				r := rand.New(rand.NewSource(time.Now().UnixNano()))
-				var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
-				b := make([]rune, n)
-				for i := range b {
-					b[i] = letters[r.Intn(len(letters))]
-				}
-				return string(b)
-			}
-			// staging with setting the new socket name
-			socketName := strings.ToLower(myHostname)
-			// function to check if the socket name exists
-			socketExists := func(name string) bool {
-				err := client.Request("GET", "socket/"+name, &models.Socket{}, nil)
-				return err == nil
-			}
-
-			// now we check if the socketName socket exists
-			err = client.Request("GET", "socket/"+socketName, &models.Socket{}, nil)
-			if err == nil {
-				// ask user to provide a new socket name
-				fmt.Printf("Socket '%s' already exists.\n", socketName)
-				socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
-				fmt.Printf("Provide a new socket name, eg: '%s'? :", socketName)
-				reader := bufio.NewReader(os.Stdin)
-				text, _ := reader.ReadString('\n')
-				text = strings.TrimSpace(text)
-				if len(text) != 0 {
-					text = strings.TrimSpace(text)
-					text = strings.ToLower(text) // Convert the input text to lowercase
-					validInput := regexp.MustCompile(`^[a-zA-Z0-9-]{3,}$`)
-					if !validInput.MatchString(text) {
-						fmt.Printf("I got '%v', that looks invalid. Using randomized name.\n", socketName)
-					} else {
-						socketName = text
-					}
-				}
-				// let's check if the socket already exists
-				if !socketExists(socketName) {
-					fmt.Printf("Using '%s' as socket name.\n", socketName)
-				} else {
-					fmt.Println("Generating randomized name.")
-					socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
-				}
-			}
-
-			// we are going to generate out template connector config yaml file
-			config := TemplateConnectorConfig{}
-			config.Connector.Name = fmt.Sprintf("%s-cntr", myHostname)
-			config.Credentials.Token = t.Token
-
-			sshServerSocket := Socket{
-				Type:      "ssh",
-				SSHServer: true,
-			}
-			config.Sockets = append(config.Sockets, map[string]Socket{socketName: sshServerSocket})
-
-			yamlData, err := yaml.Marshal(&config)
-			if err != nil {
-				log.Fatalf("Error marshaling YAML data: %v", err)
-			}
-
-			// Now we write the file
-			f, err := os.Create(configPath)
-			if err != nil {
-				return "", err
-			}
-			defer f.Close()
-			_, err = f.WriteString(string(yamlData))
-			if err != nil {
-				return "", err
-			}
-			// now we set the permissions to 0600
-			if err := os.Chmod(configPath, 0600); err != nil {
-				return "", err
-			}
-
-			// Now we install the service
-			result, err := service.Install("connector", "start", "--config", configPath)
-			if err != nil {
-				return result, err
-			}
-			// Also start the service
-			fmt.Println("\n", result)
-			startResult, err := service.Start()
-			if err != nil {
-				return startResult, err
-			}
-			fmt.Println(startResult)
-			// now do a loop and wait for the socket to be created, sleep 1s between each loop
-			// and then print the socket url
-			// lets wait for 5 seconds
-			socket := models.Socket{}
-
-			for i := 0; i < 10; i++ {
-				// lets check if the socket exists
-				err = client.Request("GET", "socket/"+socketName, &socket, nil)
-				if err == nil {
-					// socket exists
-					break
-				}
-				fmt.Println("Waiting for socket to be created...")
-				time.Sleep(2 * time.Second)
-			}
-			// now lets get the socket
-
-			socketURL := fmt.Sprintf("https://client.border0.com/#/ssh/%s", socket.Dnsname)
-			printThis := fmt.Sprintf("\n🚀 Service started successfully. You can now connect to this machine using the following url: \n%s", socketURL)
-			fmt.Println(printThis)
-			return "", err
-
-		case "uninstall":
-			result, err := service.Stop()
-			if err == nil {
-				fmt.Println(result)
-			}
-			result, err = service.Remove()
-			if err != nil {
-				return result, err
-			}
-
-			client, err := http.NewClient()
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-
-			configPath := filepath.Join(service_config_path, "border0.yaml")
-			data, err := ioutil.ReadFile(configPath)
-			if err != nil {
-				log.Fatalf("Error reading YAML file: %v", err)
-			}
-
-			var currentConfig CurrentConnectorConfig
-			err = yaml.Unmarshal(data, &currentConfig)
-			if err != nil {
-				log.Fatalf("Error unmarshaling YAML data: %v", err)
-			}
-
-			for _, socketMap := range currentConfig.Sockets {
-				for socketName, socket := range socketMap {
-					if socket.SSHServer {
-						fmt.Printf("Found socket with sshserver flag: `%s`", socketName)
-						// now we delete the socket
-						err := client.Request("DELETE", "socket/"+socketName, nil, nil)
-						if err != nil {
-							fmt.Println(" ...error deleting socket:", err)
-						} else {
-							fmt.Println(" ...socket deleted successfully")
-						}
-
-					}
-				}
-			}
-
-			// ask the user if we should remove the config file in configPath
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Printf("Do you want to remove the '%s' config file? [y/N]: ", configPath)
-			text, _ := reader.ReadString('\n')
-
-			// Remove the newline character at the end of the input
-			text = strings.TrimSpace(text)
-
-			// Check if the user wants to remove the config file
-			if strings.ToLower(text) == "y" {
-
-				err := os.Remove(configPath)
-				if err != nil {
-					fmt.Println("Error removing the config file:", err)
-				} else {
-					fmt.Println("Config file removed successfully")
-				}
-				// now also remove the socket
-
-			}
-			return result, err
-		default:
-			return usage, nil
-		}
-
-	}
-	return usage, nil
-}
-
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start ad-hoc connector",
@@ -500,7 +225,7 @@ var connectorStopCmd = &cobra.Command{
 	},
 }
 
-var connectorUnInstallCmd = &cobra.Command{
+var connectorInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "install the connector service on the machine",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -519,16 +244,204 @@ var connectorUnInstallCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		service := &Service{srv}
-		status, err := service.Manage(cmd)
-		if err != nil {
-			log.Println(status, "\nError: ", err)
+
+		if os.Geteuid() != 0 {
+			log.Printf("You need to run this command as root or with sudo")
 			os.Exit(1)
 		}
-		fmt.Println(status)
+
+		disableBrowser = true
+		loginCmd.Run(cmd, []string{})
+
+		client, err := http.NewClient()
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		myHostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		now := time.Now()
+		oneYearLater := now.AddDate(1, 0, 0)
+		oneYearFromNow := int(oneYearLater.Unix())
+
+		tokenName := fmt.Sprintf("Connector on %s host", myHostname)
+		// s := models.Socket{}
+		t := models.Token{}
+		newToken := &models.Token{
+			Name:      tokenName,
+			Role:      "connector",
+			ExpiresAt: oneYearFromNow,
+		}
+		err = client.WithVersion(version).Request("POST", "organizations/tokens", &t, newToken)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("Error: %v", err))
+		}
+
+		u, err := user.Current()
+		if err != nil {
+			log.Fatal(err)
+		}
+		homedir := u.HomeDir
+		// check if service_config_path exists and create it if not
+		if _, err := os.Stat(service_config_path); os.IsNotExist(err) {
+			os.MkdirAll(service_config_path, 0755)
+		}
+
+		configPath := filepath.Join(service_config_path, "border0.yaml")
+		// check if current user has sudo permissions
+		// Also check for sudo users
+		username := os.Getenv("SUDO_USER")
+		if username != "" {
+			// we are in sudo mode
+			if runtime.GOOS == "darwin" {
+				// This is because of:
+				// https://github.com/golang/go/issues/24383
+				// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
+				// So we'll just hard code for MACOS
+				homedir = "/Users/" + username
+			} else {
+				u, err = user.Lookup(username)
+				if err != nil {
+					log.Fatal(err)
+				}
+				homedir = u.HomeDir
+			}
+			// now copy the newly created token file to user's home directory
+			// lets determine the token file path
+			userTokenFile := fmt.Sprintf("%s/.border0/token", homedir)
+			// lets copy the token file
+			// err = copyFile(tokenFile, userTokenFile)
+			err := copyFile(http.TokenFilePath(), userTokenFile, username)
+			if err != nil {
+				fmt.Println("Error:", err)
+			}
+
+		}
+
+		//now write the randString fucntion
+		randString := func(n int) string {
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
+			b := make([]rune, n)
+			for i := range b {
+				b[i] = letters[r.Intn(len(letters))]
+			}
+			return string(b)
+		}
+		// staging with setting the new socket name
+		socketName := strings.ToLower(myHostname)
+		// function to check if the socket name exists
+		socketExists := func(name string) bool {
+			err := client.Request("GET", "socket/"+name, &models.Socket{}, nil)
+			return err == nil
+		}
+
+		// now we check if the socketName socket exists
+		err = client.Request("GET", "socket/"+socketName, &models.Socket{}, nil)
+		if err == nil {
+			// ask user to provide a new socket name
+			fmt.Printf("Socket '%s' already exists.\n", socketName)
+			socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+			fmt.Printf("Provide a new socket name, eg: '%s'? :", socketName)
+			reader := bufio.NewReader(os.Stdin)
+			text, _ := reader.ReadString('\n')
+			text = strings.TrimSpace(text)
+			if len(text) != 0 {
+				text = strings.TrimSpace(text)
+				text = strings.ToLower(text) // Convert the input text to lowercase
+				validInput := regexp.MustCompile(`^[a-zA-Z0-9-]{3,}$`)
+				if !validInput.MatchString(text) {
+					fmt.Printf("I got '%v', that looks invalid. Using randomized name.\n", socketName)
+				} else {
+					socketName = text
+				}
+			}
+			// let's check if the socket already exists
+			if !socketExists(socketName) {
+				fmt.Printf("Using '%s' as socket name.\n", socketName)
+			} else {
+				fmt.Println("Generating randomized name.")
+				socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+			}
+		}
+
+		// we are going to generate out template connector config yaml file
+		config := TemplateConnectorConfig{}
+		config.Connector.Name = fmt.Sprintf("%s-cntr", myHostname)
+		config.Credentials.Token = t.Token
+
+		sshServerSocket := Socket{
+			Type:      "ssh",
+			SSHServer: true,
+		}
+		config.Sockets = append(config.Sockets, map[string]Socket{socketName: sshServerSocket})
+
+		yamlData, err := yaml.Marshal(&config)
+		if err != nil {
+			log.Fatalf("Error marshaling YAML data: %v", err)
+		}
+
+		// Now we write the file
+		f, err := os.Create(configPath)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+		defer f.Close()
+		_, err = f.WriteString(string(yamlData))
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+		// now we set the permissions to 0644
+		if err := os.Chmod(configPath, 0644); err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		// Now we install the service
+		installResult, err := service.Install("connector", "start", "--config", configPath)
+		if err != nil {
+			log.Fatalf("error: %v %v", installResult, err)
+		}
+		fmt.Println("\n", installResult)
+		// Also start the service
+		startResult, err := service.Start()
+		if err != nil {
+			log.Fatalf("error: %v %v", startResult, err)
+		}
+		fmt.Println(startResult)
+		// now do a loop and wait for the socket to be created, sleep 1s between each loop
+		// and then print the socket url
+		// lets wait for 5 seconds
+		socket := models.Socket{}
+
+		for i := 0; i < 10; i++ {
+			// lets check if the socket exists
+			err = client.Request("GET", "socket/"+socketName, &socket, nil)
+			if err == nil {
+				// socket exists
+				break
+			}
+			fmt.Println("Waiting for socket to be created...")
+			time.Sleep(2 * time.Second)
+		}
+		// now lets get the socket
+
+		socketURL := fmt.Sprintf("https://client.border0.com/#/ssh/%s", socket.Dnsname)
+		printThis := fmt.Sprintf("\n🚀 Service started successfully.\nYou can now connect to this machine using the following url: \n%s", socketURL)
+		fmt.Println(printThis)
+
+		// status, err := service.Manage(cmd)
+		// if err != nil {
+		// 	log.Println(status, "\nError: ", err)
+		// 	os.Exit(1)
+		// }
+		// fmt.Println(status)
 
 	},
 }
-var connectorInstallCmd = &cobra.Command{
+var connectorUnInstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "uninstall the connector service from the machine",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -548,12 +461,81 @@ var connectorInstallCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		service := &Service{srv}
-		status, err := service.Manage(cmd)
-		if err != nil {
-			log.Println(status, "\nError: ", err)
+
+		if os.Geteuid() != 0 {
+			log.Printf("You need to run this command as root or with sudo")
 			os.Exit(1)
 		}
-		fmt.Println(status)
+
+		result, err := service.Stop()
+		if err == nil {
+			fmt.Println(result)
+		}
+		result, err = service.Remove()
+		if err != nil {
+			fmt.Println(result)
+		}
+
+		client, err := http.NewClient()
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		configPath := filepath.Join(service_config_path, "border0.yaml")
+		data, err := ioutil.ReadFile(configPath)
+		if err != nil {
+			log.Fatalf("Error reading YAML file: %v", err)
+		}
+
+		var currentConfig CurrentConnectorConfig
+		err = yaml.Unmarshal(data, &currentConfig)
+		if err != nil {
+			log.Fatalf("Error unmarshaling YAML data: %v", err)
+		}
+
+		for _, socketMap := range currentConfig.Sockets {
+			for socketName, socket := range socketMap {
+				if socket.SSHServer {
+					fmt.Printf("Found socket with sshserver flag: `%s`", socketName)
+					// now we delete the socket
+					err := client.Request("DELETE", "socket/"+socketName, nil, nil)
+					if err != nil {
+						fmt.Println(" ...error deleting socket:", err)
+					} else {
+						fmt.Println(" ...socket deleted successfully")
+					}
+
+				}
+			}
+		}
+
+		// ask the user if we should remove the config file in configPath
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Do you want to remove the '%s' config file? [y/N]: ", configPath)
+		text, _ := reader.ReadString('\n')
+
+		// Remove the newline character at the end of the input
+		text = strings.TrimSpace(text)
+
+		// Check if the user wants to remove the config file
+		if strings.ToLower(text) == "y" {
+
+			err := os.Remove(configPath)
+			if err != nil {
+				fmt.Println("Error removing the config file:", err)
+			} else {
+				fmt.Println("Config file removed successfully")
+			}
+			// now also remove the socket
+
+		}
+
+		// status, err := service.Manage(cmd)
+		// if err != nil {
+		// 	log.Println(status, "\nError: ", err)
+		// 	os.Exit(1)
+		// }
+		// fmt.Println(status)
 
 	},
 }

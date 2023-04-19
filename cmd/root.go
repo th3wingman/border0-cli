@@ -79,6 +79,7 @@ var (
 	upstream_tls            bool
 	upstream_identify_file  string
 	awsEC2Target            string
+	disableBrowser          bool
 )
 
 // rootCmd represents the base command when called without any subcommands
