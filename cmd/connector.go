@@ -38,7 +38,7 @@ const (
 	// for Service
 	service_name        = "border0_connector"
 	service_description = "border0.com Service"
-	service_config_path = "/etc/"
+	service_config_path = "/etc/border0/"
 )
 
 type Service struct {
@@ -227,6 +227,11 @@ func (service *Service) Manage(cmd *cobra.Command) (string, error) {
 				log.Fatal(err)
 			}
 			homedir := u.HomeDir
+			// check if service_config_path exists and create it if not
+			if _, err := os.Stat(service_config_path); os.IsNotExist(err) {
+				os.MkdirAll(service_config_path, 0755)
+			}
+
 			configPath := filepath.Join(service_config_path, "border0.yaml")
 			// check if current user has sudo permissions
 			// Also check for sudo users
