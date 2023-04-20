@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -36,10 +35,11 @@ var connectorCmd = &cobra.Command{
 
 const (
 	// for Service
-	service_name        = "border0_connector"
-	service_description = "border0.com Service"
-	service_config_path = "/etc/border0/"
+	serviceDescription = "border0.com Service"
 )
+
+var serviceConfigPath = "/etc/border0/"
+var serviceName = "border0"
 
 type Service struct {
 	daemon.Daemon
@@ -63,7 +63,12 @@ type Socket struct {
 }
 
 type CurrentConnectorConfig struct {
-	Sockets []map[string]Socket `yaml:"sockets"`
+	Sockets     []map[string]Socket `yaml:"sockets"`
+	Credentials Credentials         `yaml:"credentials"`
+}
+
+type Credentials struct {
+	Token string `yaml:"token"`
 }
 
 func displayServiceStatus(serviceName string) {
@@ -173,6 +178,34 @@ func copyFile(src, dst, username string) error {
 	return nil
 }
 
+func makeConfigPath() string {
+	if runtime.GOOS == "windows" {
+		u, err := user.Current()
+		if err != nil {
+			log.Fatal(err)
+		}
+		homedir := u.HomeDir
+		serviceConfigPath = filepath.Join(homedir, "border0")
+
+	}
+
+	// check if serviceConfigPath exists and create it if not
+	if _, err := os.Stat(serviceConfigPath); os.IsNotExist(err) {
+		os.MkdirAll(serviceConfigPath, 0755)
+	}
+
+	return filepath.Join(serviceConfigPath, "border0.yaml")
+}
+
+func checkRootPermission() {
+	if runtime.GOOS != "windows" {
+		if os.Geteuid() != 0 {
+			log.Printf("You need to run this command as root or with sudo")
+			os.Exit(1)
+		}
+	}
+}
+
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start ad-hoc connector",
@@ -238,17 +271,13 @@ var connectorInstallCmd = &cobra.Command{
 			deamonType = daemon.GlobalDaemon
 		}
 
-		srv, err := daemon.New(service_name, service_description, deamonType, service_dependencies...)
+		srv, err := daemon.New(serviceName, serviceDescription, deamonType, service_dependencies...)
 		if err != nil {
 			log.Println("Error: ", err)
 			os.Exit(1)
 		}
 		service := &Service{srv}
-
-		if os.Geteuid() != 0 {
-			log.Printf("You need to run this command as root or with sudo")
-			os.Exit(1)
-		}
+		checkRootPermission()
 
 		disableBrowser = true
 		loginCmd.Run(cmd, []string{})
@@ -285,12 +314,8 @@ var connectorInstallCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		homedir := u.HomeDir
-		// check if service_config_path exists and create it if not
-		if _, err := os.Stat(service_config_path); os.IsNotExist(err) {
-			os.MkdirAll(service_config_path, 0755)
-		}
 
-		configPath := filepath.Join(service_config_path, "border0.yaml")
+		configPath := makeConfigPath()
 		// check if current user has sudo permissions
 		// Also check for sudo users
 		username := os.Getenv("SUDO_USER")
@@ -313,7 +338,6 @@ var connectorInstallCmd = &cobra.Command{
 			// lets determine the token file path
 			userTokenFile := fmt.Sprintf("%s/.border0/token", homedir)
 			// lets copy the token file
-			// err = copyFile(tokenFile, userTokenFile)
 			err := copyFile(http.TokenFilePath(), userTokenFile, username)
 			if err != nil {
 				fmt.Println("Error:", err)
@@ -411,11 +435,8 @@ var connectorInstallCmd = &cobra.Command{
 			log.Fatalf("error: %v %v", startResult, err)
 		}
 		fmt.Println(startResult)
-		// now do a loop and wait for the socket to be created, sleep 1s between each loop
-		// and then print the socket url
-		// lets wait for 5 seconds
-		socket := models.Socket{}
 
+		socket := models.Socket{}
 		for i := 0; i < 10; i++ {
 			// lets check if the socket exists
 			err = client.Request("GET", "socket/"+socketName, &socket, nil)
@@ -431,13 +452,6 @@ var connectorInstallCmd = &cobra.Command{
 		socketURL := fmt.Sprintf("https://client.border0.com/#/ssh/%s", socket.Dnsname)
 		printThis := fmt.Sprintf("\n🚀 Service started successfully.\nYou can now connect to this machine using the following url: \n%s", socketURL)
 		fmt.Println(printThis)
-
-		// status, err := service.Manage(cmd)
-		// if err != nil {
-		// 	log.Println(status, "\nError: ", err)
-		// 	os.Exit(1)
-		// }
-		// fmt.Println(status)
 
 	},
 }
@@ -455,17 +469,13 @@ var connectorUnInstallCmd = &cobra.Command{
 			deamonType = daemon.GlobalDaemon
 		}
 
-		srv, err := daemon.New(service_name, service_description, deamonType, service_dependencies...)
+		srv, err := daemon.New(serviceName, serviceDescription, deamonType, service_dependencies...)
 		if err != nil {
 			log.Println("Error: ", err)
 			os.Exit(1)
 		}
 		service := &Service{srv}
-
-		if os.Geteuid() != 0 {
-			log.Printf("You need to run this command as root or with sudo")
-			os.Exit(1)
-		}
+		checkRootPermission()
 
 		result, err := service.Stop()
 		if err == nil {
@@ -476,13 +486,9 @@ var connectorUnInstallCmd = &cobra.Command{
 			fmt.Println(result)
 		}
 
-		client, err := http.NewClient()
-		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
+		configPath := makeConfigPath()
 
-		configPath := filepath.Join(service_config_path, "border0.yaml")
-		data, err := ioutil.ReadFile(configPath)
+		data, err := os.ReadFile(configPath)
 		if err != nil {
 			log.Fatalf("Error reading YAML file: %v", err)
 		}
@@ -493,18 +499,20 @@ var connectorUnInstallCmd = &cobra.Command{
 			log.Fatalf("Error unmarshaling YAML data: %v", err)
 		}
 
-		for _, socketMap := range currentConfig.Sockets {
-			for socketName, socket := range socketMap {
-				if socket.SSHServer {
-					fmt.Printf("Found socket with sshserver flag: `%s`", socketName)
-					// now we delete the socket
-					err := client.Request("DELETE", "socket/"+socketName, nil, nil)
-					if err != nil {
-						fmt.Println(" ...error deleting socket:", err)
-					} else {
-						fmt.Println(" ...socket deleted successfully")
-					}
+		// check if the token is valid
+		if currentConfig.Credentials.Token != "" {
+			client, err := http.NewClientWithAccessToken(currentConfig.Credentials.Token)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
 
+			for _, socketMap := range currentConfig.Sockets {
+				for socketName, socket := range socketMap {
+					if socket.SSHServer {
+						// now we delete the socket
+						_ = client.Request("DELETE", "socket/"+socketName, nil, nil)
+						break // we only need to delete one socket
+					}
 				}
 			}
 		}
@@ -529,24 +537,14 @@ var connectorUnInstallCmd = &cobra.Command{
 			// now also remove the socket
 
 		}
-
-		// status, err := service.Manage(cmd)
-		// if err != nil {
-		// 	log.Println(status, "\nError: ", err)
-		// 	os.Exit(1)
-		// }
-		// fmt.Println(status)
-
 	},
 }
-
-// now we create connector status command
 
 var connectorStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "display the connector service status",
 	Run: func(cmd *cobra.Command, args []string) {
-		displayServiceStatus(service_name)
+		displayServiceStatus(serviceName)
 	},
 }
 
