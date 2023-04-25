@@ -92,6 +92,8 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 		return nil, err
 	}
 
+	sckCtx, sckCancel := context.WithCancel(ctx)
+
 	return &Socket{
 		SocketID:                       socketFromApi.SocketID,
 		SocketType:                     socketFromApi.SocketType,
@@ -103,6 +105,9 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 		readyChan:                      make(chan bool),
 		Organization:                   org,
 		acceptChan:                     make(chan connWithError),
+
+		context: sckCtx,
+		cancel:  sckCancel,
 	}, nil
 }
 
@@ -130,7 +135,6 @@ func (s *Socket) WithProxy(proxyHost string) error {
 }
 
 func (s *Socket) Listen() (net.Listener, error) {
-	s.context, s.cancel = context.WithCancel(context.Background())
 	s.border0API.StartRefreshAccessTokenJob(s.context)
 
 	if s.ConnectorAuthenticationEnabled {
