@@ -21,6 +21,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
@@ -305,22 +306,26 @@ var socketConnectCmd = &cobra.Command{
 		SetRlimit()
 
 		if socket.SocketType != "http" && httpserver {
-			httpserver = false
+			return fmt.Errorf("can not use httpserver with non http socket type")
 		}
 
 		if socket.SocketType != "ssh" && localssh {
-			localssh = false
+			return fmt.Errorf("can not use sshserver with non ssh socket type")
+		}
+
+		if localssh && socket.UpstreamType != "ssh" {
+			return fmt.Errorf("can not use sshserver with non ssh upstream type")
 		}
 
 		if socket.SocketType == "database" && cloudSqlConnector {
 			if cloudSqlInstance == "" {
-				return fmt.Errorf("error: no cloudsql instance provided")
+				return fmt.Errorf("no cloudsql instance provided")
 			}
 		}
 
 		if socket.SocketType == "database" && rdsIAM {
 			if awsRegion == "" {
-				return fmt.Errorf("error: no AWS region provided")
+				return fmt.Errorf("no AWS region provided")
 			}
 		}
 
@@ -358,14 +363,38 @@ var socketConnectCmd = &cobra.Command{
 
 		var sshAuthProxy bool
 		var sshProxyConfig ssh.ProxyConfig
-		if socket.SocketType == "ssh" && (upstream_username != "" || upstream_password != "" || upstream_identify_file != "" || awsEC2Target != "") {
-			sshProxyConfig = ssh.ProxyConfig{
-				Hostname:     hostname,
-				Port:         port,
-				Username:     upstream_username,
-				Password:     upstream_password,
-				IdentityFile: upstream_identify_file,
-				AwsEC2Target: awsEC2Target,
+		if socket.SocketType == "ssh" && (upstream_username != "" || upstream_password != "" || upstream_identify_file != "" || awsEC2Target != "" || socket.UpstreamType == "aws-ssm") {
+			if socket.UpstreamType == "aws-ssm" {
+				if awsECSCluster == "" && awsEC2Target == "" {
+					return fmt.Errorf("aws_ecs_cluster flag or aws_ec2_target is required for aws-ssm upstream services")
+				}
+
+				sshProxyConfig = ssh.ProxyConfig{
+					AwsEC2Target: awsEC2Target,
+					AWSRegion:    awsRegion,
+					AWSProfile:   awsProfile,
+				}
+
+				if awsECSCluster != "" {
+					sshProxyConfig.ECSSSMProxy = &ssh.ECSSSMProxy{
+						Cluster:    awsECSCluster,
+						Services:   awsECSServices,
+						Tasks:      awsECSTasks,
+						Containers: awsECSContainers,
+					}
+				}
+			} else {
+				if awsECSCluster != "" || awsEC2Target != "" {
+					return fmt.Errorf("aws_ecs_cluster flag or aws_ec2_target is defined but socket is not configured with aws-ssm upstream type")
+				}
+
+				sshProxyConfig = ssh.ProxyConfig{
+					Hostname:     hostname,
+					Port:         port,
+					Username:     upstream_username,
+					Password:     upstream_password,
+					IdentityFile: upstream_identify_file,
+				}
 			}
 			sshAuthProxy = true
 		}
@@ -386,6 +415,15 @@ var socketConnectCmd = &cobra.Command{
 		}
 
 		defer l.Close()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for {
+				<-c
+				os.Exit(0)
+			}
+		}()
 
 		switch {
 		case httpserver:
@@ -446,6 +484,10 @@ func getSockets(toComplete string) []string {
 }
 
 func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	var socketNames []string
 
 	client, err := http.NewClient()
@@ -481,7 +523,7 @@ func init() {
 	socketCreateCmd.Flags().StringVarP(&upstream_username, "upstream_username", "j", "", "Upstream username used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_password, "upstream_password", "k", "", "Upstream password used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_http_hostname, "upstream_http_hostname", "", "", "Upstream http hostname")
-	socketCreateCmd.Flags().StringVarP(&upstream_type, "upstream_type", "", "", "Upstream type: http, https for http sockets or mysql, postgres for database sockets")
+	socketCreateCmd.Flags().StringVarP(&upstream_type, "upstream_type", "", "", "Upstream type: http, https for http sockets or mysql, postgres for database sockets and aws-ssm for ssh sockets")
 	socketCreateCmd.Flags().StringVarP(&socketType, "type", "t", "http", "Socket type: http, https, ssh, tls, database")
 	socketCreateCmd.Flags().BoolVarP(&connectorAuthEnabled, "connector_auth", "c", false, "Enables connector authentication")
 	socketCreateCmd.Flags().StringVarP(&orgCustomDomain, "domain", "o", "", "Use custom domain for socket")
@@ -572,6 +614,12 @@ func init() {
 	socketConnectCmd.Flags().BoolVarP(&upstream_tls, "upstream_tls", "", true, "Use TLS for upstream connection")
 	socketConnectCmd.Flags().StringVarP(&upstream_identify_file, "upstream_identity_file", "", "", "Upstream identity file")
 	socketConnectCmd.Flags().StringVarP(&awsEC2Target, "aws_ec2_target", "", "", "Aws EC2 target identifier")
+	socketConnectCmd.Flags().StringVarP(&awsRegion, "region", "", "", "AWS region to use")
+	socketConnectCmd.Flags().StringVarP(&awsProfile, "profile", "", "", "AWS profile to use")
+	socketConnectCmd.Flags().StringVarP(&awsECSCluster, "aws_ecs_cluster", "", "", "The aws cluster to connect to, Required if upstream type is asw-ssm")
+	socketConnectCmd.Flags().StringSliceVarP(&awsECSServices, "aws_ecs_service", "", []string{}, "If specified, the list will only show service that has the specified service names")
+	socketConnectCmd.Flags().StringSliceVarP(&awsECSTasks, "aws_ecs_task", "", []string{}, "If specified, the list will only show tasks that starts with the specified task names")
+	socketConnectCmd.Flags().StringSliceVarP(&awsECSContainers, "aws_ecs_container", "", []string{}, "If specified, the list will only show containers that has the specified container names")
 
 	socketConnectCmd.RegisterFlagCompletionFunc("socket_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp

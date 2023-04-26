@@ -40,6 +40,10 @@ type ConnectorLocalData struct {
 	CloudSQLInstance      string
 	GoogleCredentialsFile string
 	SSHServer             bool
+	AWSECSCluster         string
+	AWSECSServices        []string
+	AWSECSTasks           []string
+	AWSECSContainers      []string
 }
 
 func (c *ConnectorData) Tags() map[string]string {

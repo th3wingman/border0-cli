@@ -76,9 +76,14 @@ var (
 	cloudSqlConnector       bool
 	rdsIAM                  bool
 	awsRegion               string
+	awsProfile              string
 	upstream_tls            bool
 	upstream_identify_file  string
 	awsEC2Target            string
+	awsECSCluster           string
+	awsECSServices          []string
+	awsECSTasks             []string
+	awsECSContainers        []string
 	disableBrowser          bool
 )
 

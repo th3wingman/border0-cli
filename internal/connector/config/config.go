@@ -26,7 +26,8 @@ type SocketConfig struct {
 	Description                    string
 	AllowedEmailAddresses          []string `mapstructure:"allowed_email_addresses"`
 	AllowedEmailDomains            []string `mapstructure:"allowed_email_domains"`
-	UpstreamUser                   string   `mapstructure:"upstream_user"`
+	UpstreamUserDeprecated         string   `mapstructure:"upstream_user"`
+	UpstreamUser                   string   `mapstructure:"upstream_username"`
 	UpstreamPassword               string   `mapstructure:"upstream_password"`
 	UpstreamType                   string   `mapstructure:"upstream_type"`
 	DatabaseCredentials            string   `mapstructure:"database_credentials"`
@@ -34,19 +35,23 @@ type SocketConfig struct {
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
 
-	UpstreamCertFile      string `mapstructure:"upstream_certificate_file"`
-	UpstreamKeyFile       string `mapstructure:"upstream_key_file"`
-	UpstreamCACertFile    string `mapstructure:"upstream_ca_file"`
-	UpstreamIdentifyFile  string `mapstructure:"upstream_identity_file"`
-	UpstreamTLS           *bool  `mapstructure:"upstream_tls,omitempty"`
-	RdsIAMAuth            bool   `mapstructure:"rds_iam_auth"`
-	AWSRegion             string `mapstructure:"aws_region"`
-	AWSEC2Target          string `mapstructure:"aws_ec2_target"`
-	CloudSQLConnector     bool   `mapstructure:"cloudsql_connector"`
-	CloudSQLIAMAuth       bool   `mapstructure:"cloudsql_iam_auth"`
-	CloudSQLInstance      string `mapstructure:"cloudsql_instance"`
-	GoogleCredentialsFile string `mapstructure:"google_credentials_file"`
-	SSHServer             bool   `mapstructure:"sshserver"`
+	UpstreamCertFile      string   `mapstructure:"upstream_certificate_file"`
+	UpstreamKeyFile       string   `mapstructure:"upstream_key_file"`
+	UpstreamCACertFile    string   `mapstructure:"upstream_ca_file"`
+	UpstreamIdentifyFile  string   `mapstructure:"upstream_identity_file"`
+	UpstreamTLS           *bool    `mapstructure:"upstream_tls,omitempty"`
+	RdsIAMAuth            bool     `mapstructure:"rds_iam_auth"`
+	AWSRegion             string   `mapstructure:"aws_region"`
+	AWSEC2Target          string   `mapstructure:"aws_ec2_target"`
+	CloudSQLConnector     bool     `mapstructure:"cloudsql_connector"`
+	CloudSQLIAMAuth       bool     `mapstructure:"cloudsql_iam_auth"`
+	CloudSQLInstance      string   `mapstructure:"cloudsql_instance"`
+	GoogleCredentialsFile string   `mapstructure:"google_credentials_file"`
+	SSHServer             bool     `mapstructure:"sshserver"`
+	AWSECSCluster         string   `mapstructure:"aws_ecs_cluster"`
+	TaskFilter            []string `mapstructure:"aws_ecs_tasks"`
+	ServiceFilter         []string `mapstructure:"aws_ecs_services"`
+	ContainerFilter       []string `mapstructure:"aws_ecs_containers"`
 }
 
 type Credentials struct {
@@ -78,6 +83,15 @@ type ConnectorGroups struct {
 	UpstreamUsername               string   `mapstructure:"upstream_username"`
 	UpstreamPassword               string   `mapstructure:"upstream_password"`
 	UpstreamIdentifyFile           string   `mapstructure:"upstream_identity_file"`
+}
+
+type EcsPlugin struct {
+	Group                          string
+	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
+	Policies                       []string `mapstructure:"policies"`
+	TaskFilter                     []string `mapstructure:"aws_ecs_tasks"`
+	ServiceFilter                  []string `mapstructure:"aws_ecs_services"`
+	ContainerFilter                []string `mapstructure:"aws_ecs_containers"`
 }
 
 type K8Plugin struct {
@@ -122,6 +136,7 @@ type Config struct {
 	Sockets       SocketParams
 	Connector     Connector
 	AwsGroups     []ConnectorGroups `mapstructure:"aws_groups"`
+	EcsPlugin     []EcsPlugin       `mapstructure:"aws_ecs_ssm"`
 	DockerPlugin  []ConnectorGroups `mapstructure:"docker_plugin"`
 	NetworkPlugin []NetworkPlugin   `mapstructure:"network_plugin"`
 	K8Plugin      []K8Plugin        `mapstructure:"k8_plugin"`
