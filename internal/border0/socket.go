@@ -92,7 +92,7 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 		return nil, err
 	}
 
-	sckCtx, sckCancel := context.WithCancel(ctx)
+	sckContext, sckCancel := context.WithCancel(context.Background())
 
 	return &Socket{
 		SocketID:                       socketFromApi.SocketID,
@@ -106,7 +106,7 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 		Organization:                   org,
 		acceptChan:                     make(chan connWithError),
 
-		context: sckCtx,
+		context: sckContext,
 		cancel:  sckCancel,
 	}, nil
 }
