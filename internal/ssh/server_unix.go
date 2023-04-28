@@ -31,12 +31,16 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 	sysProcAttr := &syscall.SysProcAttr{}
 
 	if len(s.Command()) > 0 {
+		err := syscall.Setgroups([]int{})
+		if err != nil {
+			log.Fatalf("Failed to clear supplementary group access list: %v", err)
+		}
+
 		sysProcAttr.Credential = &syscall.Credential{
 			Uid:         uint32(uid),
 			Gid:         uint32(gid),
 			NoSetGroups: true,
 		}
-
 		cmd.Args = append(cmd.Args, "-c", s.RawCommand())
 	} else {
 		if euid == 0 && loginCmd != "" {
@@ -46,12 +50,16 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 			} else {
 				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", s.User()}, cmd.Args...)
 			}
-
 		} else {
 			sysProcAttr.Credential = &syscall.Credential{
 				Uid:         uint32(uid),
 				Gid:         uint32(gid),
 				NoSetGroups: true,
+			}
+
+			err := syscall.Setgroups([]int{})
+			if err != nil {
+				log.Fatalf("Failed to clear supplementary group access list: %v", err)
 			}
 
 			cmd.Args = []string{fmt.Sprintf("-%s", cmd.Args[0])}
