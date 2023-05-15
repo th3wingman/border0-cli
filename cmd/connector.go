@@ -124,12 +124,46 @@ func displayServiceStatus(serviceName string) {
 }
 
 func copyFile(src, dst, username string) error {
+
+	// get uid and gid of the username
+	u, err := user.Lookup(username)
+	if err != nil {
+		return err
+	}
+	// Convert UID and GID strings to integers
+	uid, err := strconv.Atoi(u.Uid)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return err
+	}
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return err
+	}
+
 	// Open the source file for reading
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer srcFile.Close()
+
+	//check of the .border0 directory exists
+	// if not create it and set the owner to the current user
+
+	// first fetch the directory from dst
+	border0dir := filepath.Dir(dst)
+
+	if _, err := os.Stat(border0dir); os.IsNotExist(err) {
+		if err := os.Mkdir(border0dir, 0700); err != nil {
+			return err
+		}
+	}
+	// set the ownership of the dir to the user
+	if err := os.Chown(border0dir, uid, gid); err != nil {
+		return err
+	}
 
 	// Create the destination file
 	dstFile, err := os.Create(dst)
@@ -154,22 +188,6 @@ func copyFile(src, dst, username string) error {
 		return err
 	}
 
-	// get uid and gid of the username
-	u, err := user.Lookup(username)
-	if err != nil {
-		return err
-	}
-	// Convert UID and GID strings to integers
-	uid, err := strconv.Atoi(u.Uid)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return err
-	}
-	gid, err := strconv.Atoi(u.Gid)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return err
-	}
 	// set the ownership of the file to the user
 	if err := os.Chown(dst, uid, gid); err != nil {
 		return err
@@ -333,12 +351,6 @@ var connectorInstallCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 				homedir = u.HomeDir
-			}
-
-			//check of the .border0 directory exists
-			// if not create it
-			if _, err := os.Stat(fmt.Sprintf("%s/.border0", homedir)); os.IsNotExist(err) {
-				os.Mkdir(fmt.Sprintf("%s/.border0", homedir), 0600)
 			}
 
 			// now copy the newly created token file to user's home directory
