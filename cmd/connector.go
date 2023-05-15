@@ -334,6 +334,13 @@ var connectorInstallCmd = &cobra.Command{
 				}
 				homedir = u.HomeDir
 			}
+
+			//check of the .border0 directory exists
+			// if not create it
+			if _, err := os.Stat(fmt.Sprintf("%s/.border0", homedir)); os.IsNotExist(err) {
+				os.Mkdir(fmt.Sprintf("%s/.border0", homedir), 0600)
+			}
+
 			// now copy the newly created token file to user's home directory
 			// lets determine the token file path
 			userTokenFile := fmt.Sprintf("%s/.border0/token", homedir)
