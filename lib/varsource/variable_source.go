@@ -20,6 +20,7 @@ type VariableSource interface {
 	//   "DB_PASSWORD": "df29^%qd3gs8&*&(asd8t\tqe=",
 	// }
 	GetVariables(ctx context.Context, vars map[string]string) (map[string]string, error)
+	GetVariable(ctx context.Context, varDefn string) (string, error)
 }
 
 // NewDefaultVariableSource returns the default VariableSource implementation.

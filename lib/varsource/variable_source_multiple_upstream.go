@@ -89,42 +89,46 @@ func NewMultipleUpstreamVariableSource(opts ...Option) *MultipleUpstreamVariable
 func (vs *MultipleUpstreamVariableSource) GetVariables(ctx context.Context, vars map[string]string) (map[string]string, error) {
 	processed := make(map[string]string)
 	for varName, varDefn := range vars {
-		// if the variable definition is an escaped variable definition
-		// e.g. "\${env:USERNAME}" simply remove the escaping and skip processing
-		if strings.HasPrefix(varDefn, `\${`) {
-			processed[varName] = strings.TrimPrefix(varDefn, `\`)
-			continue
+		value, err := vs.GetVariable(ctx, varDefn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process variable \"%s\": %v", varName, err)
 		}
-
-		// if the variable definition does not have start and end curly braces
-		// (i.e. is not of the form ${VARIABLE}) we simply skip processing (i.e. assume
-		// that the variable definition is the variable value - does not need fetching)
-		if !(strings.HasPrefix(varDefn, "${") && strings.HasSuffix(varDefn, "}")) {
-			processed[varName] = varDefn
-			continue
-		}
-
-		// remove the upstream variable indicators (the curly braces)
-		upstreamVarDefn := strings.TrimSuffix(strings.TrimPrefix(varDefn, "${"), "}")
-
-		// iterate over the sorted prefixes (in order of longest
-		// to shortest prefix) breaking after the first match
-		// (e.g. 'aws:ssm:' would match before 'aws:')
-		prefixMatchedUpstream := false
-		for _, prefix := range vs.prefixes {
-			if strings.HasPrefix(upstreamVarDefn, prefix) {
-				value, err := vs.upstreams[prefix].GetVariable(ctx, strings.TrimPrefix(upstreamVarDefn, prefix))
-				if err != nil {
-					return nil, fmt.Errorf("failed to get variable \"%s\": %v", varName, err)
-				}
-				processed[varName] = value
-				prefixMatchedUpstream = true
-				break
-			}
-		}
-		if !prefixMatchedUpstream {
-			return nil, fmt.Errorf("no upstream variable source available for variable definition \"%s\"", varDefn)
-		}
+		processed[varName] = value
 	}
 	return processed, nil
+}
+
+// GetVariable takes a single variable definition and returns the variable's
+// value i.e. fetches the variable's value based on the variable definition
+func (vs *MultipleUpstreamVariableSource) GetVariable(ctx context.Context, varDefn string) (string, error) {
+	// if the variable definition is an escaped variable definition
+	// e.g. "\${env:USERNAME}" simply remove the escaping and skip processing
+	if strings.HasPrefix(varDefn, `\${`) {
+		return strings.TrimPrefix(varDefn, `\`), nil
+
+	}
+
+	// if the variable definition does not have start and end curly braces
+	// (i.e. is not of the form ${VARIABLE}) we simply skip processing (i.e. assume
+	// that the variable definition is the variable value - does not need fetching)
+	if !(strings.HasPrefix(varDefn, "${") && strings.HasSuffix(varDefn, "}")) {
+		return varDefn, nil
+	}
+
+	// remove the upstream variable indicators (the curly braces)
+	upstreamVarDefn := strings.TrimSuffix(strings.TrimPrefix(varDefn, "${"), "}")
+
+	// iterate over the sorted prefixes (in order of longest
+	// to shortest prefix) breaking after the first match
+	// (e.g. 'aws:ssm:' would match before 'aws:')
+	for _, prefix := range vs.prefixes {
+		if strings.HasPrefix(upstreamVarDefn, prefix) {
+			value, err := vs.upstreams[prefix].GetVariable(ctx, strings.TrimPrefix(upstreamVarDefn, prefix))
+			if err != nil {
+				return "", fmt.Errorf("failed to get value for variable definition \"%s\": %v", varDefn, err)
+			}
+			return value, nil
+		}
+	}
+	return "", fmt.Errorf("no upstream variable source available for variable definition \"%s\"", varDefn)
 }
