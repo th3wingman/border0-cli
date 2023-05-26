@@ -13,6 +13,8 @@ const (
 type ConnectorData struct {
 	Name           string
 	Connector      string
+	CloudName      string
+	CloudType      string
 	Type           string
 	Port           int
 	TargetHostname string
@@ -50,6 +52,8 @@ func (c *ConnectorData) Tags() map[string]string {
 	data := map[string]string{
 		"name":            c.Name,
 		"connector_name":  c.Connector,
+		"cloud_name":      c.CloudName,
+		"cloud_type":      c.CloudType,
 		"type":            c.Type,
 		"target_port":     strconv.Itoa(c.Port),
 		"target_hostname": c.TargetHostname,
@@ -164,6 +168,8 @@ func (s *Socket) BuildConnectorDataByTags() {
 	port, _ := strconv.Atoi(s.Tags["target_port"])
 	data.Name = s.Tags["name"]
 	data.Connector = s.Tags["connector_name"]
+	data.CloudName = s.Tags["cloud_name"]
+	data.CloudType = s.Tags["connector_type"]
 	data.Type = s.Tags["type"]
 	data.Port = port
 	data.TargetHostname = s.Tags["target_hostname"]
