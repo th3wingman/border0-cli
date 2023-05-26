@@ -31,6 +31,7 @@ func GetIDPCmdRoot() *cobra.Command {
 		flag{name: "name", shorthand: "n", target: &idpEnableName, kind: reflect.String, value: "", usage: "[required if no other flags provided] the name of the identity provider to enable", require: false},
 		flag{name: "google", target: &idpEnableGoogle, kind: reflect.Bool, value: false, usage: "true if enabling the google global provider", require: false},
 		flag{name: "github", target: &idpEnableGithub, kind: reflect.Bool, value: false, usage: "true if enabling the github global provider", require: false},
+		flag{name: "microsoft", target: &idpEnableMicrosoft, kind: reflect.Bool, value: false, usage: "true if enabling the microsoft global provider", require: false},
 	)
 
 	// idp disable
@@ -40,6 +41,7 @@ func GetIDPCmdRoot() *cobra.Command {
 		flag{name: "name", shorthand: "n", target: &idpDisableName, kind: reflect.String, value: "", usage: "[required if no other flags provided] the name of the identity provider to disable", require: false},
 		flag{name: "google", target: &idpDisableGoogle, kind: reflect.Bool, value: false, usage: "true if disabling the google global provider", require: false},
 		flag{name: "github", target: &idpDisableGithub, kind: reflect.Bool, value: false, usage: "true if disabling the github global provider", require: false},
+		flag{name: "microsoft", target: &idpDisableMicrosoft, kind: reflect.Bool, value: false, usage: "true if disabling the microsoft global provider", require: false},
 	)
 
 	// idp remove

@@ -11,9 +11,10 @@ import (
 
 var (
 	// flags
-	idpEnableName   string
-	idpEnableGoogle bool
-	idpEnableGithub bool
+	idpEnableName      string
+	idpEnableGoogle    bool
+	idpEnableGithub    bool
+	idpEnableMicrosoft bool
 )
 
 func getIDPEnableCmd() *cobra.Command {
@@ -31,11 +32,12 @@ func getIDPEnableCmdHandler() func(cmd *cobra.Command, args []string) {
 			util.FailPretty("failed to get Border0 API client: %s", err)
 		}
 
-		if (idpEnableName != "" && (idpEnableGoogle || idpEnableGithub)) ||
-			(idpEnableName == "" && !idpEnableGoogle && !idpEnableGithub) ||
-			(idpEnableGoogle && idpEnableGithub) {
+		globals := countTrueValues(idpEnableGoogle, idpEnableGithub, idpEnableMicrosoft)
+		isGlobal := globals > 0
+
+		if (idpEnableName != "" && isGlobal) || (idpEnableName == "" && !isGlobal) || (globals > 1) {
 			cmd.Help()
-			util.FailPretty("one (and only one) of --google, --github, or --name must set")
+			util.FailPretty("one (and only one) of --google, --github, --microsoft, or --name must set")
 		}
 
 		if idpEnableGoogle {
@@ -44,10 +46,13 @@ func getIDPEnableCmdHandler() func(cmd *cobra.Command, args []string) {
 		if idpEnableGithub {
 			idpEnableName = identityProviderTypeGlobalGithub
 		}
+		if idpEnableMicrosoft {
+			idpEnableName = identityProviderTypeGlobalMicrosoft
+		}
 
 		reqBody := &toggleStatusRequest{
 			Name:   idpEnableName,
-			Global: idpEnableGoogle || idpEnableGithub,
+			Global: isGlobal,
 			Enable: true,
 		}
 

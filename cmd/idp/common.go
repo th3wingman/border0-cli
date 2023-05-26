@@ -12,6 +12,7 @@ import (
 var (
 	identityProviderTypeGlobalGoogle    = "google"
 	identityProviderTypeGlobalGithub    = "github"
+	identityProviderTypeGlobalMicrosoft = "microsoft"
 	identityProviderTypeOIDC            = "oidc"
 	identityProviderTypeSAML            = "saml"
 	identityProviderTypeOktaWorkforce   = "okta-workforce"
@@ -175,4 +176,14 @@ func addCommandWithFlags(
 	}
 
 	parent.AddCommand(child)
+}
+
+func countTrueValues(b ...bool) uint {
+	trueValues := uint(0)
+	for _, val := range b {
+		if val {
+			trueValues++
+		}
+	}
+	return trueValues
 }
