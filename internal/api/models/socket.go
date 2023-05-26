@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/borderzero/border0-cli/internal/connector/config"
 )
 
 const (
 	tagKeyManagedBy = "managed_by"
 )
+
+type Metadata struct {
+	Principal string // e.g. "token:${token_uuid}" OR "user:${user_uuid}"
+	CloudName string // e.g. "aws"
+	CloudType string // e.g. "production
+}
 
 type ConnectorData struct {
 	Name           string
@@ -139,12 +143,12 @@ func (s *Socket) SanitizeName() {
 	s.Name = strings.Replace(socketName, "_", "-", -1)
 }
 
-func (s *Socket) BuildConnectorData(ConnectorConfig config.Connector, principal string) {
+func (s *Socket) BuildConnectorData(connectorName string, metadata Metadata) {
 	s.ConnectorData = &ConnectorData{
 		Name:           s.Name,
-		Connector:      ConnectorConfig.Name,
-		CloudName:      ConnectorConfig.CloudName,
-		CloudType:      ConnectorConfig.CloudType,
+		Connector:      connectorName,
+		CloudName:      metadata.CloudName,
+		CloudType:      metadata.CloudType,
 		Type:           s.SocketType,
 		Port:           s.TargetPort,
 		TargetHostname: s.TargetHostname,
@@ -152,12 +156,12 @@ func (s *Socket) BuildConnectorData(ConnectorConfig config.Connector, principal 
 		Ec2Tag:         s.Ec2Tag,
 		InstanceId:     s.InstanceId,
 		PluginName:     s.PluginName,
-		ManagedBy:      principal,
+		ManagedBy:      metadata.Principal,
 	}
 }
 
-func (s *Socket) BuildConnectorDataAndTags(ConnectorConfig config.Connector, principal string) {
-	s.BuildConnectorData(ConnectorConfig, principal)
+func (s *Socket) BuildConnectorDataAndTags(connectorName string, metadata Metadata) {
+	s.BuildConnectorData(connectorName, metadata)
 	s.Tags = s.ConnectorData.Tags()
 }
 

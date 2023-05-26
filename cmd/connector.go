@@ -49,7 +49,7 @@ var service_dependencies = []string{}
 
 type TemplateConnectorConfig struct {
 	Connector struct {
-		Name string `yaml:"name"`
+		Name      string `yaml:"name"`
 	} `yaml:"connector"`
 	Credentials struct {
 		Token string `yaml:"token"`
