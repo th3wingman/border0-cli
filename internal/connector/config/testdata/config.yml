@@ -1,6 +1,8 @@
 connector:
    name: "my-awesome.connector"
    aws-region: "us-west-2"
+   cloud-type: "aws"
+   cloud-name: "aws-prod"
 
 credentials:
    user: my-aweseome-email@border0.com
