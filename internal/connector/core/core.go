@@ -206,7 +206,7 @@ func (c *ConnectorCore) DiscoverNewSocketChanges(ctx context.Context, ch chan []
 	}
 
 	for i, s := range sockets {
-		s.BuildConnectorDataAndTags(c.cfg.Connector.Name, c.metadata.Principal)
+		s.BuildConnectorDataAndTags(c.cfg.Connector, c.metadata.Principal)
 		sockets[i] = s
 	}
 
@@ -225,7 +225,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 	for i, socket := range discoveredSockets {
 		socket.PluginName = c.discovery.Name()
 		socket.SanitizeName()
-		socket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
+		socket.BuildConnectorData(c.cfg.Connector, c.metadata.Principal)
 		socket.Tags = socket.ConnectorData.Tags()
 		socket.SetupTypeAndUpstreamTypeByPortOrTags()
 		localSocketsMap[socket.ConnectorData.Key()] = socket
@@ -425,7 +425,7 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 			}
 
 			createdSocket.PluginName = c.discovery.Name()
-			createdSocket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
+			createdSocket.BuildConnectorData(c.cfg.Connector, c.metadata.Principal)
 			createdSocket.ConnectorLocalData = localSocket.ConnectorLocalData
 
 			socketsToConnect = append(socketsToConnect, *createdSocket)

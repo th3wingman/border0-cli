@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/borderzero/border0-cli/internal/connector/config"
 )
 
 const (
@@ -137,10 +139,12 @@ func (s *Socket) SanitizeName() {
 	s.Name = strings.Replace(socketName, "_", "-", -1)
 }
 
-func (s *Socket) BuildConnectorData(connectorName, principal string) {
+func (s *Socket) BuildConnectorData(ConnectorConfig config.Connector, principal string) {
 	s.ConnectorData = &ConnectorData{
 		Name:           s.Name,
-		Connector:      connectorName,
+		Connector:      ConnectorConfig.Name,
+		CloudName:      ConnectorConfig.CloudName,
+		CloudType:      ConnectorConfig.CloudType,
 		Type:           s.SocketType,
 		Port:           s.TargetPort,
 		TargetHostname: s.TargetHostname,
@@ -152,8 +156,8 @@ func (s *Socket) BuildConnectorData(connectorName, principal string) {
 	}
 }
 
-func (s *Socket) BuildConnectorDataAndTags(connectorName, principal string) {
-	s.BuildConnectorData(connectorName, principal)
+func (s *Socket) BuildConnectorDataAndTags(ConnectorConfig config.Connector, principal string) {
+	s.BuildConnectorData(ConnectorConfig, principal)
 	s.Tags = s.ConnectorData.Tags()
 }
 
@@ -169,7 +173,7 @@ func (s *Socket) BuildConnectorDataByTags() {
 	data.Name = s.Tags["name"]
 	data.Connector = s.Tags["connector_name"]
 	data.CloudName = s.Tags["cloud_name"]
-	data.CloudType = s.Tags["connector_type"]
+	data.CloudType = s.Tags["cloud_type"]
 	data.Type = s.Tags["type"]
 	data.Port = port
 	data.TargetHostname = s.Tags["target_hostname"]
