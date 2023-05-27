@@ -127,9 +127,12 @@ type Connector struct {
 	AwsRegion    string `mapstructure:"aws-region"`
 	SSMAwsRegion string `mapstructure:"ssm-aws-region"`
 	AwsProfile   string `mapstructure:"aws-profile"`
-	CloudName    string `mapstructure:"cloud-name"`
-	CloudType    string `mapstructure:"cloud-type"`
+	ProviderRegion    string `mapstructure:"provider-region"`
+	ProviderEnv    string `mapstructure:"provider-enviroment"`
+	ProviderType    string `mapstructure:"provider-type"`
+
 }
+
 
 type SocketParams []map[string]SocketConfig
 

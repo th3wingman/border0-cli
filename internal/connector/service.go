@@ -130,8 +130,9 @@ func (c *ConnectorService) buildMetadata(accessToken string) models.Metadata {
 	}
 
 	meta.Principal = fmt.Sprintf("%s:%s", typeClaim, tokenID)
-	meta.CloudName = c.cfg.Connector.CloudName
-	meta.CloudType = c.cfg.Connector.CloudType
+	meta.ProviderEnv = c.cfg.Connector.ProviderEnv
+	meta.ProviderType = c.cfg.Connector.ProviderType
+	meta.ProviderRegion = c.cfg.Connector.ProviderRegion
 
 	return meta
 }

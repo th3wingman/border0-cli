@@ -11,16 +11,19 @@ const (
 )
 
 type Metadata struct {
-	Principal string // e.g. "token:${token_uuid}" OR "user:${user_uuid}"
-	CloudName string // e.g. "aws"
-	CloudType string // e.g. "production
+	Principal      string // e.g. "token:${token_uuid}" OR "user:${user_uuid}"
+	ProviderEnv    string // e.g. "prod, or "dev"
+	ProviderRegion string // e.g. "us-east-1
+	ProviderType   string // e.g. "aws
+
 }
 
 type ConnectorData struct {
 	Name           string
 	Connector      string
-	CloudName      string
-	CloudType      string
+	ProviderEnv    string
+	ProviderType   string
+	ProviderRegion string
 	Type           string
 	Port           int
 	TargetHostname string
@@ -58,8 +61,9 @@ func (c *ConnectorData) Tags() map[string]string {
 	data := map[string]string{
 		"name":            c.Name,
 		"connector_name":  c.Connector,
-		"cloud_name":      c.CloudName,
-		"cloud_type":      c.CloudType,
+		"provider_env":    c.ProviderEnv,
+		"provier_type":    c.ProviderType,
+		"provier_region":  c.ProviderRegion,
 		"type":            c.Type,
 		"target_port":     strconv.Itoa(c.Port),
 		"target_hostname": c.TargetHostname,
@@ -147,8 +151,9 @@ func (s *Socket) BuildConnectorData(connectorName string, metadata Metadata) {
 	s.ConnectorData = &ConnectorData{
 		Name:           s.Name,
 		Connector:      connectorName,
-		CloudName:      metadata.CloudName,
-		CloudType:      metadata.CloudType,
+		ProviderEnv:    metadata.ProviderEnv,
+		ProviderType:   metadata.ProviderType,
+		ProviderRegion: metadata.ProviderRegion,
 		Type:           s.SocketType,
 		Port:           s.TargetPort,
 		TargetHostname: s.TargetHostname,
@@ -176,8 +181,9 @@ func (s *Socket) BuildConnectorDataByTags() {
 	port, _ := strconv.Atoi(s.Tags["target_port"])
 	data.Name = s.Tags["name"]
 	data.Connector = s.Tags["connector_name"]
-	data.CloudName = s.Tags["cloud_name"]
-	data.CloudType = s.Tags["cloud_type"]
+	data.ProviderEnv = s.Tags["provider_env"]
+	data.ProviderType = s.Tags["provider_type"]
+	data.ProviderRegion = s.Tags["providerion_region"]
 	data.Type = s.Tags["type"]
 	data.Port = port
 	data.TargetHostname = s.Tags["target_hostname"]

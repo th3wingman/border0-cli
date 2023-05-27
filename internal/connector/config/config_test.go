@@ -10,7 +10,7 @@ import (
 func TestParse(t *testing.T) {
 	validConfig := Config{
 		Credentials: Credentials{User: "my-aweseome-email@border0.com", Password: "AVeryLongAndSecurePassword", Token: ""},
-		Connector:   Connector{Name: "my-awesome.connector", AwsRegion: "us-west-2", AwsProfile: "", CloudName: "aws-prod", CloudType: "aws"},
+		Connector:   Connector{Name: "my-awesome.connector", AwsRegion: "us-west-2", AwsProfile: "", ProviderEnv: "aws-prod", ProviderType: "aws", ProviderRegion: "us-west-2"},
 		Sockets: SocketParams{
 			map[string]SocketConfig{
 				"webserver.connector.lab": {
