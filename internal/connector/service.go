@@ -98,8 +98,8 @@ func (c *ConnectorService) Start() error {
 	return nil
 }
 
-func (c *ConnectorService) buildMetadata(accessToken string) core.Metadata {
-	meta := core.Metadata{}
+func (c *ConnectorService) buildMetadata(accessToken string) models.Metadata {
+	meta := models.Metadata{}
 
 	token, _, err := new(jwt.Parser).ParseUnverified(accessToken, jwt.MapClaims{})
 	if err != nil {
@@ -130,6 +130,9 @@ func (c *ConnectorService) buildMetadata(accessToken string) core.Metadata {
 	}
 
 	meta.Principal = fmt.Sprintf("%s:%s", typeClaim, tokenID)
+	meta.ProviderEnv = c.cfg.Connector.ProviderEnv
+	meta.ProviderType = c.cfg.Connector.ProviderType
+	meta.ProviderRegion = c.cfg.Connector.ProviderRegion
 
 	return meta
 }
@@ -160,7 +163,7 @@ func (c *ConnectorService) fetchAccessToken(border0API api.API) (*models.Credent
 	}
 }
 
-func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Config, border0API api.API, plugins []discover.Discover, metadata core.Metadata) error {
+func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Config, border0API api.API, plugins []discover.Discover, metadata models.Metadata) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

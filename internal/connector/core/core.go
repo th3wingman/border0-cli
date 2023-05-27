@@ -38,14 +38,10 @@ type ConnectorCore struct {
 	connectChan      chan connectTunnelData
 	connectedTunnels sync.Map
 
-	metadata Metadata // additionall metadata
+	metadata models.Metadata // additionall metadata
 }
 
-type Metadata struct {
-	Principal string // e.g. "token:${token_uuid}" OR "user:${user_uuid}"
-}
-
-func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API, meta Metadata, version string) *ConnectorCore {
+func NewConnectorCore(logger *zap.Logger, cfg config.Config, discovery discover.Discover, border0API api.API, meta models.Metadata, version string) *ConnectorCore {
 	connectedTunnels := sync.Map{}
 	connectChan := make(chan connectTunnelData, 5)
 	discoverState := discover.DiscoverState{
@@ -206,7 +202,7 @@ func (c *ConnectorCore) DiscoverNewSocketChanges(ctx context.Context, ch chan []
 	}
 
 	for i, s := range sockets {
-		s.BuildConnectorDataAndTags(c.cfg.Connector.Name, c.metadata.Principal)
+		s.BuildConnectorDataAndTags(c.cfg.Connector.Name, c.metadata)
 		sockets[i] = s
 	}
 
@@ -225,7 +221,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 	for i, socket := range discoveredSockets {
 		socket.PluginName = c.discovery.Name()
 		socket.SanitizeName()
-		socket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
+		socket.BuildConnectorData(c.cfg.Connector.Name, c.metadata)
 		socket.Tags = socket.ConnectorData.Tags()
 		socket.SetupTypeAndUpstreamTypeByPortOrTags()
 		localSocketsMap[socket.ConnectorData.Key()] = socket
@@ -425,7 +421,7 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 			}
 
 			createdSocket.PluginName = c.discovery.Name()
-			createdSocket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
+			createdSocket.BuildConnectorData(c.cfg.Connector.Name, c.metadata)
 			createdSocket.ConnectorLocalData = localSocket.ConnectorLocalData
 
 			socketsToConnect = append(socketsToConnect, *createdSocket)
