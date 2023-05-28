@@ -123,16 +123,14 @@ type NetworkPluginNetwork struct {
 }
 
 type Connector struct {
-	Name         string
-	AwsRegion    string `mapstructure:"aws-region"`
-	SSMAwsRegion string `mapstructure:"ssm-aws-region"`
-	AwsProfile   string `mapstructure:"aws-profile"`
-	ProviderRegion    string `mapstructure:"provider-region"`
+	Name           string
+	AwsRegion      string `mapstructure:"aws-region"`
+	SSMAwsRegion   string `mapstructure:"ssm-aws-region"`
+	AwsProfile     string `mapstructure:"aws-profile"`
+	ProviderRegion string `mapstructure:"provider-region"`
 	ProviderEnv    string `mapstructure:"provider-enviroment"`
-	ProviderType    string `mapstructure:"provider-type"`
-
+	ProviderType   string `mapstructure:"provider-type"`
 }
-
 
 type SocketParams []map[string]SocketConfig
 
