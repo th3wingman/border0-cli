@@ -62,8 +62,8 @@ func (c *ConnectorData) Tags() map[string]string {
 		"name":            c.Name,
 		"connector_name":  c.Connector,
 		"provider_env":    c.ProviderEnv,
-		"provier_type":    c.ProviderType,
-		"provier_region":  c.ProviderRegion,
+		"provider_type":   c.ProviderType,
+		"provider_region": c.ProviderRegion,
 		"type":            c.Type,
 		"target_port":     strconv.Itoa(c.Port),
 		"target_hostname": c.TargetHostname,
@@ -183,7 +183,7 @@ func (s *Socket) BuildConnectorDataByTags() {
 	data.Connector = s.Tags["connector_name"]
 	data.ProviderEnv = s.Tags["provider_env"]
 	data.ProviderType = s.Tags["provider_type"]
-	data.ProviderRegion = s.Tags["providerion_region"]
+	data.ProviderRegion = s.Tags["provider_region"]
 	data.Type = s.Tags["type"]
 	data.Port = port
 	data.TargetHostname = s.Tags["target_hostname"]
