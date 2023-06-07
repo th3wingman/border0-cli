@@ -216,6 +216,9 @@ func (s *Socket) SetupTypeAndUpstreamTypeByPortOrTags() {
 			case "https":
 				s.SocketType = "http"
 				s.UpstreamType = "https"
+			case "http":
+				s.SocketType = "http"
+				s.UpstreamType = "http"
 			case "ssh":
 				s.UpstreamType = "ssh"
 			}
