@@ -75,6 +75,7 @@ var (
 	cloudSqlIAM             bool
 	cloudSqlConnector       bool
 	rdsIAM                  bool
+	aws                     bool
 	awsRegion               string
 	awsProfile              string
 	upstream_tls            bool

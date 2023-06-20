@@ -343,6 +343,22 @@ func (a *Border0API) DetachPolicies(ctx context.Context, socketID string, policy
 	return response, nil
 }
 
+// CreateToken creates a new border0 admin token (api key)
+func (a *Border0API) CreateToken(ctx context.Context, name string, role string, expiresAt *time.Time) (*models.Token, error) {
+	payload := &models.Token{Name: name, Role: role}
+	if expiresAt != nil {
+		payload.ExpiresAt = expiresAt.Unix()
+	}
+
+	var tk models.Token
+	err := a.Request(http.MethodPost, "organizations/tokens", &tk, payload, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tk, nil
+}
+
 func (a *Border0API) GetPolicyByName(ctx context.Context, name string) (*models.Policy, error) {
 	url := fmt.Sprintf("policies/find?name=%s", name)
 
