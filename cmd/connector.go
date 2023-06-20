@@ -2,23 +2,27 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
+	"github.com/borderzero/border0-cli/internal/connector/install"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/logging"
 	"github.com/spf13/cobra"
@@ -276,10 +280,40 @@ var connectorStopCmd = &cobra.Command{
 	},
 }
 
+func connectorInstallAws(ctx context.Context) {
+	sigs := make(chan os.Signal, 1)
+	defer close(sigs)
+
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	defer signal.Stop(sigs)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		if sig, ok := <-sigs; ok {
+			fmt.Println(fmt.Sprintf("Received shutdown signal: %s", sig.String()))
+			cancel()
+		}
+	}()
+
+	err := install.RunWizardForAWS(ctx, version)
+	if err != nil {
+		fmt.Printf("\nERROR: %s\n", err)
+		os.Exit(1)
+	}
+}
+
 var connectorInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "install the connector service on the machine",
 	Run: func(cmd *cobra.Command, args []string) {
+
+		if aws {
+			connectorInstallAws(cmd.Context())
+			return
+		}
+
 		// put the install code here
 		deamonType := daemon.SystemDaemon
 		if runtime.GOOS == "darwin" {
@@ -312,7 +346,7 @@ var connectorInstallCmd = &cobra.Command{
 
 		now := time.Now()
 		oneYearLater := now.AddDate(1, 0, 0)
-		oneYearFromNow := int(oneYearLater.Unix())
+		oneYearFromNow := oneYearLater.Unix()
 
 		tokenName := fmt.Sprintf("Connector on %s host", myHostname)
 		// s := models.Socket{}
@@ -572,6 +606,7 @@ func init() {
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
+	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
 	rootCmd.AddCommand(connectorCmd)
