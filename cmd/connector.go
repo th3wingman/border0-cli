@@ -315,6 +315,28 @@ func connectorInstallAws(ctx context.Context) {
 	}
 }
 
+func checkDaemonInstallation() (bool, error) {
+	deamonType := daemon.SystemDaemon
+	if runtime.GOOS == "darwin" {
+		deamonType = daemon.GlobalDaemon
+	}
+
+	daemon, err := daemon.New(serviceName, serviceDescription, deamonType, service_dependencies...)
+	if err != nil {
+		return false, err
+	}
+
+	status, err := daemon.Status()
+	if err != nil {
+		return false, err
+	}
+
+	if status == "service not installed" {
+		return false, err
+	}
+	return true, err
+}
+
 var connectorInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "install the connector service on the machine",
@@ -341,6 +363,12 @@ var connectorInstallCmd = &cobra.Command{
 		}
 		service := &Service{srv}
 		checkRootPermission()
+		// check if the service is already isntalled
+		installed, _ := checkDaemonInstallation()
+		if installed {
+			log.Println("Service already installed")
+			os.Exit(1)
+		}
 
 		disableBrowser = true
 		loginCmd.Run(cmd, []string{})
@@ -519,6 +547,7 @@ var connectorInstallCmd = &cobra.Command{
 
 	},
 }
+
 var connectorUnInstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "uninstall the connector service from the machine",
@@ -541,6 +570,12 @@ var connectorUnInstallCmd = &cobra.Command{
 		service := &Service{srv}
 		checkRootPermission()
 
+		installed, _ := checkDaemonInstallation()
+		if !installed {
+			log.Println("Service is NOT installed")
+			os.Exit(1)
+		}
+
 		result, err := service.Stop()
 		if err == nil {
 			fmt.Println(result)
@@ -548,19 +583,26 @@ var connectorUnInstallCmd = &cobra.Command{
 		result, err = service.Remove()
 		if err != nil {
 			fmt.Println(result)
+		} else {
+			fmt.Println(result)
 		}
 
-		configPath := makeConfigPath()
+		configPath := filepath.Join(serviceConfigPath + defaultConfigFileName)
+		// check if the file exists
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			fmt.Println("Config file does not exist. Nothing else to do.")
+			os.Exit(0)
+		}
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			log.Fatalf("Error reading YAML file: %v", err)
+			fmt.Printf("Error reading YAML file: %v", err)
 		}
 
 		var currentConfig CurrentConnectorConfig
 		err = yaml.Unmarshal(data, &currentConfig)
 		if err != nil {
-			log.Fatalf("Error unmarshaling YAML data: %v", err)
+			fmt.Printf("Error unmarshaling YAML data: %v", err)
 		}
 
 		// check if the token is valid
