@@ -42,6 +42,7 @@ const (
 	serviceDescription = "border0.com Service"
 )
 
+var defaultConfigFileName = "border0.yaml"
 var serviceConfigPath = "/etc/border0/"
 var serviceName = "border0"
 
@@ -216,7 +217,7 @@ func makeConfigPath() string {
 		os.MkdirAll(serviceConfigPath, 0755)
 	}
 
-	return filepath.Join(serviceConfigPath, "border0.yaml")
+	return filepath.Join(serviceConfigPath, defaultConfigFileName)
 }
 
 func checkRootPermission() {
@@ -230,7 +231,7 @@ func checkRootPermission() {
 
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "start ad-hoc connector",
+	Short: "start the connector in foreground ad-hoc mode",
 	Run: func(cmd *cobra.Command, args []string) {
 		log, _ := logging.BuildProduction()
 		defer log.Sync()
@@ -239,7 +240,17 @@ var connectorStartCmd = &cobra.Command{
 		if connectorConfig != "" {
 			configPath = connectorConfig
 		} else {
-			configPath = filepath.Join("border0.yaml")
+			// check if defaultConfigFileName "border0.yaml" exists in the current directory
+			// if not check if it exists in the serviceConfigPath directory
+			if _, err := os.Stat(defaultConfigFileName); err == nil {
+				configPath = filepath.Join(defaultConfigFileName)
+				log.Info("using config file in the current directory", zap.String("config_path", configPath))
+			} else if _, err := os.Stat(serviceConfigPath + defaultConfigFileName); err == nil {
+				configPath = filepath.Join(serviceConfigPath + defaultConfigFileName)
+				log.Info("using config file in the service config directory", zap.String("config_path", configPath))
+			} else {
+				log.Fatal("no default " + defaultConfigFileName + " config file found, neither in the current directory nor in '" + serviceConfigPath + "' please specify a config file with the --config flag")
+			}
 		}
 
 		parser := config.NewConfigParser()
@@ -602,7 +613,7 @@ var connectorStatusCmd = &cobra.Command{
 }
 
 func init() {
-	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "setup configuration for connector command")
+	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
