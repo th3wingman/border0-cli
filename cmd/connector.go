@@ -237,8 +237,14 @@ var connectorStartCmd = &cobra.Command{
 		defer log.Sync()
 
 		var configPath string
+		configPathFromEnv := os.Getenv("BORDER0_CONFIG_FILE")
+
+		// check if the config file is provided as a flag or environment variable
 		if connectorConfig != "" {
 			configPath = connectorConfig
+
+		} else if configPathFromEnv != "" {
+			configPath = configPathFromEnv
 		} else {
 			// check if defaultConfigFileName "border0.yaml" exists in the current directory
 			// if not check if it exists in the serviceConfigPath directory
