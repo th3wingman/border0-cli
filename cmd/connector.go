@@ -42,6 +42,7 @@ const (
 	serviceDescription = "border0.com Service"
 )
 
+var defaultConfigFileName = "border0.yaml"
 var serviceConfigPath = "/etc/border0/"
 var serviceName = "border0"
 
@@ -216,7 +217,7 @@ func makeConfigPath() string {
 		os.MkdirAll(serviceConfigPath, 0755)
 	}
 
-	return filepath.Join(serviceConfigPath, "border0.yaml")
+	return filepath.Join(serviceConfigPath, defaultConfigFileName)
 }
 
 func checkRootPermission() {
@@ -230,16 +231,32 @@ func checkRootPermission() {
 
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "start ad-hoc connector",
+	Short: "start the connector in foreground ad-hoc mode",
 	Run: func(cmd *cobra.Command, args []string) {
 		log, _ := logging.BuildProduction()
 		defer log.Sync()
 
 		var configPath string
+		configPathFromEnv := os.Getenv("BORDER0_CONFIG_FILE")
+
+		// check if the config file is provided as a flag or environment variable
 		if connectorConfig != "" {
 			configPath = connectorConfig
+
+		} else if configPathFromEnv != "" {
+			configPath = configPathFromEnv
 		} else {
-			configPath = filepath.Join("border0.yaml")
+			// check if defaultConfigFileName "border0.yaml" exists in the current directory
+			// if not check if it exists in the serviceConfigPath directory
+			if _, err := os.Stat(defaultConfigFileName); err == nil {
+				configPath = filepath.Join(defaultConfigFileName)
+				log.Info("using config file in the current directory", zap.String("config_path", configPath))
+			} else if _, err := os.Stat(serviceConfigPath + defaultConfigFileName); err == nil {
+				configPath = filepath.Join(serviceConfigPath + defaultConfigFileName)
+				log.Info("using config file in the service config directory", zap.String("config_path", configPath))
+			} else {
+				log.Fatal("no default " + defaultConfigFileName + " config file found, neither in the current directory nor in '" + serviceConfigPath + "' please specify a config file with the --config flag")
+			}
 		}
 
 		parser := config.NewConfigParser()
@@ -304,6 +321,28 @@ func connectorInstallAws(ctx context.Context) {
 	}
 }
 
+func checkDaemonInstallation() (bool, error) {
+	deamonType := daemon.SystemDaemon
+	if runtime.GOOS == "darwin" {
+		deamonType = daemon.GlobalDaemon
+	}
+
+	daemon, err := daemon.New(serviceName, serviceDescription, deamonType, service_dependencies...)
+	if err != nil {
+		return false, err
+	}
+
+	status, err := daemon.Status()
+	if err != nil {
+		return false, err
+	}
+
+	if status == "service not installed" {
+		return false, err
+	}
+	return true, err
+}
+
 var connectorInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "install the connector service on the machine",
@@ -330,6 +369,12 @@ var connectorInstallCmd = &cobra.Command{
 		}
 		service := &Service{srv}
 		checkRootPermission()
+		// check if the service is already isntalled
+		installed, _ := checkDaemonInstallation()
+		if installed {
+			log.Println("Service already installed")
+			os.Exit(1)
+		}
 
 		disableBrowser = true
 		loginCmd.Run(cmd, []string{})
@@ -508,6 +553,7 @@ var connectorInstallCmd = &cobra.Command{
 
 	},
 }
+
 var connectorUnInstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "uninstall the connector service from the machine",
@@ -530,6 +576,12 @@ var connectorUnInstallCmd = &cobra.Command{
 		service := &Service{srv}
 		checkRootPermission()
 
+		installed, _ := checkDaemonInstallation()
+		if !installed {
+			log.Println("Service is NOT installed")
+			os.Exit(1)
+		}
+
 		result, err := service.Stop()
 		if err == nil {
 			fmt.Println(result)
@@ -537,19 +589,26 @@ var connectorUnInstallCmd = &cobra.Command{
 		result, err = service.Remove()
 		if err != nil {
 			fmt.Println(result)
+		} else {
+			fmt.Println(result)
 		}
 
-		configPath := makeConfigPath()
+		configPath := filepath.Join(serviceConfigPath + defaultConfigFileName)
+		// check if the file exists
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			fmt.Println("Config file does not exist. Nothing else to do.")
+			os.Exit(0)
+		}
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			log.Fatalf("Error reading YAML file: %v", err)
+			fmt.Printf("Error reading YAML file: %v", err)
 		}
 
 		var currentConfig CurrentConnectorConfig
 		err = yaml.Unmarshal(data, &currentConfig)
 		if err != nil {
-			log.Fatalf("Error unmarshaling YAML data: %v", err)
+			fmt.Printf("Error unmarshaling YAML data: %v", err)
 		}
 
 		// check if the token is valid
@@ -602,7 +661,7 @@ var connectorStatusCmd = &cobra.Command{
 }
 
 func init() {
-	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "setup configuration for connector command")
+	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
