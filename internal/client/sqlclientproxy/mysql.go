@@ -25,6 +25,8 @@ type mysqlClientProxy struct {
 
 type dummyProvider struct{}
 
+var _ server.CredentialProvider = (*dummyProvider)(nil)
+
 type mysqlServerHandler struct {
 	server.EmptyHandler
 	Database string
