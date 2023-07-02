@@ -33,7 +33,7 @@ jobs:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
           role-session-name: BuildAndDeploy4border0cli
-          role-duration-seconds: 1200
+          role-duration-seconds: 2400 # 40 minutes
 
       - uses: actions/setup-go@v3
         with:
