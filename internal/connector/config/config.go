@@ -123,13 +123,21 @@ type NetworkPluginNetwork struct {
 }
 
 type Connector struct {
-	Name           string
-	AwsRegion      string `mapstructure:"aws-region"`
-	SSMAwsRegion   string `mapstructure:"ssm-aws-region"`
-	AwsProfile     string `mapstructure:"aws-profile"`
-	ProviderRegion string `mapstructure:"provider-region"`
-	ProviderEnv    string `mapstructure:"provider-enviroment"`
-	ProviderType   string `mapstructure:"provider-type"`
+	Name                string
+	AwsRegion           string `mapstructure:"aws-region"`
+	SSMAwsRegion        string `mapstructure:"ssm-aws-region"`
+	AwsProfile          string `mapstructure:"aws-profile"`
+	ProviderRegion      string `mapstructure:"provider-region"`
+	ProviderEnv         string `mapstructure:"provider-enviroment"`
+	ProviderEnvironment string `mapstructure:"provider-environment"`
+	ProviderType        string `mapstructure:"provider-type"`
+}
+
+func (c *Connector) GetProviderEnvironment() string {
+	if c.ProviderEnvironment != "" {
+		return c.ProviderEnvironment
+	}
+	return c.ProviderEnv
 }
 
 type SocketParams []map[string]SocketConfig
