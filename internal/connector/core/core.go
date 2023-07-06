@@ -113,7 +113,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	}
 
 	switch {
-	case socket.ConnectorLocalData.SSHServer && socket.SocketType == "ssh":
+	case socket.ConnectorLocalData != nil && socket.ConnectorLocalData.SSHServer && socket.SocketType == "ssh":
 		sshServer := ssh.NewServer(conn.Socket.Organization.Certificates["ssh_public_key"])
 		if err := sshServer.Serve(l); err != nil {
 			return err
