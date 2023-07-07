@@ -43,13 +43,18 @@ const (
 	proxyHostRegex                        = "^http(s)?://"
 )
 
+type Border0API interface {
+	GetUserID() (string, error)
+	SignSSHKey(ctx context.Context, socketID string, publicKey []byte) (string, string, error)
+}
+
 type Socket struct {
 	SocketID                         string
 	SocketType                       string
 	UpstreamType                     string
 	ConnectorAuthenticationEnabled   bool
 	ConnectorAuthenticationTLSConfig *tls.Config
-	border0API                       api.API
+	border0API                       Border0API
 	keyPair                          sshKeyPair
 	sshSigner                        ssh.Signer
 	tunnelHost                       string
@@ -63,6 +68,7 @@ type Socket struct {
 	acceptChan                       chan connWithError
 	context                          context.Context
 	cancel                           context.CancelFunc
+	Socket                           *models.Socket
 }
 
 type connWithError struct {
@@ -80,6 +86,12 @@ type border0NetError string
 func (e border0NetError) Error() string   { return "Border0 network error " + string(e) }
 func (e border0NetError) Timeout() bool   { return false }
 func (e border0NetError) Temporary() bool { return true }
+
+type PermanentError struct {
+	Message string
+}
+
+func (e PermanentError) Error() string { return e.Message }
 
 func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socket, error) {
 	socketFromApi, err := border0API.GetSocket(ctx, nameOrID)
@@ -100,7 +112,7 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 		UpstreamType:                   socketFromApi.UpstreamType,
 		ConnectorAuthenticationEnabled: socketFromApi.ConnectorAuthenticationEnabled,
 		border0API:                     border0API,
-		tunnelHost:                     getTunnelHost(),
+		tunnelHost:                     TunnelHost(),
 		errChan:                        make(chan error),
 		readyChan:                      make(chan bool),
 		Organization:                   org,
@@ -108,6 +120,27 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 
 		context: sckContext,
 		cancel:  sckCancel,
+	}, nil
+}
+
+func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socket models.Socket, org *models.Organization) (*Socket, error) {
+	newCtx, cancel := context.WithCancel(context.Background())
+
+	return &Socket{
+		SocketID:                       socket.SocketID,
+		SocketType:                     socket.SocketType,
+		UpstreamType:                   socket.UpstreamType,
+		ConnectorAuthenticationEnabled: socket.ConnectorAuthenticationEnabled,
+		border0API:                     border0API,
+		tunnelHost:                     TunnelHost(),
+		errChan:                        make(chan error),
+		readyChan:                      make(chan bool),
+		Organization:                   org,
+		acceptChan:                     make(chan connWithError),
+		Socket:                         &socket,
+
+		context: newCtx,
+		cancel:  cancel,
 	}, nil
 }
 
@@ -135,8 +168,6 @@ func (s *Socket) WithProxy(proxyHost string) error {
 }
 
 func (s *Socket) Listen() (net.Listener, error) {
-	s.border0API.StartRefreshAccessTokenJob(s.context)
-
 	if s.ConnectorAuthenticationEnabled {
 		tlsConfig, err := s.generateConnectorAuthenticationTLSConfig()
 		if err != nil {
@@ -148,24 +179,27 @@ func (s *Socket) Listen() (net.Listener, error) {
 
 	go s.tunnelConnect()
 
-	select {
-	case err := <-s.errChan:
-		return nil, err
-	case <-s.context.Done():
-		return nil, s.context.Err()
-	case <-s.readyChan:
-	}
-
 	go func() {
 		for {
 			select {
 			case err := <-s.errChan:
 				log.Printf("border0 listener: %v", err)
+				if _, ok := err.(PermanentError); ok {
+					log.Printf("border0 listener: permanent error, exiting")
+					s.cancel()
+					return
+				}
 			case <-s.context.Done():
 				return
 			}
 		}
 	}()
+
+	select {
+	case <-s.context.Done():
+		return nil, s.context.Err()
+	case <-s.readyChan:
+	}
 
 	newConn := make(chan net.Conn)
 	go func() {
@@ -213,13 +247,13 @@ func (s *Socket) Listen() (net.Listener, error) {
 func (s *Socket) tunnelConnect() {
 	defer close(s.errChan)
 	if err := s.generateSSHKeyPair(); err != nil {
-		s.errChan <- err
+		s.errChan <- PermanentError{fmt.Sprintf("failed to generate ssh key pair: %v", err)}
 		return
 	}
 
 	userID, err := s.border0API.GetUserID()
 	if err != nil {
-		s.errChan <- fmt.Errorf("failed to get userid from token: %v", err)
+		s.errChan <- PermanentError{fmt.Sprintf("failed to get userid from token: %v", err)}
 		return
 	}
 
@@ -235,7 +269,7 @@ func (s *Socket) tunnelConnect() {
 
 	err = backoff.Retry(func() error {
 		if err := s.refreshSSHCert(); err != nil {
-			fmt.Printf("failed to refresh tunnel certificate (%s), retrying...\n", err)
+			s.errChan <- fmt.Errorf("failed to refresh tunnel certificate: %s", err)
 			return err
 		}
 
@@ -412,7 +446,7 @@ func (s *Socket) refreshSSHCert() error {
 	return nil
 }
 
-func getTunnelHost() string {
+func TunnelHost() string {
 	if os.Getenv(tunnelHostEnvVar) != "" {
 		if !strings.Contains(os.Getenv(tunnelHostEnvVar), ":") {
 			return net.JoinHostPort(os.Getenv(tunnelHostEnvVar), strconv.Itoa(defaultTunnelPort))
