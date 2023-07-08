@@ -194,27 +194,44 @@ func myFileServer(dir string) http.HandlerFunc {
 			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 			<style>
 			body {
+				background-color: black;
+				color: #FFFFFF;
 				padding: 1em;
 			}
-			a {
-				color: #333;
+			
+			h1, a, th {
+				color: #FFFFFF;
+			}
+			.container {
+				text-align: center;
+				padding-top: 2em;
+			}
+			.b0-logo{
+				max-height:50px;
+				display:block;
+				margin:auto;
+			}
+			.table-dark {
+				border-top: 4px solid #FFA500;
+				border-bottom: 4px solid #FFA500;
+				border: 1px solid #FFFFFF;
 			}
 			.table-dark th {
-				color: #fff;
+				color: #FFFFFF;
 			}
 			.table-dark td {
-				color: #fff;
+				color: #FFFFFF;
 			}
 			.table-dark th a {
-				color: #fff;
+				color: #FFFFFF;
 			}
 			.table-dark td a {
-				color: #fff;
+				color: #FFFFFF;
 			}
-			
 			</style>
 			</head><body><div class="container">
-			<h1 class="my-4">Border0 File Browser</h1>
+			<h1 class="my-4">Directory Browser</h1>
+			
 			<table class="table table-striped table-dark"><thead>
 			<tr>
 			`)
@@ -232,7 +249,11 @@ func myFileServer(dir string) http.HandlerFunc {
 			<tbody>`)
 
 			writeTableBody(w, items, path)
-			fmt.Fprint(w, "</tbody></table></div></body></html>")
+			fmt.Fprint(w, `</tbody></table>
+			<p class="b0-message">
+			<img class="b0-logo" src="https://download.border0.com/static/border0_logos/full-white.png" >
+			</p>
+			</div></body></html>`)
 		} else {
 			http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 		}
