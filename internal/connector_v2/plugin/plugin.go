@@ -34,6 +34,8 @@ func NewPlugin(
 		return newAwsEcsDiscoveryPlugin(ctx, logger, pluginId, config.AwsEcsDiscoveryPluginConfiguration)
 	case types.PluginTypeAwsRdsDiscovery:
 		return newAwsRdsDiscoveryPlugin(ctx, logger, pluginId, config.AwsRdsDiscoveryPluginConfiguration)
+	case types.PluginTypeKubernetesDiscovery:
+		return newKubernetesDiscoveryPlugin(ctx, logger, pluginId, config.KubernetesDiscoveryPluginConfiguration)
 	default:
 		return nil, fmt.Errorf("plugin type %s is not supported...", pluginType)
 	}

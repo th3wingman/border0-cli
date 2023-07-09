@@ -3,6 +3,8 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -46,7 +48,7 @@ func newAwsEc2DiscoveryPlugin(
 		engineOpts = append(engineOpts, engines.WithDiscoverer(
 			discoverers.NewAwsEc2Discoverer(
 				awsConfig,
-				discoverers.WithAwsEc2DiscovererDiscovererId(fmt.Sprintf("aws ec2 %s", awsConfig.Region)),
+				discoverers.WithAwsEc2DiscovererDiscovererId(fmt.Sprintf("aws ec2 ( region = %s )", awsConfig.Region)),
 				discoverers.WithAwsEc2DiscovererIncludedInstanceStates(
 					slice.Transform(
 						config.IncludeWithStates,
@@ -83,7 +85,7 @@ func newAwsEcsDiscoveryPlugin(
 		engineOpts = append(engineOpts, engines.WithDiscoverer(
 			discoverers.NewAwsEcsDiscoverer(
 				awsConfig,
-				discoverers.WithAwsEcsDiscovererDiscovererId(fmt.Sprintf("aws ecs %s", awsConfig.Region)),
+				discoverers.WithAwsEcsDiscovererDiscovererId(fmt.Sprintf("aws ecs ( region = %s )", awsConfig.Region)),
 				discoverers.WithAwsEcsDiscovererIncludedClusterStatuses(config.IncludeWithStatuses...),
 				discoverers.WithAwsEcsDiscovererInclusionClusterTags(config.IncludeWithTags),
 				discoverers.WithAwsEcsDiscovererExclusionClusterTags(config.ExcludeWithTags),
@@ -116,11 +118,64 @@ func newAwsRdsDiscoveryPlugin(
 		engineOpts = append(engineOpts, engines.WithDiscoverer(
 			discoverers.NewAwsRdsDiscoverer(
 				awsConfig,
-				discoverers.WithAwsRdsDiscovererDiscovererId(fmt.Sprintf("aws rds %s", awsConfig.Region)),
+				discoverers.WithAwsRdsDiscovererDiscovererId(fmt.Sprintf("aws rds ( region = %s )", awsConfig.Region)),
 				discoverers.WithAwsRdsDiscovererIncludedInstanceStatuses(config.IncludeWithStatuses...),
 				discoverers.WithAwsRdsDiscovererInclusionInstanceTags(config.IncludeWithTags),
 				discoverers.WithAwsRdsDiscovererExclusionInstanceTags(config.ExcludeWithTags),
 			),
+			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
+		))
+	}
+	engine := engines.NewContinuousEngine(engineOpts...)
+
+	return newPlugin(pluginId, logger, engine), nil
+}
+
+func newKubernetesDiscoveryPlugin(ctx context.Context,
+	logger *zap.Logger,
+	pluginId string,
+	config *types.KubernetesDiscoveryPluginConfiguration,
+) (Plugin, error) {
+	if config == nil {
+		return nil, fmt.Errorf("Received nil kubernetes discovery plugin configuration for plugin %s", pluginId)
+	}
+
+	baseDiscovererOpts := []discoverers.KubernetesDiscovererOption{
+		discoverers.WithKubernetesDiscovererInclusionServiceLabels(config.IncludeWithLabels),
+		discoverers.WithKubernetesDiscovererExclusionServiceLabels(config.ExcludeWithLabels),
+	}
+	if config.KubernetesCredentials != nil {
+		if config.KubernetesCredentials.MasterUrl != nil {
+			baseDiscovererOpts = append(
+				baseDiscovererOpts,
+				discoverers.WithKubernetesDiscovererMasterUrl(*config.KubernetesCredentials.MasterUrl),
+			)
+		}
+		if config.KubernetesCredentials.KubeconfigPath != nil {
+			path := *config.KubernetesCredentials.KubeconfigPath
+			if strings.HasPrefix(path, "~") {
+				path = fmt.Sprintf("%s%s", os.Getenv("HOME"), strings.TrimPrefix(path, "~"))
+			}
+			baseDiscovererOpts = append(
+				baseDiscovererOpts,
+				discoverers.WithKubernetesDiscovererKubeconfigPath(path),
+			)
+		}
+	}
+
+	namespaces := config.Namespaces
+	if len(namespaces) == 0 {
+		namespaces = []string{"default"}
+	}
+
+	engineOpts := []engines.ContinuousEngineOption{}
+	for _, namespace := range namespaces {
+		engineOpts = append(engineOpts, engines.WithDiscoverer(
+			discoverers.NewKubernetesDiscoverer(append(
+				baseDiscovererOpts,
+				discoverers.WithKubernetesDiscovererNamespace(namespace),
+				discoverers.WithKubernetesDiscovererDiscovererId(fmt.Sprintf("kubernetes ( namespace = %s )", namespace)),
+			)...),
 			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
 		))
 	}
