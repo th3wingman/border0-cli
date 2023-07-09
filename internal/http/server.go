@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	jwt "github.com/golang-jwt/jwt"
 )
@@ -86,7 +90,7 @@ func StartLocalHTTPServer(dir string, l net.Listener) error {
 		})
 
 	} else {
-		fs := http.FileServer(http.Dir(dir))
+		fs := customFileServer(dir)
 		mux.Handle("/", http.StripPrefix("/", fs))
 	}
 
@@ -96,6 +100,230 @@ func StartLocalHTTPServer(dir string, l net.Listener) error {
 	}
 
 	return nil
+}
+
+func customFileServer(dir string) http.HandlerFunc {
+	fs := http.Dir(dir)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if !strings.HasPrefix(path, "/") {
+			path = fmt.Sprintf("/%s", path)
+		}
+		path = filepath.Clean(path)
+
+		// Treat an empty path as a reference to the root directory.
+		if path == "." {
+			path = "/"
+		}
+
+		f, err := fs.Open(path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+
+		info, err := f.Stat()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if info.IsDir() {
+			items, err := f.Readdir(-1)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			sortQuery := r.URL.Query().Get("sort")
+			if sortQuery != "" {
+				sortDir := r.URL.Query().Get("dir")
+				if sortDir == "" {
+					// Default to ascending if no direction is specified
+					sortDir = "asc"
+				}
+
+				sort.Slice(items, func(i, j int) bool {
+					switch sortQuery {
+					case "name":
+						if sortDir == "asc" {
+							return items[i].Name() < items[j].Name()
+						} else {
+							return items[i].Name() > items[j].Name()
+						}
+					case "size":
+						if sortDir == "asc" {
+							return items[i].Size() < items[j].Size()
+						} else {
+							return items[i].Size() > items[j].Size()
+						}
+					case "modified":
+						if sortDir == "asc" {
+							return items[i].ModTime().Before(items[j].ModTime())
+						} else {
+							return items[i].ModTime().After(items[j].ModTime())
+						}
+					case "type":
+						if sortDir == "asc" {
+							return items[i].IsDir() && !items[j].IsDir()
+						} else {
+							return items[j].IsDir() && !items[i].IsDir()
+						}
+					default:
+						// Sort by name by default if sortQuery is not recognized
+						if sortDir == "asc" {
+							return items[i].Name() < items[j].Name()
+						} else {
+							return items[i].Name() > items[j].Name()
+						}
+					}
+				})
+			}
+
+			sort := r.URL.Query().Get("sort")
+			dir := r.URL.Query().Get("dir")
+			lastSort := r.URL.Query().Get("last_sort")
+			lastDir := r.URL.Query().Get("last_dir")
+
+			const htmlHeader = `<html><head>
+			<title>Border0 File Server</title>
+			<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+			<style>
+			body {
+				background-color: black;
+				color: #FFFFFF;
+				padding: 1em;
+			}
+			
+			h1, a, th {
+				color: #FFFFFF;
+			}
+			.container {
+				text-align: center;
+				padding-top: 2em;
+			}
+			.b0-logo{
+				max-height:50px;
+				display:block;
+				margin:auto;
+			}
+			.table-dark {
+				border-top: 4px solid #FFA500;
+				border-bottom: 4px solid #FFA500;
+				border: 1px solid #FFFFFF;
+			}
+			.table-dark th {
+				color: #FFFFFF;
+			}
+			.table-dark td {
+				color: #FFFFFF;
+			}
+			.table-dark th a {
+				color: #FFFFFF;
+			}
+			.table-dark td a {
+				color: #FFFFFF;
+			}
+			</style>
+			</head><body><div class="container">
+			<h1 class="my-4">Directory Browser</h1>
+			
+			<table class="table table-striped table-dark"><thead>
+			<tr>
+			`
+			fmt.Fprint(w, htmlHeader)
+
+			fmt.Fprintf(w, `<th><a href="?sort=type&dir=%s&last_sort=type&last_dir=%s">Type %s</a></th>`,
+				nextDir("type", sort, dir, lastSort, lastDir), dir, iconForSort("type", sort, dir))
+			fmt.Fprintf(w, `<th><a href="?sort=name&dir=%s&last_sort=name&last_dir=%s">Name %s</a></th>`,
+				nextDir("name", sort, dir, lastSort, lastDir), dir, iconForSort("name", sort, dir))
+			fmt.Fprintf(w, `<th><a href="?sort=size&dir=%s&last_sort=size&last_dir=%s">Size %s</a></th>`,
+				nextDir("size", sort, dir, lastSort, lastDir), dir, iconForSort("size", sort, dir))
+			fmt.Fprintf(w, `<th><a href="?sort=modified&dir=%s&last_sort=modified&last_dir=%s">Last Modified %s</a></th>`,
+				nextDir("modified", sort, dir, lastSort, lastDir), dir, iconForSort("modified", sort, dir))
+
+			fmt.Fprint(w, `</tr></thead>
+			<tbody>`)
+
+			writeTableBody(w, items, path)
+			fmt.Fprint(w, `</tbody></table>
+			<p class="b0-message">
+			<img class="b0-logo" src="https://download.border0.com/static/border0_logos/full-white.png" >
+			</p>
+			</div></body></html>`)
+		} else {
+			http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+		}
+	}
+}
+func byteCountSI(b int64) string {
+	const (
+		KB = 1 << 10
+		MB = 1 << 20
+		GB = 1 << 30
+		TB = 1 << 40
+	)
+	switch {
+	case b < KB:
+		return fmt.Sprintf("%d B", b)
+	case b < MB:
+		return fmt.Sprintf("%.2f KB", float64(b)/KB)
+	case b < GB:
+		return fmt.Sprintf("%.2f MB", float64(b)/MB)
+	case b < TB:
+		return fmt.Sprintf("%.2f GB", float64(b)/GB)
+	default:
+		return fmt.Sprintf("%.2f TB", float64(b)/TB)
+	}
+}
+
+func nextDir(sortKey, sort, dir, lastSort, lastDir string) string {
+	if sortKey != sort {
+		return "asc"
+	}
+	if dir == "asc" {
+		return "desc"
+	}
+	return "asc"
+}
+
+func iconForSort(sortKey, sort, dir string) string {
+	switch sortKey {
+	case "name", "size", "modified", "type":
+		if sortKey == sort {
+			if dir == "asc" {
+				return `<i class="fas fa-arrow-up"></i>`
+			}
+			return `<i class="fas fa-arrow-down"></i>`
+		}
+	}
+	return ""
+}
+
+func writeTableBody(w http.ResponseWriter, items []os.FileInfo, path string) {
+	if path != "/" {
+		fmt.Fprint(w, `<tr><td><a href=".."><i class="fas fa-level-up-alt"></i></a></td><td colspan="3"><a href="..">..</a></td></tr>`)
+	}
+
+	for _, item := range items {
+		icon := "<i class=\"fas fa-file\"></i>"
+		if item.IsDir() {
+			icon = "<i class=\"fas fa-folder\"></i>"
+		}
+		itemPath := filepath.Join(path, item.Name())
+		if item.IsDir() {
+			itemPath += "/"
+		}
+		size := byteCountSI(item.Size())
+		modified := item.ModTime().Format("02 Jan 2006 15:04 MST")
+
+		fmt.Fprintf(w, `<tr><td>%s</td><td><a href="%s">%s</a></td><td>%s</td><td>%s</td></tr>`,
+			icon, itemPath, item.Name(), size, modified)
+	}
 }
 
 func getAdminData() (jwt.MapClaims, error) {
