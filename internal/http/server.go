@@ -90,7 +90,7 @@ func StartLocalHTTPServer(dir string, l net.Listener) error {
 		})
 
 	} else {
-		fs := myFileServer(dir)
+		fs := customFileServer(dir)
 		mux.Handle("/", http.StripPrefix("/", fs))
 	}
 
@@ -102,14 +102,14 @@ func StartLocalHTTPServer(dir string, l net.Listener) error {
 	return nil
 }
 
-func myFileServer(dir string) http.HandlerFunc {
+func customFileServer(dir string) http.HandlerFunc {
 	fs := http.Dir(dir)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
 		if !strings.HasPrefix(path, "/") {
-			path = "/" + path
+			path = fmt.Sprintf("/%s", path)
 		}
 		path = filepath.Clean(path)
 
@@ -188,7 +188,7 @@ func myFileServer(dir string) http.HandlerFunc {
 			lastSort := r.URL.Query().Get("last_sort")
 			lastDir := r.URL.Query().Get("last_dir")
 
-			fmt.Fprint(w, `<html><head>
+			const htmlHeader = `<html><head>
 			<title>Border0 File Server</title>
 			<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
@@ -234,7 +234,8 @@ func myFileServer(dir string) http.HandlerFunc {
 			
 			<table class="table table-striped table-dark"><thead>
 			<tr>
-			`)
+			`
+			fmt.Fprint(w, htmlHeader)
 
 			fmt.Fprintf(w, `<th><a href="?sort=type&dir=%s&last_sort=type&last_dir=%s">Type %s</a></th>`,
 				nextDir("type", sort, dir, lastSort, lastDir), dir, iconForSort("type", sort, dir))
