@@ -87,9 +87,8 @@ func newAwsEcsDiscoveryPlugin(
 			discoverers.NewAwsEcsDiscoverer(
 				awsConfig,
 				discoverers.WithAwsEcsDiscovererDiscovererId(fmt.Sprintf("aws ecs ( region = %s )", awsConfig.Region)),
-				discoverers.WithAwsEcsDiscovererIncludedClusterStatuses(config.IncludeWithStatuses...),
-				discoverers.WithAwsEcsDiscovererInclusionClusterTags(config.IncludeWithTags),
-				discoverers.WithAwsEcsDiscovererExclusionClusterTags(config.ExcludeWithTags),
+				discoverers.WithAwsEcsDiscovererInclusionServiceTags(config.IncludeWithTags),
+				discoverers.WithAwsEcsDiscovererExclusionServiceTags(config.ExcludeWithTags),
 			),
 			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
 		))
