@@ -48,6 +48,7 @@ func newAwsEc2DiscoveryPlugin(
 		engineOpts = append(engineOpts, engines.WithDiscoverer(
 			discoverers.NewAwsEc2Discoverer(
 				awsConfig,
+				discoverers.WithAwsEc2DiscovererSsmStatusCheck(config.CheckSsmStatus, false),
 				discoverers.WithAwsEc2DiscovererDiscovererId(fmt.Sprintf("aws ec2 ( region = %s )", awsConfig.Region)),
 				discoverers.WithAwsEc2DiscovererIncludedInstanceStates(
 					slice.Transform(

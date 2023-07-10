@@ -70,7 +70,10 @@ func (p *pluginImpl) Start(ctx context.Context, results chan *PluginDiscoveryRes
 		case result := <-pluginResults:
 			p.logger.Debug("discovery result", zap.String("plugin_id", p.ID), zap.String("discoverer_id", result.Metadata.DiscovererId), zap.Int("resources", len(result.Resources)))
 			if len(result.Errors) > 0 {
-				p.logger.Warn("discovery error", zap.String("plugin_id", p.ID), zap.String("discoverer_id", result.Metadata.DiscovererId), zap.Any("errors", result.Errors))
+				p.logger.Warn("discovery errors", zap.String("plugin_id", p.ID), zap.String("discoverer_id", result.Metadata.DiscovererId), zap.Any("errors", result.Errors))
+			}
+			if len(result.Warnings) > 0 {
+				p.logger.Info("discovery warnings", zap.String("plugin_id", p.ID), zap.String("discoverer_id", result.Metadata.DiscovererId), zap.Any("warnings", result.Warnings))
 			}
 			results <- &PluginDiscoveryResults{
 				PluginID: p.ID,
