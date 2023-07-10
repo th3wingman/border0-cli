@@ -223,23 +223,23 @@ func (c *ConnectorService) controlStream() error {
 }
 
 func (c *ConnectorService) newConnectorClient(ctx context.Context) (*grpc.ClientConn, error) {
-	var grpcOpts []grpc.DialOption
+	grpcOpts := []grpc.DialOption{
+		grpc.WithPerRPCCredentials(newBorder0GrpcTunnelCredentials(
+			c.config.Token,
+			c.config.ConnectorInsecureTransport,
+		)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                20 * time.Second,
+			Timeout:             10 * time.Second,
+			PermitWithoutStream: true,
+		}),
+	}
 
 	if c.config.ConnectorInsecureTransport {
 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})))
 	}
-
-	grpcOpts = append(
-		grpcOpts,
-		grpc.WithPerRPCCredentials(&tokenAuth{token: c.config.Token, insecure: c.config.ConnectorInsecureTransport}),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                20 * time.Second,
-			Timeout:             10 * time.Second,
-			PermitWithoutStream: true,
-		}),
-	)
 
 	c.logger.Info("connecting to connector server", zap.String("server", c.config.ConnectorServer))
 	client, err := grpc.DialContext(c.context, c.config.ConnectorServer, grpcOpts...)
