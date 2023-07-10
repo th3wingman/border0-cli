@@ -641,6 +641,7 @@ func (c *ConnectorService) handleDiscoveryResult(ctx context.Context) {
 							EndedAt:     timestamppb.New(result.Result.Metadata.EndedAt),
 						},
 						Errors:    result.Result.Errors,
+						Warnings:  result.Result.Warnings,
 						Resources: resources,
 					},
 				},

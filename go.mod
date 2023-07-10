@@ -21,9 +21,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.19.2
 	github.com/aws/session-manager-plugin v0.0.0-20230315220744-7b544e9f381d
 	github.com/bluele/factory-go v0.0.1
-	github.com/borderzero/border0-go v0.1.10
-	github.com/borderzero/border0-proto v1.0.0
-	github.com/borderzero/discovery v0.1.14
+	github.com/borderzero/border0-go v0.1.12
+	github.com/borderzero/border0-proto v1.0.1
+	github.com/borderzero/discovery v0.1.15
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/creack/pty v1.1.18
@@ -51,12 +51,12 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/takama/daemon v1.0.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/crypto v0.9.0
-	golang.org/x/net v0.10.0
+	golang.org/x/crypto v0.11.0
+	golang.org/x/net v0.12.0
 	golang.org/x/sync v0.2.0
-	golang.org/x/sys v0.8.0
-	golang.org/x/term v0.8.0
-	google.golang.org/grpc v1.55.0
+	golang.org/x/sys v0.10.0
+	golang.org/x/term v0.10.0
+	google.golang.org/grpc v1.56.2
 	k8s.io/api v0.27.3
 	k8s.io/apimachinery v0.27.3
 	k8s.io/client-go v0.27.3
@@ -108,7 +108,7 @@ require (
 	golang.org/x/tools v0.9.1 // indirect
 	google.golang.org/api v0.124.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230525234020-1aefcd67740a // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230526203410-71b5a4ffd15e // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230710151506-e685fd7b542b // indirect
 )
 
 require (
@@ -168,10 +168,10 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/protobuf v1.31.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
