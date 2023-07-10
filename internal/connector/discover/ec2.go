@@ -117,6 +117,12 @@ func (s *Ec2Discover) buildSocket(connector config.Connector, group config.Conne
 			socket.UpstreamType = "ssh"
 		}
 
+		if group.AwsEC2ConnectEnabled {
+			socket.ConnectorLocalData.AWSEC2Target = socket.InstanceId
+			socket.ConnectorLocalData.AWSAvailabilityZone = *instance.Placement.AvailabilityZone
+			socket.ConnectorLocalData.AWSEC2ConnectEnabled = true
+		}
+
 		if group.UpstreamUsername != "" {
 			socket.ConnectorLocalData.UpstreamUsername = group.UpstreamUsername
 		}
