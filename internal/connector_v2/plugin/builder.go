@@ -206,6 +206,36 @@ func newDockerDiscoveryPlugin(ctx context.Context,
 	return newPlugin(pluginId, logger, engine), nil
 }
 
+func newNetworkDiscoveryPlugin(ctx context.Context,
+	logger *zap.Logger,
+	pluginId string,
+	config *types.NetworkDiscoveryPluginConfiguration,
+) (Plugin, error) {
+	if config == nil {
+		return nil, fmt.Errorf("Received nil network discovery plugin configuration for plugin %s", pluginId)
+	}
+
+	ds := []discovery.Discoverer{}
+	for index, target := range config.Targets {
+		ds = append(ds, discoverers.NewNetworkDiscoverer(
+			discoverers.WithNetworkDiscovererDiscovererId(fmt.Sprintf("network ( [%d] target = %s )", index, target.Target)),
+			discoverers.WithNetworkDiscovererPorts(slice.Transform(target.Ports, func(i uint16) string { return fmt.Sprint(i) })...),
+		))
+	}
+
+	engineOpts := []engines.ContinuousEngineOption{}
+	for _, discoverer := range ds {
+		engineOpts = append(engineOpts, engines.WithDiscoverer(
+			discoverer,
+			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
+		))
+	}
+
+	engine := engines.NewContinuousEngine(engineOpts...)
+
+	return newPlugin(pluginId, logger, engine), nil
+}
+
 // returns slice of aws configurations based on an aws-based plugin's configuration
 func getAwsConfigs(ctx context.Context, awsPluginConfig types.BaseAwsPluginConfiguration) ([]aws.Config, error) {
 	optFns := []func(*config.LoadOptions) error{}
