@@ -38,6 +38,8 @@ func NewPlugin(
 		return newKubernetesDiscoveryPlugin(ctx, logger, pluginId, config.KubernetesDiscoveryPluginConfiguration)
 	case types.PluginTypeDockerDiscovery:
 		return newDockerDiscoveryPlugin(ctx, logger, pluginId, config.DockerDiscoveryPluginConfiguration)
+	case types.PluginTypeNetworkDiscovery:
+		return newNetworkDiscoveryPlugin(ctx, logger, pluginId, config.NetworkDiscoveryPluginConfiguration)
 	default:
 		return nil, fmt.Errorf("plugin type %s is not supported...", pluginType)
 	}
