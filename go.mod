@@ -15,10 +15,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.30.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.101.0
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.27.1
-	github.com/aws/aws-sdk-go-v2/service/iam v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.19.8
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.36.6
-	github.com/aws/aws-sdk-go-v2/service/sts v1.19.2
 	github.com/aws/session-manager-plugin v0.0.0-20230315220744-7b544e9f381d
 	github.com/bluele/factory-go v0.0.1
 	github.com/borderzero/border0-go v0.1.15
@@ -75,6 +73,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/rds v1.45.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.12.10 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.19.2 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
