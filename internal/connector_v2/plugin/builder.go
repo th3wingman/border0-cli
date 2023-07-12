@@ -217,9 +217,12 @@ func newNetworkDiscoveryPlugin(ctx context.Context,
 
 	ds := []discovery.Discoverer{}
 	for index, target := range config.Targets {
+		ports := slice.Transform(target.Ports, func(i uint16) string { return fmt.Sprint(i) })
+
 		ds = append(ds, discoverers.NewNetworkDiscoverer(
-			discoverers.WithNetworkDiscovererDiscovererId(fmt.Sprintf("network ( [%d] target = %s )", index, target.Target)),
-			discoverers.WithNetworkDiscovererPorts(slice.Transform(target.Ports, func(i uint16) string { return fmt.Sprint(i) })...),
+			discoverers.WithNetworkDiscovererDiscovererId(fmt.Sprintf("network [%d/%d] ( target = %s )", index+1, len(config.Targets), target.Target)),
+			discoverers.WithNetworkDiscovererTargets(target.Target),
+			discoverers.WithNetworkDiscovererPorts(ports...),
 		))
 	}
 
