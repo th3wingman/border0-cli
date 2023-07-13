@@ -62,7 +62,6 @@ func policysList(cmd *cobra.Command, args []string) {
 	}
 
 	policies := []models.Policy{}
-	fmt.Println(policiesPath)
 	err = client.Request("GET", policiesPath, &policies, nil)
 	if err != nil {
 		log.Fatalf(fmt.Sprintf("Error: %v", err))
