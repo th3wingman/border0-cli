@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/slice"
@@ -40,7 +41,7 @@ func newAwsEc2DiscoveryPlugin(
 
 	awsConfigs, err := getAwsConfigs(ctx, config.BaseAwsPluginConfiguration)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s", pluginId)
+		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s: %v", pluginId, err)
 	}
 
 	engineOpts := []engines.ContinuousEngineOption{}
@@ -78,7 +79,7 @@ func newAwsEcsDiscoveryPlugin(
 
 	awsConfigs, err := getAwsConfigs(ctx, config.BaseAwsPluginConfiguration)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s", pluginId)
+		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s: %v", pluginId, err)
 	}
 
 	engineOpts := []engines.ContinuousEngineOption{}
@@ -110,7 +111,7 @@ func newAwsRdsDiscoveryPlugin(
 
 	awsConfigs, err := getAwsConfigs(ctx, config.BaseAwsPluginConfiguration)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s", pluginId)
+		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s: %v", pluginId, err)
 	}
 
 	engineOpts := []engines.ContinuousEngineOption{}
@@ -264,29 +265,39 @@ func getAwsConfigs(ctx context.Context, awsPluginConfig types.BaseAwsPluginConfi
 	}
 
 	// if no regions are provided we try to load without a region
-	// and hopes that the current AWS profile has a region assigned.
+	// and hopes that the current AWS profile has a region defined.
 	if len(awsPluginConfig.AwsRegions) == 0 {
 		baseAwsConfig, err := config.LoadDefaultConfig(ctx, optFns...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load base aws config: %v", err)
 		}
+		// if the loaded default configuration does not have a region
+		// we will try to get the region from ec2 instance metadata.
+		// this will only work when running within an ec2 instance.
+		if baseAwsConfig.Region == "" {
+			identityDoc, err := imds.NewFromConfig(baseAwsConfig).GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
+			if err != nil {
+				return nil, fmt.Errorf("aws configuration did not have a region defined and failed to deduce it")
+			}
+			baseAwsConfig.Region = identityDoc.Region
+		}
 		return []aws.Config{baseAwsConfig}, nil
 	}
 
 	// if regions are provided, we first build a base aws configuration which
-	// we will use as the basis for all other configs (we will just update the
-	// region). The reason why us-east-1 is provided below is that if the default
-	// credential providers chain does not find a region, LoadDefaultConfig will
-	// fail. There's nothing special about us-east-1 -- we could pick any here.
-	baseAwsConfig, err := config.LoadDefaultConfig(ctx, append(optFns, config.WithRegion("us-east-1"))...)
+	// we will use as the basis for all other configs (we will then just take
+	// a copy of the base aws config and update the region for each of the aws
+	// regions provided)
+	baseAwsConfig, err := config.LoadDefaultConfig(ctx, optFns...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load base aws config: %v", err)
 	}
 
 	awsConfigs := []aws.Config{}
 	for _, region := range awsPluginConfig.AwsRegions {
-		baseAwsConfig.Region = region
-		awsConfigs = append(awsConfigs, baseAwsConfig)
+		newAwsConfig := baseAwsConfig.Copy()
+		newAwsConfig.Region = region
+		awsConfigs = append(awsConfigs, newAwsConfig)
 	}
 	return awsConfigs, nil
 }
