@@ -22,8 +22,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
-	"github.com/borderzero/border0-cli/internal/connector/install"
 	"github.com/borderzero/border0-cli/internal/connector/service_daemon"
+	"github.com/borderzero/border0-cli/internal/connector_v2/install"
 
 	connectorv2 "github.com/borderzero/border0-cli/internal/connector_v2"
 	connectorv2config "github.com/borderzero/border0-cli/internal/connector_v2/config"
@@ -355,7 +355,7 @@ func connectorInstallAws(ctx context.Context) {
 		}
 	}()
 
-	err := install.RunWizardForAWS(ctx, version)
+	err := install.RunCloudInstallWizardForAWS(ctx, version)
 	if err != nil {
 		fmt.Printf("\nERROR: %s\n", err)
 		os.Exit(1)
@@ -679,6 +679,7 @@ func init() {
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
+
 	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
