@@ -462,35 +462,32 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 }
 
 func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, error) {
-
-	var configMap map[string]interface{}
+	var configMap types.ConnectorServiceUpstreamConfig
 	if err := util.AsStruct(config.GetConfig(), &configMap); err != nil {
 		return nil, fmt.Errorf("failed to parse socket config: %w", err)
 	}
 
-	s := models.Socket{
+	s := &models.Socket{
 		SocketID:   config.GetId(),
 		SocketType: config.GetType(),
 	}
 
+	if s.ConnectorLocalData == nil {
+		s.ConnectorLocalData = &models.ConnectorLocalData{}
+	}
+
+	if s.ConnectorData == nil {
+		s.ConnectorData = &models.ConnectorData{}
+	}
+
 	switch config.GetType() {
 	case "ssh":
-		switch configMap["upstream_connection_type"] {
-		case "ssh":
-			s.TargetHostname = configMap["hostname"].(string)
-			s.TargetPort = int(configMap["port"].(float64))
-		case "aws_ssm":
-			s.UpstreamType = "aws-ssm"
-		case nil:
-			return nil, fmt.Errorf("upstream connection type is required")
-		default:
-			return nil, fmt.Errorf("unknown upstream connection type: %s", configMap["upstream_connection_type"])
-		}
+		c.setupSSHUpstreamValues(s, configMap)
 	default:
 		return nil, fmt.Errorf("unsupported socket type: %s", config.GetType())
 	}
 
-	socket, err := border0.NewSocketFromConnectorAPI(c.context, c, s, c.organization)
+	socket, err := border0.NewSocketFromConnectorAPI(c.context, c, *s, c.organization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create socket: %w", err)
 	}
@@ -498,6 +495,45 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 	go c.Listen(socket)
 
 	return socket, nil
+}
+
+func (c *ConnectorService) setupSSHUpstreamValues(s *models.Socket, configMap types.ConnectorServiceUpstreamConfig) error {
+	switch configMap.UpstreamConnectionType {
+	case types.UpstreamConnectionTypeSSH:
+		s.TargetHostname = configMap.Hostname
+		s.TargetPort = configMap.Port
+		s.ConnectorData.TargetHostname = configMap.Hostname
+		s.ConnectorData.Port = configMap.Port
+
+		if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeUsernamePassword {
+			s.UpstreamType = "ssh"
+			s.ConnectorLocalData.UpstreamUsername = configMap.SSHConfiguration.BasicCredentials.Username
+			s.ConnectorLocalData.UpstreamPassword = configMap.SSHConfiguration.BasicCredentials.Password
+		}
+		if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeSSHPrivateKey {
+			s.UpstreamType = "ssh"
+			s.ConnectorLocalData.UpstreamKeyFile = configMap.SSHConfiguration.SSHPrivateKeyDetails.Key
+		}
+	case types.UpstreamConnectionTypeAwsSSM:
+		s.UpstreamType = "aws-ssm"
+		s.ConnectorLocalData.AWSEC2Target = configMap.SSHConfiguration.AwsSSMDetails.InstanceID
+		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
+		s.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
+	case types.UpstreamConnectionTypeAwsEC2Connection:
+		s.UpstreamType = "aws-ec2connect"
+		s.ConnectorLocalData.AWSAvailabilityZone = configMap.SSHConfiguration.AwsEC2ConnectDetails.AvailabilityZone
+		s.ConnectorLocalData.AWSEC2Target = configMap.SSHConfiguration.AwsEC2ConnectDetails.InstanceID
+		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsEC2ConnectDetails.Region
+		s.ConnectorLocalData.AWSEC2ConnectEnabled = true
+		s.ConnectorData.TargetHostname = configMap.Hostname
+		s.ConnectorData.Port = configMap.Port
+		s.TargetHostname = configMap.Hostname
+		s.TargetPort = configMap.Port
+	default:
+		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)
+	}
+
+	return nil
 }
 
 func (c *ConnectorService) GetUserID() (string, error) {
