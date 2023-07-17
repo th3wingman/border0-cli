@@ -515,6 +515,10 @@ func (c *ConnectorService) setupSSHUpstreamValues(s *models.Socket, configMap ty
 
 			keyInBytes := []byte(configMap.SSHConfiguration.SSHPrivateKeyDetails.Key)
 			s.ConnectorLocalData.UpstreamIdentityPrivateKey = keyInBytes
+
+			if configMap.SSHConfiguration.BasicCredentials != nil {
+				s.ConnectorLocalData.UpstreamUsername = configMap.SSHConfiguration.BasicCredentials.Username
+			}
 		}
 	case types.UpstreamConnectionTypeAwsSSM:
 		s.UpstreamType = "aws-ssm"
