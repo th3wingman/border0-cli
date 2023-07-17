@@ -37,6 +37,7 @@ type ProxyConfig struct {
 	Username            string
 	Password            string
 	IdentityFile        string
+	IdentityPrivateKey  []byte
 	Hostname            string
 	Port                int
 	sshClientConfig     *ssh.ClientConfig
@@ -191,6 +192,15 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 			signer, err := ssh.ParsePrivateKey(bytes)
 			if err != nil {
 				return fmt.Errorf("sshauthproxy: failed to parse identity file: %s", err)
+			}
+
+			authMethods = append(authMethods, ssh.PublicKeys(signer))
+		}
+
+		if len(c.IdentityPrivateKey) > 0 {
+			signer, err := ssh.ParsePrivateKey(c.IdentityPrivateKey)
+			if err != nil {
+				return fmt.Errorf("sshauthproxy: failed to parse identity private key: %s", err)
 			}
 
 			authMethods = append(authMethods, ssh.PublicKeys(signer))

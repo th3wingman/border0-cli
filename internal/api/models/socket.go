@@ -35,28 +35,29 @@ type ConnectorData struct {
 }
 
 type ConnectorLocalData struct {
-	UpstreamUsername      string
-	UpstreamPassword      string
-	UpstreamCertFile      string
-	UpstreamKeyFile       string
-	UpstreamCACertFile    string
-	UpstreamTLS           *bool
-	UpstreamIdentifyFile  string
-	SqlAuthProxy          bool
-	RdsIAMAuth            bool
-	AWSRegion             string
-	AWSEC2Target          string
-	CloudSQLConnector     bool
-	CloudSQLIAMAuth       bool
-	CloudSQLInstance      string
-	GoogleCredentialsFile string
-	SSHServer             bool
-	AWSECSCluster         string
-	AWSECSServices        []string
-	AWSECSTasks           []string
-	AWSECSContainers      []string
-	AWSEC2ConnectEnabled  bool
-	AWSAvailabilityZone   string
+	UpstreamUsername           string
+	UpstreamPassword           string
+	UpstreamCertFile           string
+	UpstreamKeyFile            string
+	UpstreamCACertFile         string
+	UpstreamTLS                *bool
+	UpstreamIdentifyFile       string
+	UpstreamIdentityPrivateKey []byte
+	SqlAuthProxy               bool
+	RdsIAMAuth                 bool
+	AWSRegion                  string
+	AWSEC2Target               string
+	CloudSQLConnector          bool
+	CloudSQLIAMAuth            bool
+	CloudSQLInstance           string
+	GoogleCredentialsFile      string
+	SSHServer                  bool
+	AWSECSCluster              string
+	AWSECSServices             []string
+	AWSECSTasks                []string
+	AWSECSContainers           []string
+	AWSEC2ConnectEnabled       bool
+	AWSAvailabilityZone        string
 }
 
 func (c *ConnectorData) Tags() map[string]string {
