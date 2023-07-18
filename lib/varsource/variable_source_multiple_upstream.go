@@ -14,6 +14,13 @@ const (
 	prefixFile              = "file:"
 )
 
+var AvailablePrefixes = []string{
+	prefixAWSSecretsManager,
+	prefixAWSSSM,
+	prefixEnv,
+	prefixFile,
+}
+
 // variableUpstream represents functioanlity of an upstream source of variable values
 type variableUpstream interface {
 	GetVariable(ctx context.Context, varDefn string) (string, error)

@@ -16,6 +16,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector_v2/util"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
+	"github.com/borderzero/border0-cli/lib/varsource"
 	"github.com/borderzero/border0-go/service/connector/types"
 	pb "github.com/borderzero/border0-proto/connector"
 	backoff "github.com/cenkalti/backoff/v4"
@@ -497,43 +498,59 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 	return socket, nil
 }
 
+func fetchVariableFromSource(vs varsource.VariableSource, field string) string {
+	if strings.HasPrefix(field, "${") && strings.HasSuffix(field, "}") {
+		val, err := vs.GetVariable(context.Background(), field)
+		if err != nil {
+			fmt.Println("error fetching variable", err)
+		}
+
+		return val
+	}
+
+	return field
+}
+
 func (c *ConnectorService) setupSSHUpstreamValues(s *models.Socket, configMap types.ConnectorServiceUpstreamConfig) error {
+	vs := varsource.NewDefaultVariableSource()
+
 	switch configMap.UpstreamConnectionType {
 	case types.UpstreamConnectionTypeSSH:
-		s.TargetHostname = configMap.Hostname
-		s.TargetPort = configMap.Port
 		s.ConnectorData.TargetHostname = configMap.Hostname
 		s.ConnectorData.Port = configMap.Port
 
 		if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeUsernamePassword {
 			s.UpstreamType = "ssh"
-			s.ConnectorLocalData.UpstreamUsername = configMap.SSHConfiguration.BasicCredentials.Username
-			s.ConnectorLocalData.UpstreamPassword = configMap.SSHConfiguration.BasicCredentials.Password
+
+			basicCreds := configMap.SSHConfiguration.BasicCredentials
+			s.ConnectorLocalData.UpstreamUsername = fetchVariableFromSource(vs, basicCreds.Username)
+			s.ConnectorLocalData.UpstreamPassword = fetchVariableFromSource(vs, basicCreds.Password)
 		}
 		if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeSSHPrivateKey {
 			s.UpstreamType = "ssh"
 
 			details := configMap.SSHConfiguration.SSHPrivateKeyDetails
-			keyInBytes := []byte(details.Key)
+			keyInBytes := []byte(fetchVariableFromSource(vs, details.Key))
 
 			s.ConnectorLocalData.UpstreamIdentityPrivateKey = keyInBytes
-			s.ConnectorLocalData.UpstreamUsername = details.Username
+			s.ConnectorLocalData.UpstreamUsername = fetchVariableFromSource(vs, details.Username)
 		}
 	case types.UpstreamConnectionTypeAwsSSM:
 		s.UpstreamType = "aws-ssm"
-		s.ConnectorLocalData.AWSEC2Target = configMap.SSHConfiguration.AwsSSMDetails.InstanceID
-		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
-		s.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
+		ssmDetails := configMap.SSHConfiguration.AwsSSMDetails
+
+		s.ConnectorLocalData.AWSEC2Target = fetchVariableFromSource(vs, ssmDetails.InstanceID)
+		s.ConnectorLocalData.AWSRegion = fetchVariableFromSource(vs, ssmDetails.Region)
+		s.AWSRegion = fetchVariableFromSource(vs, ssmDetails.Region)
 	case types.UpstreamConnectionTypeAwsEC2Connection:
 		s.UpstreamType = "aws-ec2connect"
-		s.ConnectorLocalData.AWSAvailabilityZone = configMap.SSHConfiguration.AwsEC2ConnectDetails.AvailabilityZone
-		s.ConnectorLocalData.AWSEC2Target = configMap.SSHConfiguration.AwsEC2ConnectDetails.InstanceID
-		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsEC2ConnectDetails.Region
+		ec2Details := configMap.SSHConfiguration.AwsEC2ConnectDetails
+		s.ConnectorLocalData.AWSAvailabilityZone = fetchVariableFromSource(vs, ec2Details.AvailabilityZone)
+		s.ConnectorLocalData.AWSEC2Target = fetchVariableFromSource(vs, ec2Details.InstanceID)
+		s.ConnectorLocalData.AWSRegion = fetchVariableFromSource(vs, ec2Details.Region)
 		s.ConnectorLocalData.AWSEC2ConnectEnabled = true
-		s.ConnectorData.TargetHostname = configMap.Hostname
+		s.ConnectorData.TargetHostname = fetchVariableFromSource(vs, configMap.Hostname)
 		s.ConnectorData.Port = configMap.Port
-		s.TargetHostname = configMap.Hostname
-		s.TargetPort = configMap.Port
 	default:
 		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)
 	}
