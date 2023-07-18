@@ -37,6 +37,7 @@ type ProxyConfig struct {
 	Username            string
 	Password            string
 	IdentityFile        string
+	IdentityPrivateKey  []byte
 	Hostname            string
 	Port                int
 	sshClientConfig     *ssh.ClientConfig
@@ -66,10 +67,13 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		return nil, nil
 	}
 
-	if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" &&
-		socket.ConnectorLocalData.UpstreamIdentifyFile == "" && socket.ConnectorLocalData.AWSEC2Target == "" &&
-		socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2ConnectEnabled {
-		return nil, nil
+	isNormalSSHSocket := socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2ConnectEnabled
+	if isNormalSSHSocket {
+		if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" {
+			if len(socket.ConnectorLocalData.UpstreamIdentityPrivateKey) == 0 && socket.ConnectorLocalData.UpstreamIdentifyFile == "" {
+				return nil, nil
+			}
+		}
 	}
 
 	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster == "" && socket.ConnectorLocalData.AWSEC2Target == "" {
@@ -99,6 +103,7 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		Username:            socket.ConnectorLocalData.UpstreamUsername,
 		Password:            socket.ConnectorLocalData.UpstreamPassword,
 		IdentityFile:        socket.ConnectorLocalData.UpstreamIdentifyFile,
+		IdentityPrivateKey:  socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
 		AwsEC2Target:        socket.ConnectorLocalData.AWSEC2Target,
 		AWSRegion:           AWSRegion,
 		AWSProfile:          AWSProfile,
@@ -191,6 +196,15 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 			signer, err := ssh.ParsePrivateKey(bytes)
 			if err != nil {
 				return fmt.Errorf("sshauthproxy: failed to parse identity file: %s", err)
+			}
+
+			authMethods = append(authMethods, ssh.PublicKeys(signer))
+		}
+
+		if len(c.IdentityPrivateKey) > 0 {
+			signer, err := ssh.ParsePrivateKey(c.IdentityPrivateKey)
+			if err != nil {
+				return fmt.Errorf("sshauthproxy: failed to parse identity private key: %s", err)
 			}
 
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
