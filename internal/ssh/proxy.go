@@ -67,11 +67,14 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		return nil, nil
 	}
 
-	// if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" &&
-	// 	(len(socket.ConnectorLocalData.UpstreamIdentityPrivateKey) == 0 || socket.ConnectorLocalData.UpstreamIdentifyFile == "") && socket.ConnectorLocalData.AWSEC2Target == "" &&
-	// 	socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2ConnectEnabled {
-	// 	return nil, nil
-	// }
+	isNormalSSHSocket := socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2ConnectEnabled
+	if isNormalSSHSocket {
+		if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" {
+			if len(socket.ConnectorLocalData.UpstreamIdentityPrivateKey) == 0 && socket.ConnectorLocalData.UpstreamIdentifyFile == "" {
+				return nil, nil
+			}
+		}
+	}
 
 	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster == "" && socket.ConnectorLocalData.AWSEC2Target == "" {
 		return nil, fmt.Errorf("aws_ecs_cluster or aws_ec2_target is required for aws-ssm upstream type")
