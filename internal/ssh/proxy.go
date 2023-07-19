@@ -43,6 +43,7 @@ type ProxyConfig struct {
 	sshClientConfig    *ssh.ClientConfig
 	sshServerConfig    *ssh.ServerConfig
 	AwsEC2Target       string
+	AwsEC2InstanceId   string
 	ssmClient          *ssm.Client
 	windowWidth        int
 	windowHeight       int
@@ -88,8 +89,8 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 	}
 
 	if socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2ConnectEnabled {
-		if socket.ConnectorLocalData.AWSEC2Target == "" {
-			return nil, fmt.Errorf("aws_ec2_target is required for aws-ec2connect upstream type")
+		if socket.ConnectorLocalData.AwsEC2InstanceId == "" {
+			return nil, fmt.Errorf("aws ec2 instance id is required for aws-ec2connect upstream type")
 		}
 	}
 
@@ -101,6 +102,7 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		IdentityFile:       socket.ConnectorLocalData.UpstreamIdentifyFile,
 		IdentityPrivateKey: socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
 		AwsEC2Target:       socket.ConnectorLocalData.AWSEC2Target,
+		AwsEC2InstanceId:   socket.ConnectorLocalData.AwsEC2InstanceId,
 		AWSRegion:          AWSRegion,
 		AWSProfile:         AWSProfile,
 	}
@@ -653,7 +655,7 @@ func handleEC2ConnectClient(conn net.Conn, config ProxyConfig) {
 
 	ec2ConnectClient := ec2instanceconnect.NewFromConfig(config.awsConfig)
 	_, err = ec2ConnectClient.SendSSHPublicKey(context.TODO(), &ec2instanceconnect.SendSSHPublicKeyInput{
-		InstanceId:     &config.AwsEC2Target,
+		InstanceId:     &config.AwsEC2InstanceId,
 		InstanceOSUser: &user,
 		SSHPublicKey:   &publicKeyString,
 	})
