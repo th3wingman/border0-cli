@@ -34,25 +34,24 @@ import (
 const ResizeSleepInterval = 500 * time.Millisecond
 
 type ProxyConfig struct {
-	Username            string
-	Password            string
-	IdentityFile        string
-	IdentityPrivateKey  []byte
-	Hostname            string
-	Port                int
-	sshClientConfig     *ssh.ClientConfig
-	sshServerConfig     *ssh.ServerConfig
-	AwsEC2Target        string
-	AwsAvailabilityZone string
-	ssmClient           *ssm.Client
-	windowWidth         int
-	windowHeight        int
-	session             *ShellSession
-	AWSRegion           string
-	AWSProfile          string
-	ECSSSMProxy         *ECSSSMProxy
-	awsConfig           aws.Config
-	AwsUpstreamType     string
+	Username           string
+	Password           string
+	IdentityFile       string
+	IdentityPrivateKey []byte
+	Hostname           string
+	Port               int
+	sshClientConfig    *ssh.ClientConfig
+	sshServerConfig    *ssh.ServerConfig
+	AwsEC2Target       string
+	ssmClient          *ssm.Client
+	windowWidth        int
+	windowHeight       int
+	session            *ShellSession
+	AWSRegion          string
+	AWSProfile         string
+	ECSSSMProxy        *ECSSSMProxy
+	awsConfig          aws.Config
+	AwsUpstreamType    string
 }
 
 type ECSSSMProxy struct {
@@ -92,22 +91,18 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		if socket.ConnectorLocalData.AWSEC2Target == "" {
 			return nil, fmt.Errorf("aws_ec2_target is required for aws-ec2connect upstream type")
 		}
-		if socket.ConnectorLocalData.AWSAvailabilityZone == "" {
-			return nil, fmt.Errorf("aws_availability_zone is required for aws-ec2connect upstream type")
-		}
 	}
 
 	proxyConfig := &ProxyConfig{
-		Hostname:            socket.ConnectorData.TargetHostname,
-		Port:                socket.ConnectorData.Port,
-		Username:            socket.ConnectorLocalData.UpstreamUsername,
-		Password:            socket.ConnectorLocalData.UpstreamPassword,
-		IdentityFile:        socket.ConnectorLocalData.UpstreamIdentifyFile,
-		IdentityPrivateKey:  socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
-		AwsEC2Target:        socket.ConnectorLocalData.AWSEC2Target,
-		AWSRegion:           AWSRegion,
-		AWSProfile:          AWSProfile,
-		AwsAvailabilityZone: socket.ConnectorLocalData.AWSAvailabilityZone,
+		Hostname:           socket.ConnectorData.TargetHostname,
+		Port:               socket.ConnectorData.Port,
+		Username:           socket.ConnectorLocalData.UpstreamUsername,
+		Password:           socket.ConnectorLocalData.UpstreamPassword,
+		IdentityFile:       socket.ConnectorLocalData.UpstreamIdentifyFile,
+		IdentityPrivateKey: socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
+		AwsEC2Target:       socket.ConnectorLocalData.AWSEC2Target,
+		AWSRegion:          AWSRegion,
+		AWSProfile:         AWSProfile,
 	}
 
 	switch {
@@ -658,10 +653,9 @@ func handleEC2ConnectClient(conn net.Conn, config ProxyConfig) {
 
 	ec2ConnectClient := ec2instanceconnect.NewFromConfig(config.awsConfig)
 	_, err = ec2ConnectClient.SendSSHPublicKey(context.TODO(), &ec2instanceconnect.SendSSHPublicKeyInput{
-		AvailabilityZone: &config.AwsAvailabilityZone,
-		InstanceId:       &config.AwsEC2Target,
-		InstanceOSUser:   &user,
-		SSHPublicKey:     &publicKeyString,
+		InstanceId:     &config.AwsEC2Target,
+		InstanceOSUser: &user,
+		SSHPublicKey:   &publicKeyString,
 	})
 
 	if err != nil {
