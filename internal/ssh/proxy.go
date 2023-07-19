@@ -102,6 +102,7 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		IdentityFile:       socket.ConnectorLocalData.UpstreamIdentifyFile,
 		IdentityPrivateKey: socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
 		AwsEC2InstanceId:   socket.ConnectorLocalData.AwsEC2InstanceId,
+		AwsSSMTarget:       socket.ConnectorLocalData.AwsEC2InstanceId, // when instance id empty and ecs cluster is given, target will be constructed during connection
 		AWSRegion:          AWSRegion,
 		AWSProfile:         AWSProfile,
 	}
@@ -114,6 +115,8 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 	}
 
 	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster != "" {
+		// TODO: when ECSSSMProxy is not nil, proxyConfig.AwsSSMTarget will be constructed
+		// from ecs cluster during connection... this kind of sucks... improve
 		proxyConfig.ECSSSMProxy = &ECSSSMProxy{
 			Cluster:    socket.ConnectorLocalData.AWSECSCluster,
 			Services:   socket.ConnectorLocalData.AWSECSServices,
