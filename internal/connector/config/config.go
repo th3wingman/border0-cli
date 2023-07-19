@@ -35,25 +35,24 @@ type SocketConfig struct {
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
 
-	UpstreamCertFile      string   `mapstructure:"upstream_certificate_file"`
-	UpstreamKeyFile       string   `mapstructure:"upstream_key_file"`
-	UpstreamCACertFile    string   `mapstructure:"upstream_ca_file"`
-	UpstreamIdentifyFile  string   `mapstructure:"upstream_identity_file"`
-	UpstreamTLS           *bool    `mapstructure:"upstream_tls,omitempty"`
-	RdsIAMAuth            bool     `mapstructure:"rds_iam_auth"`
-	AWSRegion             string   `mapstructure:"aws_region"`
-	AWSEC2Target          string   `mapstructure:"aws_ec2_target"`
-	AWSAvailabilityZone   string   `mapstructure:"aws_availability_zone"`
-	AWSEC2ConnectEnabled  bool     `mapstructure:"aws_ec2_connect"`
-	CloudSQLConnector     bool     `mapstructure:"cloudsql_connector"`
-	CloudSQLIAMAuth       bool     `mapstructure:"cloudsql_iam_auth"`
-	CloudSQLInstance      string   `mapstructure:"cloudsql_instance"`
-	GoogleCredentialsFile string   `mapstructure:"google_credentials_file"`
-	SSHServer             bool     `mapstructure:"sshserver"`
-	AWSECSCluster         string   `mapstructure:"aws_ecs_cluster"`
-	TaskFilter            []string `mapstructure:"aws_ecs_tasks"`
-	ServiceFilter         []string `mapstructure:"aws_ecs_services"`
-	ContainerFilter       []string `mapstructure:"aws_ecs_containers"`
+	UpstreamCertFile             string   `mapstructure:"upstream_certificate_file"`
+	UpstreamKeyFile              string   `mapstructure:"upstream_key_file"`
+	UpstreamCACertFile           string   `mapstructure:"upstream_ca_file"`
+	UpstreamIdentifyFile         string   `mapstructure:"upstream_identity_file"`
+	UpstreamTLS                  *bool    `mapstructure:"upstream_tls,omitempty"`
+	RdsIAMAuth                   bool     `mapstructure:"rds_iam_auth"`
+	AWSRegion                    string   `mapstructure:"aws_region"`
+	AWSEC2InstanceConnectEnabled bool     `mapstructure:"aws_ec2_instance_connect"`
+	AWSEC2InstanceId             string   `mapstructure:"aws_ec2_instance_id"`
+	CloudSQLConnector            bool     `mapstructure:"cloudsql_connector"`
+	CloudSQLIAMAuth              bool     `mapstructure:"cloudsql_iam_auth"`
+	CloudSQLInstance             string   `mapstructure:"cloudsql_instance"`
+	GoogleCredentialsFile        string   `mapstructure:"google_credentials_file"`
+	SSHServer                    bool     `mapstructure:"sshserver"`
+	AWSECSCluster                string   `mapstructure:"aws_ecs_cluster"`
+	TaskFilter                   []string `mapstructure:"aws_ecs_tasks"`
+	ServiceFilter                []string `mapstructure:"aws_ecs_services"`
+	ContainerFilter              []string `mapstructure:"aws_ecs_containers"`
 }
 
 type Credentials struct {
@@ -82,7 +81,7 @@ type ConnectorGroups struct {
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
 	AwsSsmEnabled                  bool     `mapstructure:"aws_ssm_enabled"`
-	AwsEC2ConnectEnabled           bool     `mapstructure:"aws_ec2_connect"`
+	AwsEC2InstanceConnectEnabled   bool     `mapstructure:"aws_ec2_instance_connect"`
 	UpstreamUsername               string   `mapstructure:"upstream_username"`
 	UpstreamPassword               string   `mapstructure:"upstream_password"`
 	UpstreamIdentifyFile           string   `mapstructure:"upstream_identity_file"`
