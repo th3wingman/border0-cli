@@ -535,19 +535,15 @@ func (c *ConnectorService) setupSSHUpstreamValues(s *models.Socket, configMap ty
 		}
 	case types.UpstreamConnectionTypeAwsSSM:
 		s.UpstreamType = "aws-ssm"
-		ssmDetails := configMap.SSHConfiguration.AwsSSMDetails
-
-		s.ConnectorLocalData.AWSEC2Target = fetchVariableFromSource(vs, ssmDetails.InstanceID)
-		s.ConnectorLocalData.AWSRegion = fetchVariableFromSource(vs, ssmDetails.Region)
-		s.AWSRegion = fetchVariableFromSource(vs, ssmDetails.Region)
+		s.ConnectorLocalData.AwsEC2InstanceId = configMap.SSHConfiguration.AwsSSMDetails.InstanceID
+		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
+		s.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
 	case types.UpstreamConnectionTypeAwsEC2Connection:
 		s.UpstreamType = "aws-ec2connect"
-		ec2Details := configMap.SSHConfiguration.AwsEC2ConnectDetails
-		s.ConnectorLocalData.AWSAvailabilityZone = fetchVariableFromSource(vs, ec2Details.AvailabilityZone)
-		s.ConnectorLocalData.AWSEC2Target = fetchVariableFromSource(vs, ec2Details.InstanceID)
-		s.ConnectorLocalData.AWSRegion = fetchVariableFromSource(vs, ec2Details.Region)
-		s.ConnectorLocalData.AWSEC2ConnectEnabled = true
-		s.ConnectorData.TargetHostname = fetchVariableFromSource(vs, configMap.Hostname)
+		s.ConnectorLocalData.AwsEC2InstanceId = configMap.SSHConfiguration.AwsEC2ConnectDetails.InstanceID
+		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsEC2ConnectDetails.Region
+		s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
+		s.ConnectorData.TargetHostname = configMap.Hostname
 		s.ConnectorData.Port = configMap.Port
 	default:
 		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)

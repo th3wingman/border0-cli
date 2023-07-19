@@ -35,29 +35,28 @@ type ConnectorData struct {
 }
 
 type ConnectorLocalData struct {
-	UpstreamUsername           string
-	UpstreamPassword           string
-	UpstreamCertFile           string
-	UpstreamKeyFile            string
-	UpstreamCACertFile         string
-	UpstreamTLS                *bool
-	UpstreamIdentifyFile       string
-	UpstreamIdentityPrivateKey []byte
-	SqlAuthProxy               bool
-	RdsIAMAuth                 bool
-	AWSRegion                  string
-	AWSEC2Target               string
-	CloudSQLConnector          bool
-	CloudSQLIAMAuth            bool
-	CloudSQLInstance           string
-	GoogleCredentialsFile      string
-	SSHServer                  bool
-	AWSECSCluster              string
-	AWSECSServices             []string
-	AWSECSTasks                []string
-	AWSECSContainers           []string
-	AWSEC2ConnectEnabled       bool
-	AWSAvailabilityZone        string
+	UpstreamUsername             string
+	UpstreamPassword             string
+	UpstreamCertFile             string
+	UpstreamKeyFile              string
+	UpstreamCACertFile           string
+	UpstreamTLS                  *bool
+	UpstreamIdentifyFile         string
+	UpstreamIdentityPrivateKey   []byte
+	SqlAuthProxy                 bool
+	RdsIAMAuth                   bool
+	AWSRegion                    string
+	CloudSQLConnector            bool
+	CloudSQLIAMAuth              bool
+	CloudSQLInstance             string
+	GoogleCredentialsFile        string
+	SSHServer                    bool
+	AWSECSCluster                string
+	AWSECSServices               []string
+	AWSECSTasks                  []string
+	AWSECSContainers             []string
+	AwsEC2InstanceId             string
+	AWSEC2InstanceConnectEnabled bool
 }
 
 func (c *ConnectorData) Tags() map[string]string {
@@ -135,7 +134,6 @@ type Socket struct {
 	UpstreamTLS           *bool  `json:"-"`
 	RdsIAMAuth            bool   `json:"-"`
 	AWSRegion             string `json:"-"`
-	AWSEC2Target          string `json:"-"`
 	CloudSQLConnector     bool   `json:"-"`
 	CloudSQLIAMAuth       bool   `json:"-"`
 	CloudSQLInstance      string `json:"-"`
