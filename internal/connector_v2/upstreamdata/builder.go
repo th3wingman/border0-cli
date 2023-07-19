@@ -76,7 +76,7 @@ func (u *UpstreamDataBuilder) setupSSH(s *models.Socket, configMap types.Connect
 
 func (u *UpstreamDataBuilder) setupAWSSSM(s *models.Socket, ssmDetails types.AwsSSMDetails) error {
 	s.UpstreamType = UpstreamTypeAwsSSM
-	s.ConnectorLocalData.AWSEC2Target = u.fetchVariableFromSource(ssmDetails.InstanceID)
+	s.ConnectorLocalData.AwsEC2InstanceId = u.fetchVariableFromSource(ssmDetails.InstanceID)
 	s.ConnectorLocalData.AWSRegion = u.fetchVariableFromSource(ssmDetails.Region)
 	s.AWSRegion = u.fetchVariableFromSource(ssmDetails.Region)
 
@@ -85,10 +85,9 @@ func (u *UpstreamDataBuilder) setupAWSSSM(s *models.Socket, ssmDetails types.Aws
 
 func (u *UpstreamDataBuilder) setupEc2Connect(s *models.Socket, ec2Details types.AwsEC2ConnectDetails) error {
 	s.UpstreamType = UpstreamTypeAwsEC2Conn
-	s.ConnectorLocalData.AWSAvailabilityZone = u.fetchVariableFromSource(ec2Details.AvailabilityZone)
-	s.ConnectorLocalData.AWSEC2Target = u.fetchVariableFromSource(ec2Details.InstanceID)
+	s.ConnectorLocalData.AwsEC2InstanceId = u.fetchVariableFromSource(ec2Details.InstanceID)
 	s.ConnectorLocalData.AWSRegion = u.fetchVariableFromSource(ec2Details.Region)
-	s.ConnectorLocalData.AWSEC2ConnectEnabled = true
+	s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
 
 	return nil
 }
