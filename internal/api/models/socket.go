@@ -47,6 +47,7 @@ type ConnectorLocalData struct {
 	RdsIAMAuth                 bool
 	AWSRegion                  string
 	AWSEC2Target               string
+	AwsEC2InstanceId           string
 	CloudSQLConnector          bool
 	CloudSQLIAMAuth            bool
 	CloudSQLInstance           string

@@ -86,7 +86,8 @@ var (
 	awsECSTasks             []string
 	awsECSContainers        []string
 	disableBrowser          bool
-	awsEC2Connect           bool
+	awsEc2InstanceId        string
+	awsEc2InstanceConnect   bool
 )
 
 // rootCmd represents the base command when called without any subcommands
