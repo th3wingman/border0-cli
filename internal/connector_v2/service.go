@@ -13,6 +13,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/plugin"
+	"github.com/borderzero/border0-cli/internal/connector_v2/upstreamdata"
 	"github.com/borderzero/border0-cli/internal/connector_v2/util"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
@@ -481,11 +482,8 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 		s.ConnectorData = &models.ConnectorData{}
 	}
 
-	switch config.GetType() {
-	case "ssh":
-		c.setupSSHUpstreamValues(s, configMap)
-	default:
-		return nil, fmt.Errorf("unsupported socket type: %s", config.GetType())
+	if err := upstreamdata.NewUpstreamDataBuilder().Build(s, configMap); err != nil {
+		return nil, fmt.Errorf("failed to build upstream data: %w", err)
 	}
 
 	socket, err := border0.NewSocketFromConnectorAPI(c.context, c, *s, c.organization)
