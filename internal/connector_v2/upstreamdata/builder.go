@@ -3,7 +3,6 @@ package upstreamdata
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/lib/varsource"
@@ -93,13 +92,11 @@ func (u *UpstreamDataBuilder) setupEc2Connect(s *models.Socket, ec2Details types
 }
 
 func (u *UpstreamDataBuilder) fetchVariableFromSource(field string) string {
-	if strings.HasPrefix(field, "${") && strings.HasSuffix(field, "}") {
-		val, err := u.vs.GetVariable(context.Background(), field)
-		if err != nil {
-			fmt.Printf("error evaluating variable %s: %v\n", field, err)
-		}
-
-		return val
+	val, err := u.vs.GetVariable(context.Background(), field)
+	if err != nil {
+		fmt.Printf("error evaluating variable %s: %v\n", field, err)
+		return field
 	}
-	return field
+
+	return val
 }
