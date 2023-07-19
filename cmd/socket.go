@@ -363,15 +363,15 @@ var socketConnectCmd = &cobra.Command{
 
 		var sshAuthProxy bool
 		var sshProxyConfig ssh.ProxyConfig
-		if socket.SocketType == "ssh" && (upstream_username != "" || upstream_password != "" || upstream_identify_file != "" || awsEC2Target != "" || awsEc2InstanceId != "" || socket.UpstreamType == "aws-ssm" || socket.UpstreamType == "aws-ec2connect" || awsEc2InstanceConnect) {
+		if socket.SocketType == "ssh" && (upstream_username != "" || upstream_password != "" || upstream_identify_file != "" || awsEc2InstanceId != "" || socket.UpstreamType == "aws-ssm" || socket.UpstreamType == "aws-ec2connect" || awsEc2InstanceConnect) {
 			switch {
 			case socket.UpstreamType == "aws-ssm":
-				if awsECSCluster == "" && awsEC2Target == "" {
-					return fmt.Errorf("aws_ecs_cluster flag or aws_ec2_target is required for aws-ssm upstream services")
+				if awsECSCluster == "" && awsEc2InstanceId == "" {
+					return fmt.Errorf("aws_ecs_cluster flag or aws ec2 instance id is required for aws-ssm upstream services")
 				}
 
 				sshProxyConfig = ssh.ProxyConfig{
-					AwsEC2Target:    awsEC2Target,
+					AwsSSMTarget:    awsEc2InstanceId,
 					AWSRegion:       awsRegion,
 					AWSProfile:      awsProfile,
 					AwsUpstreamType: "aws-ssm",
@@ -401,8 +401,8 @@ var socketConnectCmd = &cobra.Command{
 				}
 
 			default:
-				if awsECSCluster != "" || awsEC2Target != "" {
-					return fmt.Errorf("aws_ecs_cluster flag or aws_ec2_target is defined but socket is not configured with aws-ssm upstream type")
+				if awsECSCluster != "" || awsEc2InstanceId != "" {
+					return fmt.Errorf("aws_ecs_cluster flag or aws ec2 instance id is defined but socket is not configured with aws-ssm upstream type")
 				}
 
 				sshProxyConfig = ssh.ProxyConfig{
@@ -630,7 +630,7 @@ func init() {
 	socketConnectCmd.Flags().StringVarP(&upstream_ca_file, "upstream_ca_filename", "a", "", "path to file from where to read the upstream ca certificate")
 	socketConnectCmd.Flags().BoolVarP(&upstream_tls, "upstream_tls", "", true, "Use TLS for upstream connection")
 	socketConnectCmd.Flags().StringVarP(&upstream_identify_file, "upstream_identity_file", "", "", "Upstream identity file")
-	socketConnectCmd.Flags().StringVarP(&awsEC2Target, "aws_ec2_target", "", "", "Aws EC2 target identifier")
+	socketConnectCmd.Flags().StringVarP(&awsEc2InstanceId, "aws_ec2_target", "", "", "Aws EC2 target identifier") // kept for backwards compatibility
 	socketConnectCmd.Flags().StringVarP(&awsEc2InstanceId, "aws-ec2-instance-id", "", "", "Instance id of the target AWS EC2 Instance")
 	socketConnectCmd.Flags().BoolVarP(&awsEc2InstanceConnect, "aws-ec2-instance-connect", "", false, "Use AWS EC2 Instance Connect to connect to the target")
 	socketConnectCmd.Flags().StringVarP(&awsRegion, "region", "", "", "AWS region to use")

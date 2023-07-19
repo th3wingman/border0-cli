@@ -42,7 +42,7 @@ type ProxyConfig struct {
 	Port               int
 	sshClientConfig    *ssh.ClientConfig
 	sshServerConfig    *ssh.ServerConfig
-	AwsEC2Target       string
+	AwsSSMTarget       string
 	AwsEC2InstanceId   string
 	ssmClient          *ssm.Client
 	windowWidth        int
@@ -67,7 +67,7 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		return nil, nil
 	}
 
-	isNormalSSHSocket := socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2ConnectEnabled
+	isNormalSSHSocket := socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled
 	if isNormalSSHSocket {
 		if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" {
 			if len(socket.ConnectorLocalData.UpstreamIdentityPrivateKey) == 0 && socket.ConnectorLocalData.UpstreamIdentifyFile == "" {
@@ -76,19 +76,19 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		}
 	}
 
-	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster == "" && socket.ConnectorLocalData.AWSEC2Target == "" {
-		return nil, fmt.Errorf("aws_ecs_cluster or aws_ec2_target is required for aws-ssm upstream type")
+	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster == "" && socket.ConnectorLocalData.AwsEC2InstanceId == "" {
+		return nil, fmt.Errorf("aws_ecs_cluster or aws ec2 instance id is required for aws-ssm upstream type")
 	}
 
-	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster != "" && socket.ConnectorLocalData.AWSEC2Target != "" {
-		return nil, fmt.Errorf("aws_ecs_cluster and aws_ec2_target are mutually exclusive")
+	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster != "" && socket.ConnectorLocalData.AwsEC2InstanceId != "" {
+		return nil, fmt.Errorf("aws_ecs_cluster and aws ec2 instance id are mutually exclusive")
 	}
 
-	if socket.UpstreamType != "aws-ssm" && !socket.ConnectorLocalData.AWSEC2ConnectEnabled && (socket.ConnectorLocalData.AWSECSCluster != "" || socket.ConnectorLocalData.AWSEC2Target != "") {
-		return nil, fmt.Errorf("aws_ecs_cluster or aws_ec2_target is defined but upstream_type is not aws-ssm")
+	if socket.UpstreamType != "aws-ssm" && !socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled && (socket.ConnectorLocalData.AWSECSCluster != "" || socket.ConnectorLocalData.AwsEC2InstanceId != "") {
+		return nil, fmt.Errorf("aws_ecs_cluster or aws ec2 instance id is defined but upstream_type is not aws-ssm")
 	}
 
-	if socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2ConnectEnabled {
+	if socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled {
 		if socket.ConnectorLocalData.AwsEC2InstanceId == "" {
 			return nil, fmt.Errorf("aws ec2 instance id is required for aws-ec2connect upstream type")
 		}
@@ -101,7 +101,6 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 		Password:           socket.ConnectorLocalData.UpstreamPassword,
 		IdentityFile:       socket.ConnectorLocalData.UpstreamIdentifyFile,
 		IdentityPrivateKey: socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
-		AwsEC2Target:       socket.ConnectorLocalData.AWSEC2Target,
 		AwsEC2InstanceId:   socket.ConnectorLocalData.AwsEC2InstanceId,
 		AWSRegion:          AWSRegion,
 		AWSProfile:         AWSProfile,
@@ -110,7 +109,7 @@ func BuildProxyConfig(socket models.Socket, AWSRegion, AWSProfile string) (*Prox
 	switch {
 	case socket.UpstreamType == "aws-ssm":
 		proxyConfig.AwsUpstreamType = "aws-ssm"
-	case socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2ConnectEnabled:
+	case socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled:
 		proxyConfig.AwsUpstreamType = "aws-ec2connect"
 	}
 
@@ -173,7 +172,7 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 			}
 		}
 
-		handler = handelSSMclient
+		handler = handleSsmClient
 	case "aws-ec2connect":
 		c.sshClientConfig = &ssh.ClientConfig{
 			User:            c.Username,
@@ -181,7 +180,7 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 			Timeout:         5 * time.Second,
 		}
 
-		handler = handleEC2ConnectClient
+		handler = handleEc2InstanceConnectClient
 	default:
 		var authMethods []ssh.AuthMethod
 		if c.IdentityFile != "" {
@@ -222,7 +221,7 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 			Timeout:         5 * time.Second,
 		}
 
-		handler = handleSSHclient
+		handler = handleSshClient
 	}
 
 	c.sshServerConfig = &ssh.ServerConfig{
@@ -250,7 +249,7 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 	}
 }
 
-func handelSSMclient(conn net.Conn, config ProxyConfig) {
+func handleSsmClient(conn net.Conn, config ProxyConfig) {
 	defer conn.Close()
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)
@@ -297,7 +296,7 @@ func handelSSMclient(conn net.Conn, config ProxyConfig) {
 					req.Reply(false, nil)
 				case req.Type == "shell":
 					if config.ECSSSMProxy != nil {
-						if err := pickAWSECSTarget(channel, &config); err != nil {
+						if err := pickAwsEcsTargetForAwsSsm(channel, &config); err != nil {
 							log.Printf("sshauthproxy: failed to pick ECS target: %s", err)
 							req.Reply(false, nil)
 							sshConn.Close()
@@ -315,7 +314,7 @@ func handelSSMclient(conn net.Conn, config ProxyConfig) {
 
 }
 
-func pickAWSECSTarget(channel ssh.Channel, proxyConfig *ProxyConfig) error {
+func pickAwsEcsTargetForAwsSsm(channel ssh.Channel, proxyConfig *ProxyConfig) error {
 	ecsSvc := ecs.NewFromConfig(proxyConfig.awsConfig)
 	var selectedCluster string
 	if proxyConfig.ECSSSMProxy.Cluster == "" {
@@ -513,7 +512,7 @@ func pickAWSECSTarget(channel ssh.Channel, proxyConfig *ProxyConfig) error {
 		return fmt.Errorf("unable to select container, %v", err)
 	}
 
-	proxyConfig.AwsEC2Target = fmt.Sprintf("ecs:%s_%s_%s", selectedCluster, tasksIDS[selectedTask], containers[selectedTask][selectedContainer])
+	proxyConfig.AwsSSMTarget = fmt.Sprintf("ecs:%s_%s_%s", selectedCluster, tasksIDS[selectedTask], containers[selectedTask][selectedContainer])
 
 	return nil
 }
@@ -559,7 +558,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 
 	var s ShellSession
 	sessionOutput, err := config.ssmClient.StartSession(context.TODO(), &ssm.StartSessionInput{
-		Target: &config.AwsEC2Target,
+		Target: &config.AwsSSMTarget,
 	})
 	if err != nil {
 		fmt.Printf("sshauthproxy: failed to start ssm session: %s\n", err)
@@ -594,7 +593,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 	}
 }
 
-func handleSSHclient(conn net.Conn, config ProxyConfig) {
+func handleSshClient(conn net.Conn, config ProxyConfig) {
 	defer conn.Close()
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)
@@ -610,7 +609,7 @@ func handleSSHclient(conn net.Conn, config ProxyConfig) {
 	}
 }
 
-func handleEC2ConnectClient(conn net.Conn, config ProxyConfig) {
+func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 	defer conn.Close()
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)

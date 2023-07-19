@@ -521,15 +521,14 @@ func (c *ConnectorService) setupSSHUpstreamValues(s *models.Socket, configMap ty
 		}
 	case types.UpstreamConnectionTypeAwsSSM:
 		s.UpstreamType = "aws-ssm"
-		s.ConnectorLocalData.AWSEC2Target = configMap.SSHConfiguration.AwsSSMDetails.InstanceID
+		s.ConnectorLocalData.AwsEC2InstanceId = configMap.SSHConfiguration.AwsSSMDetails.InstanceID
 		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
 		s.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
 	case types.UpstreamConnectionTypeAwsEC2Connection:
 		s.UpstreamType = "aws-ec2connect"
-		s.ConnectorLocalData.AWSAvailabilityZone = configMap.SSHConfiguration.AwsEC2ConnectDetails.AvailabilityZone
-		s.ConnectorLocalData.AWSEC2Target = configMap.SSHConfiguration.AwsEC2ConnectDetails.InstanceID
+		s.ConnectorLocalData.AwsEC2InstanceId = configMap.SSHConfiguration.AwsEC2ConnectDetails.InstanceID
 		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsEC2ConnectDetails.Region
-		s.ConnectorLocalData.AWSEC2ConnectEnabled = true
+		s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
 		s.ConnectorData.TargetHostname = configMap.Hostname
 		s.ConnectorData.Port = configMap.Port
 		s.TargetHostname = configMap.Hostname
