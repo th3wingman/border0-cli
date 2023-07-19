@@ -85,7 +85,6 @@ var (
 	awsECSServices          []string
 	awsECSTasks             []string
 	awsECSContainers        []string
-	awsAvailabilityZone     string
 	disableBrowser          bool
 	awsEC2Connect           bool
 )
