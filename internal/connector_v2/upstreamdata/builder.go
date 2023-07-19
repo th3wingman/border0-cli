@@ -85,7 +85,7 @@ func (u *UpstreamDataBuilder) setupAWSSSM(s *models.Socket, ssmDetails types.Aws
 func (u *UpstreamDataBuilder) setupEc2Connect(s *models.Socket, ec2Details types.AwsEC2ConnectDetails) error {
 	s.UpstreamType = UpstreamTypeAwsEC2Conn
 	s.ConnectorLocalData.AwsEC2InstanceId = u.fetchVariableFromSource(ec2Details.InstanceID)
-	s.ConnectorLocalData.AWSRegion = u.fetchVariableFromSource(ec2Details.Region)
+	s.AWSRegion = u.fetchVariableFromSource(ec2Details.Region)
 	s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
 
 	return nil
