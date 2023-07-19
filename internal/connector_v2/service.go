@@ -13,6 +13,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/plugin"
+	"github.com/borderzero/border0-cli/internal/connector_v2/upstreamdata"
 	"github.com/borderzero/border0-cli/internal/connector_v2/util"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
@@ -480,11 +481,8 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 		s.ConnectorData = &models.ConnectorData{}
 	}
 
-	switch config.GetType() {
-	case "ssh":
-		c.setupSSHUpstreamValues(s, configMap)
-	default:
-		return nil, fmt.Errorf("unsupported socket type: %s", config.GetType())
+	if err := upstreamdata.NewUpstreamDataBuilder().Build(s, configMap); err != nil {
+		return nil, fmt.Errorf("failed to build upstream data: %w", err)
 	}
 
 	socket, err := border0.NewSocketFromConnectorAPI(c.context, c, *s, c.organization)
@@ -495,49 +493,6 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 	go c.Listen(socket)
 
 	return socket, nil
-}
-
-func (c *ConnectorService) setupSSHUpstreamValues(s *models.Socket, configMap types.ConnectorServiceUpstreamConfig) error {
-	switch configMap.UpstreamConnectionType {
-	case types.UpstreamConnectionTypeSSH:
-		s.TargetHostname = configMap.Hostname
-		s.TargetPort = configMap.Port
-		s.ConnectorData.TargetHostname = configMap.Hostname
-		s.ConnectorData.Port = configMap.Port
-
-		if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeUsernamePassword {
-			s.UpstreamType = "ssh"
-			s.ConnectorLocalData.UpstreamUsername = configMap.SSHConfiguration.BasicCredentials.Username
-			s.ConnectorLocalData.UpstreamPassword = configMap.SSHConfiguration.BasicCredentials.Password
-		}
-		if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeSSHPrivateKey {
-			s.UpstreamType = "ssh"
-
-			details := configMap.SSHConfiguration.SSHPrivateKeyDetails
-			keyInBytes := []byte(details.Key)
-
-			s.ConnectorLocalData.UpstreamIdentityPrivateKey = keyInBytes
-			s.ConnectorLocalData.UpstreamUsername = details.Username
-		}
-	case types.UpstreamConnectionTypeAwsSSM:
-		s.UpstreamType = "aws-ssm"
-		s.ConnectorLocalData.AwsEC2InstanceId = configMap.SSHConfiguration.AwsSSMDetails.InstanceID
-		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
-		s.AWSRegion = configMap.SSHConfiguration.AwsSSMDetails.Region
-	case types.UpstreamConnectionTypeAwsEC2Connection:
-		s.UpstreamType = "aws-ec2connect"
-		s.ConnectorLocalData.AwsEC2InstanceId = configMap.SSHConfiguration.AwsEC2ConnectDetails.InstanceID
-		s.ConnectorLocalData.AWSRegion = configMap.SSHConfiguration.AwsEC2ConnectDetails.Region
-		s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
-		s.ConnectorData.TargetHostname = configMap.Hostname
-		s.ConnectorData.Port = configMap.Port
-		s.TargetHostname = configMap.Hostname
-		s.TargetPort = configMap.Port
-	default:
-		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)
-	}
-
-	return nil
 }
 
 func (c *ConnectorService) GetUserID() (string, error) {
