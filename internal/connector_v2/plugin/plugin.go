@@ -27,6 +27,7 @@ func NewPlugin(
 	pluginType string,
 	config *types.PluginConfiguration,
 ) (Plugin, error) {
+	logger = logger.With(zap.String("plugin_id", pluginId))
 	switch pluginType {
 	case types.PluginTypeAwsEc2Discovery:
 		return newAwsEc2DiscoveryPlugin(ctx, logger, pluginId, config.AwsEc2DiscoveryPluginConfiguration)
@@ -41,7 +42,7 @@ func NewPlugin(
 	case types.PluginTypeNetworkDiscovery:
 		return newNetworkDiscoveryPlugin(ctx, logger, pluginId, config.NetworkDiscoveryPluginConfiguration)
 	default:
-		return nil, fmt.Errorf("plugin type %s is not supported...", pluginType)
+		return nil, fmt.Errorf("plugin type %s is not supported", pluginType)
 	}
 }
 

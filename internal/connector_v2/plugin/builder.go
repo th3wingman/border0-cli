@@ -36,7 +36,7 @@ func newAwsEc2DiscoveryPlugin(
 	config *types.AwsEc2DiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
-		return nil, fmt.Errorf("Received nil ec2 discovery plugin configuration for plugin %s", pluginId)
+		return nil, fmt.Errorf("received nil ec2 discovery plugin configuration for plugin %s", pluginId)
 	}
 
 	awsConfigs, err := getAwsConfigs(ctx, config.BaseAwsPluginConfiguration)
@@ -74,7 +74,7 @@ func newAwsEcsDiscoveryPlugin(
 	config *types.AwsEcsDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
-		return nil, fmt.Errorf("Received nil ecs discovery plugin configuration for plugin %s", pluginId)
+		return nil, fmt.Errorf("received nil ecs discovery plugin configuration for plugin %s", pluginId)
 	}
 
 	awsConfigs, err := getAwsConfigs(ctx, config.BaseAwsPluginConfiguration)
@@ -138,7 +138,7 @@ func newKubernetesDiscoveryPlugin(ctx context.Context,
 	config *types.KubernetesDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
-		return nil, fmt.Errorf("Received nil kubernetes discovery plugin configuration for plugin %s", pluginId)
+		return nil, fmt.Errorf("received nil kubernetes discovery plugin configuration for plugin %s", pluginId)
 	}
 
 	baseDiscovererOpts := []discoverers.KubernetesDiscovererOption{
@@ -191,7 +191,7 @@ func newDockerDiscoveryPlugin(ctx context.Context,
 	config *types.DockerDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
-		return nil, fmt.Errorf("Received nil docker discovery plugin configuration for plugin %s", pluginId)
+		return nil, fmt.Errorf("received nil docker discovery plugin configuration for plugin %s", pluginId)
 	}
 
 	engine := engines.NewContinuousEngine(
@@ -213,7 +213,7 @@ func newNetworkDiscoveryPlugin(ctx context.Context,
 	config *types.NetworkDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
-		return nil, fmt.Errorf("Received nil network discovery plugin configuration for plugin %s", pluginId)
+		return nil, fmt.Errorf("received nil network discovery plugin configuration for plugin %s", pluginId)
 	}
 
 	ds := []discovery.Discoverer{}

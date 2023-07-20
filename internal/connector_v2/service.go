@@ -12,6 +12,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
+	"github.com/borderzero/border0-cli/internal/connector_v2/errors"
+	"github.com/borderzero/border0-cli/internal/connector_v2/logger"
 	"github.com/borderzero/border0-cli/internal/connector_v2/plugin"
 	"github.com/borderzero/border0-cli/internal/connector_v2/upstreamdata"
 	"github.com/borderzero/border0-cli/internal/connector_v2/util"
@@ -52,23 +54,24 @@ type ConnectorService struct {
 	discoveryResultChan chan *plugin.PluginDiscoveryResults
 }
 
-func NewConnectorService(ctx context.Context, logger *zap.Logger, version string) *ConnectorService {
+func NewConnectorService(ctx context.Context, l *zap.Logger, version string) *ConnectorService {
 	config, err := config.GetConfiguration(ctx)
 	if err != nil {
-		logger.Fatal("failed to get configuration", zap.Error(err))
+		l.Fatal("failed to get configuration", zap.Error(err))
 	}
 
-	return &ConnectorService{
-		config:            config,
-		logger:            logger,
-		version:           version,
-		context:           ctx,
-		heartbeatInterval: 10,
-		plugins:           make(map[string]plugin.Plugin),
-		sockets:           make(map[string]*border0.Socket),
-		// requests:            make(map[string]chan *pb.ControlStreamReponse),
+	cs := &ConnectorService{
+		config:              config,
+		version:             version,
+		context:             ctx,
+		heartbeatInterval:   10,
+		plugins:             make(map[string]plugin.Plugin),
+		sockets:             make(map[string]*border0.Socket),
 		discoveryResultChan: make(chan *plugin.PluginDiscoveryResults, 100),
 	}
+
+	cs.logger = logger.NewConnectorLogger(l, cs.sendControlStreamRequest)
+	return cs
 }
 
 func (c *ConnectorService) Start() {
@@ -110,7 +113,9 @@ func (c *ConnectorService) controlStream() error {
 	ctx, cancel := context.WithCancel(c.context)
 	defer cancel()
 
-	defer func() { c.logger.Debug("control stream closed", zap.Duration("next retry", c.backoff.NextBackOff())) }()
+	defer func() {
+		c.logger.Debug("control stream closed", zap.Duration("next retry", c.backoff.NextBackOff()))
+	}()
 
 	grpcConn, err := c.newConnectorClient(ctx)
 	if err != nil {
@@ -191,7 +196,6 @@ func (c *ConnectorService) controlStream() error {
 				}
 			case *pb.ControlStreamReponse_TunnelCertificateSignResponse:
 				if v, ok := c.requests.Load(r.TunnelCertificateSignResponse.RequestId); ok {
-					// if _, ok := c.requests[r.TunnelCertificateSignResponse.RequestId]; ok {
 					responseChan, ok := v.(chan *pb.ControlStreamReponse)
 					if !ok {
 						c.logger.Error("failed to cast response channel", zap.String("request_id", r.TunnelCertificateSignResponse.RequestId))
@@ -520,10 +524,6 @@ func (c *ConnectorService) GetUserID() (string, error) {
 }
 
 func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publicKey []byte) (string, string, error) {
-	if c.stream == nil {
-		return "", "", fmt.Errorf("stream is not connected")
-	}
-
 	requestId := uuid.New().String()
 	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
 		RequestType: &pb.ControlStreamRequest_TunnelCertificateSignRequest{
@@ -559,45 +559,51 @@ func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publ
 }
 
 func (c *ConnectorService) Listen(socket *border0.Socket) {
+	logger := c.logger.With(zap.String("socket_id", socket.SocketID))
+
 	l, err := socket.Listen()
 	if err != nil {
-		c.logger.Error("failed to start listener", zap.String("socket", socket.SocketID), zap.Error(err))
+		logger.Error("failed to start listener", zap.String("socket", socket.SocketID), zap.Error(err))
 		return
 	}
 
 	var handlerConfig *sqlauthproxy.Config
 	if socket.SocketType == "database" {
-		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(*socket.Socket)
+		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(logger, *socket.Socket)
 		if err != nil {
-			c.logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	}
 
 	var sshProxyConfig *ssh.ProxyConfig
 	if socket.SocketType == "ssh" {
-		sshProxyConfig, err = ssh.BuildProxyConfig(*socket.Socket, socket.Socket.AWSRegion, "")
+		sshProxyConfig, err = ssh.BuildProxyConfig(logger, *socket.Socket, socket.Socket.AWSRegion, "")
 		if err != nil {
-			c.logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	}
 
 	switch {
 	case socket.Socket.SSHServer && socket.SocketType == "ssh":
-		sshServer := ssh.NewServer(c.organization.Certificates["ssh_public_key"])
+		sshServer, err := ssh.NewServer(logger, c.organization.Certificates["ssh_public_key"])
+		if err != nil {
+			logger.Error("failed to create ssh server", zap.String("socket", socket.SocketID), zap.Error(err))
+			return
+		}
 		if err := sshServer.Serve(l); err != nil {
-			c.logger.Error("ssh server failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("ssh server failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	case sshProxyConfig != nil:
 		if err := ssh.Proxy(l, *sshProxyConfig); err != nil {
-			c.logger.Error("ssh proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("ssh proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	case handlerConfig != nil:
 		if err := sqlauthproxy.Serve(l, *handlerConfig); err != nil {
-			c.logger.Error("sql proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("sql proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	default:
-		if err := border0.Serve(l, socket.Socket.TargetHostname, socket.Socket.TargetPort); err != nil {
-			c.logger.Error("proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+		if err := border0.Serve(logger, l, socket.Socket.TargetHostname, socket.Socket.TargetPort); err != nil {
+			logger.Error("proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	}
 }
@@ -650,7 +656,7 @@ func (c *ConnectorService) handleDiscoveryResult(ctx context.Context) {
 
 func (c *ConnectorService) sendControlStreamRequest(request *pb.ControlStreamRequest) error {
 	if c.stream == nil {
-		return fmt.Errorf("stream is not connected")
+		return fmt.Errorf(errors.ErrStreamNotConnected)
 	}
 
 	return c.stream.Send(request)

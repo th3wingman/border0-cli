@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"strconv"
@@ -21,6 +20,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
+	"go.uber.org/zap"
 )
 
 type postgresHandler struct {
@@ -98,14 +98,14 @@ func (h postgresHandler) handleClient(c net.Conn) {
 
 	startupMessage, c, err := h.handleClientStartup(c)
 	if err != nil {
-		log.Printf("sqlauthproxy: failed to handle client startup: %s", err)
+		h.Logger.Error("sqlauthproxy: failed to handle client startup", zap.Error(err))
 		return
 	}
 
 	clientConn := pgproto3.NewBackend(pgproto3.NewChunkReader(c), c)
 
 	if startupMessage == nil {
-		log.Printf("sqlauthproxy: failed to handle client startup")
+		h.Logger.Error("sqlauthproxy: failed to handle client startup")
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h postgresHandler) handleClient(c net.Conn) {
 	if h.RdsIam {
 		authenticationToken, err := auth.BuildAuthToken(context.TODO(), net.JoinHostPort(h.Hostname, strconv.Itoa(h.Port)), h.AwsRegion, h.Username, h.awsCredentials)
 		if err != nil {
-			log.Printf("sqlauthproxy: failed to create authentication token: %s", err)
+			h.Logger.Error("sqlauthproxy: failed to create authentication token", zap.Error(err))
 			return
 		}
 
@@ -128,18 +128,18 @@ func (h postgresHandler) handleClient(c net.Conn) {
 
 	conn, err := pgconn.ConnectConfig(ctx, h.UpstreamConfig)
 	if err != nil {
-		log.Printf("sqlauthproxy: failed to connect to upstream: %s", err)
+		h.Logger.Error("sqlauthproxy: failed to connect to upstream", zap.Error(err))
 		return
 	}
 
 	pgconn, err := conn.Hijack()
 	if err != nil {
-		log.Printf("sqlauthproxy: failed to connect to upstream: %s", err)
+		h.Logger.Error("sqlauthproxy: failed to connect to upstream", zap.Error(err))
 		return
 	}
 
 	if err = h.handleClientAuthRequest(clientConn, pgconn.ParameterStatuses); err != nil {
-		log.Printf("sqlauthproxy: failed to handle client authentication: %s", err)
+		h.Logger.Error("sqlauthproxy: failed to handle client authentication", zap.Error(err))
 		return
 	}
 
