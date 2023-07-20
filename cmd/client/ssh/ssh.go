@@ -1,11 +1,15 @@
 package ssh
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -17,11 +21,13 @@ import (
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
+	"nhooyr.io/websocket"
 )
 
 var (
 	hostname     string
 	sshLoginName string
+	wsProxy      string
 )
 
 type HostDB struct {
@@ -40,6 +46,8 @@ func AddCommandsTo(client *cobra.Command) {
 	sshCmd.Flags().StringVarP(&hostname, "host", "", "", "The ssh border0 target host")
 	sshCmd.Flags().StringVarP(&sshLoginName, "username", "u", "", "Specifies the user to log in as on the remote machine(deprecated)")
 	sshCmd.Flags().StringVarP(&sshLoginName, "login", "l", "", "Same as username, specifies the user login to use on remote machine")
+	sshCmd.Flags().StringVarP(&wsProxy, "wsproxy", "w", "", "websocket proxy")
+	sshCmd.Flag("wsproxy").Hidden = true
 
 	client.AddCommand(keySignCmd)
 	keySignCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
@@ -131,11 +139,53 @@ var sshCmd = &cobra.Command{
 		}
 
 		var conn net.Conn
-		if info.ConnectorAuthenticationEnabled {
-			conn, err = client.ConnectorAuthConnect(fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+
+		if wsProxy != "" {
+			destination := struct {
+				DNSName string `json:"dnsname"`
+				Port    int    `json:"port"`
+			}{
+				DNSName: hostname,
+				Port:    info.Port,
+			}
+			destinationJson, err := json.Marshal(&destination)
 			if err != nil {
-				fmt.Println("ERROR: could not setup listener:", err)
-				return err
+				return fmt.Errorf("failed to marshal destination: %w", err)
+			}
+
+			parsedURL, err := url.Parse(wsProxy)
+			if err != nil {
+				return fmt.Errorf("failed to parse wsproxy url: %w", err)
+			}
+			parsedURL.RawQuery = url.Values{
+				"dst": []string{base64.StdEncoding.EncodeToString(destinationJson)},
+			}.Encode()
+
+			wsURL := parsedURL.String()
+
+			ctx := context.Background()
+			wsConn, _, err := websocket.Dial(ctx, wsURL, nil)
+			if err != nil {
+				return fmt.Errorf("failed to perform WebSocket handshake on %s: %w", wsURL, err)
+			}
+			defer wsConn.Close(websocket.StatusInternalError, "the sky is falling")
+			wsNetConn := websocket.NetConn(ctx, wsConn, websocket.MessageBinary)
+
+			conn = tls.Client(wsNetConn, &tlsConfig)
+		}
+
+		if info.ConnectorAuthenticationEnabled {
+			if wsProxy == "" {
+				conn, err = client.ConnectorAuthConnect(fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+				if err != nil {
+					fmt.Println("ERROR: could not setup listener:", err)
+					return err
+				}
+			} else {
+				if err := client.ConnectorAuthConnectWithConn(conn, &tlsConfig); err != nil {
+					fmt.Println("ERROR: could not setup listener:", err)
+					return err
+				}
 			}
 		} else {
 			conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
@@ -185,7 +235,7 @@ var sshCmd = &cobra.Command{
 		serverConn, chans, reqs, err := ssh.NewClientConn(conn, hostname, sshConfig)
 		if err != nil {
 			if err.Error() == "ssh: handshake failed: EOF" {
-				return fmt.Errorf("ssh handshake failed (EOF): you might be unauthorized for this server\n")
+				return fmt.Errorf("ssh handshake failed (EOF): you might be unauthorized for this server")
 			}
 			return fmt.Errorf("dial into remote server error: %s", err)
 		}
