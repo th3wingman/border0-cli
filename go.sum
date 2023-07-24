@@ -119,8 +119,8 @@ github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLj
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/bluele/factory-go v0.0.1 h1:Wb3nA5Oe9biPfBJNNtZ9rcsf38jNwJV/2ASShHao8Ug=
 github.com/bluele/factory-go v0.0.1/go.mod h1:M5D/YMEfPK1tzRvy/nj1tb0nfvvNY3d9zmgT66sldu0=
-github.com/borderzero/border0-go v0.1.17 h1:4Tdw2rQCJF8GJwb1E42iGwXPc5yR222Kmv4mRySIRgA=
-github.com/borderzero/border0-go v0.1.17/go.mod h1:A4NGE3GI2f5NMJcWRuNDCTY6UBegTw4F2l1Q4wdULGY=
+github.com/borderzero/border0-go v0.1.18 h1:Xf62f93P3Q5FGdOWL3OFSI3NOFvWbcV3RelLGJoP0B4=
+github.com/borderzero/border0-go v0.1.18/go.mod h1:Yll5qVCxLLICOwODQEG3O/D5Q7AtuLgbbDoj06shFaQ=
 github.com/borderzero/border0-proto v1.0.2 h1:BDMLFvcXjX5rA0YPc4r+rTa2yBGV9g0nBE1wxTGOPck=
 github.com/borderzero/border0-proto v1.0.2/go.mod h1:BhNopgYg3o/p5bYLVcKYISS4S49Ci6iAWNCbQpTzzqs=
 github.com/borderzero/discovery v0.1.18 h1:YRC1yVoOaiUgSMQ+mSToNNk9EOv19+mOwuBNmpZXu9E=
