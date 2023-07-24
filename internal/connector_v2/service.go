@@ -11,6 +11,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
+	"github.com/borderzero/border0-cli/internal/connector_v2/cmds"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/errors"
 	"github.com/borderzero/border0-cli/internal/connector_v2/logger"
@@ -80,6 +81,7 @@ func (c *ConnectorService) Start() {
 
 	go c.StartControlStream(newCtx, cancel)
 	go c.handleDiscoveryResult(newCtx)
+	go c.uploadConnectorMetadata(newCtx)
 
 	<-newCtx.Done()
 }
@@ -652,6 +654,14 @@ func (c *ConnectorService) handleDiscoveryResult(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (c *ConnectorService) uploadConnectorMetadata(ctx context.Context) {
+	metadata := cmds.MetadataFromContext(ctx)
+
+	c.logger.Info("got metadata", zap.Any("metadata", metadata))
+
+	// TODO: send metadata over GRPC stream
 }
 
 func (c *ConnectorService) sendControlStreamRequest(request *pb.ControlStreamRequest) error {
