@@ -61,6 +61,7 @@ require (
 	k8s.io/client-go v0.27.3
 	k8s.io/kubectl v0.27.2
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	nhooyr.io/websocket v1.8.7
 )
 
 require (
@@ -89,6 +90,7 @@ require (
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/pingcap/errors v0.11.5-0.20210425183316-da1aaba5fb63 // indirect
