@@ -3,7 +3,6 @@ package connectorv2
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -81,7 +80,6 @@ func (c *ConnectorService) Start() {
 
 	go c.StartControlStream(newCtx, cancel)
 	go c.handleDiscoveryResult(newCtx)
-	go c.uploadConnectorMetadata(newCtx)
 
 	<-newCtx.Done()
 }
@@ -137,6 +135,7 @@ func (c *ConnectorService) controlStream() error {
 
 	defer func() { c.stream = nil }()
 	go c.heartbeat(ctx)
+	go c.uploadConnectorMetadata(ctx)
 
 	for {
 		msgChan := make(chan struct {
@@ -618,20 +617,12 @@ func (c *ConnectorService) handleDiscoveryResult(ctx context.Context) {
 		case result := <-c.discoveryResultChan:
 			var resources []*structpb.Struct
 			for _, r := range result.Result.Resources {
-				jsonBytes, err := json.Marshal(r)
-				if err != nil {
-					c.logger.Error("failed to marshal resource", zap.Error(err))
+				var pbstruct structpb.Struct
+				if err := util.AsPbStruct(r, &pbstruct); err != nil {
+					c.logger.Error("failed to convert go struct to pb struct", zap.Error(err))
 					continue
 				}
-
-				var structpbStruct structpb.Struct
-				err = json.Unmarshal(jsonBytes, &structpbStruct)
-				if err != nil {
-					c.logger.Error("failed to unmarshal resource", zap.Error(err))
-					continue
-				}
-
-				resources = append(resources, &structpbStruct)
+				resources = append(resources, &pbstruct)
 			}
 
 			if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
@@ -658,10 +649,25 @@ func (c *ConnectorService) handleDiscoveryResult(ctx context.Context) {
 
 func (c *ConnectorService) uploadConnectorMetadata(ctx context.Context) {
 	metadata := cmds.MetadataFromContext(ctx)
+	c.logger.Debug("collected connector metadata", zap.Any("metadata", metadata))
 
-	c.logger.Info("got metadata", zap.Any("metadata", metadata))
+	var pbstruct structpb.Struct
+	if err := util.AsPbStruct(metadata, &pbstruct); err != nil {
+		c.logger.Error("failed to convert go struct to pb struct", zap.Error(err))
+		return
+	}
 
-	// TODO: send metadata over GRPC stream
+	err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
+		RequestType: &pb.ControlStreamRequest_Metadata{
+			Metadata: &pb.ConnectorMetadata{
+				Data: &pbstruct,
+			},
+		},
+	})
+	if err != nil {
+		c.logger.Error("failed to send connector metadata", zap.Error(err))
+		return
+	}
 }
 
 func (c *ConnectorService) sendControlStreamRequest(request *pb.ControlStreamRequest) error {
