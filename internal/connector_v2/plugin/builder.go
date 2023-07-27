@@ -59,6 +59,10 @@ func newAwsEc2DiscoveryPlugin(
 				),
 				discoverers.WithAwsEc2DiscovererInclusionInstanceTags(config.IncludeWithTags),
 				discoverers.WithAwsEc2DiscovererExclusionInstanceTags(config.ExcludeWithTags),
+
+				// TODO: add to config eventually under some kind of "advanced settings"
+				discoverers.WithAwsEc2DiscovererNetworkReachabilityCheck(true),
+				discoverers.WithAwsEc2DiscovererReachabilityRequired(false),
 			),
 			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
 		))
