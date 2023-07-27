@@ -26,6 +26,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector/service_daemon"
 
 	connectorv2 "github.com/borderzero/border0-cli/internal/connector_v2"
+	connectorv2config "github.com/borderzero/border0-cli/internal/connector_v2/config"
+
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/logging"
 	"github.com/spf13/cobra"
@@ -47,7 +49,10 @@ const (
 var defaultConfigFileName = "border0.yaml"
 var serviceConfigPath = "/etc/border0/"
 var serviceName = "border0"
+
+// hidden variables used for connector v2 only
 var v2 bool
+var connectorId string
 
 type TemplateConnectorConfig struct {
 	Connector struct {
@@ -239,7 +244,15 @@ var connectorStartCmd = &cobra.Command{
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			connectorv2.NewConnectorService(ctx, log, version).Start()
+			config, err := connectorv2config.GetConfiguration(ctx)
+			if err != nil {
+				log.Fatal("failed to get connector (v2) configuration", zap.Error(err))
+			}
+			if connectorId != "" {
+				config.ConnectorId = connectorId
+			}
+
+			connectorv2.NewConnectorService(ctx, log, version, config).Start()
 		} else {
 			var configPath string
 			configPathFromEnv := os.Getenv("BORDER0_CONFIG_FILE")
@@ -661,6 +674,8 @@ func init() {
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
 	connectorStartCmd.Flags().BoolVarP(&v2, "v2", "", false, "use connector v2")
 	connectorStartCmd.Flag("v2").Hidden = true
+	connectorStartCmd.Flags().StringVarP(&connectorId, "connector-id", "", "", "connector id to use with connector control stream")
+	connectorStartCmd.Flag("connector-id").Hidden = true
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)

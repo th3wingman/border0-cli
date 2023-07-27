@@ -32,6 +32,7 @@ const (
 // Configuration represents (static) connector configuration
 type Configuration struct {
 	Token                      string            `yaml:"token"`
+	ConnectorId                string            `yaml:"connector_id"`
 	ConnectorServer            string            `yaml:"connector_server"`
 	ConnectorInsecureTransport bool              `yaml:"connector_insecure"`
 	TunnelServer               string            `yaml:"tunnel_server"`
