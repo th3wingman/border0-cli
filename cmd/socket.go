@@ -17,7 +17,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -35,8 +37,11 @@ import (
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/borderzero/border0-cli/internal/util"
+	"github.com/borderzero/border0-cli/internal/vpnlib"
 	"github.com/jedib0t/go-pretty/table"
+	"github.com/songgao/water"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 // socketCmd represents the socket command
@@ -275,6 +280,99 @@ var socketShowCmd = &cobra.Command{
 
 		fmt.Print(print_socket(socket, orgWidePolicies))
 		return nil
+	},
+}
+
+var socketConnectVpnCmd = &cobra.Command{
+	Use:               "vpn",
+	Short:             "Connect a VPN socket (TLS under-the-hood)",
+	ValidArgsFunction: AutocompleteSocket,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		border0API := api.NewAPI(api.WithVersion(version))
+
+		if socketID == "" && (len(args) == 0) {
+			return fmt.Errorf("error: no socket provided")
+		}
+		if len(args) > 0 {
+			socketID = args[0]
+		}
+
+		socket, err := border0.NewSocket(ctx, border0API, socketID)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		socket.WithVersion(version)
+
+		border0API.StartRefreshAccessTokenJob(ctx)
+
+		l, err := socket.Listen()
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		defer l.Close()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for {
+				<-c
+				os.Exit(0)
+			}
+		}()
+
+		iface, err := water.New(water.Config{DeviceType: water.TUN})
+		if err != nil {
+			return fmt.Errorf("failed to create TUN iface: %v", err)
+		}
+		logger.Logger.Info("Created TUN interface", zap.String("interface_name", iface.Name()))
+
+		if err = vpnlib.AddIpToIface(iface.Name(), serverIp, clientIp); err != nil {
+			return fmt.Errorf("failed to add static IPs to interface: %v", err)
+		}
+
+		// define control message
+		controlMessage := &vpnlib.ControlMessage{
+			ClientIp:     clientIp,
+			ServerIp:     serverIp,
+			SubnetLength: 30,
+			Routes:       routes,
+		}
+		controlMessageBytes, err := controlMessage.Build()
+		if err != nil {
+			return fmt.Errorf("failed to build control message: %v", err)
+		}
+
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				fmt.Printf("Failed to accept new vpn connection: %v\n", err)
+			}
+
+			go func() {
+				// write configuration message
+				n, err := conn.Write(controlMessageBytes)
+				if err != nil {
+					fmt.Printf("failed to write control message to net conn: %v\n", err)
+					return
+				}
+				if n < len(controlMessageBytes) {
+					fmt.Printf("failed to write entire control message bytes (is %d, wrote %d)\n", controlMessageBytes, n)
+					return
+				}
+				// note: this blocks
+				if err = vpnlib.PacketCopy(conn, iface); err != nil {
+					if errors.Is(err, io.EOF) {
+						return
+					}
+					fmt.Printf("failed to forward between tls conn and TUN iface: %v\n", err)
+				}
+			}()
+		}
 	},
 }
 
@@ -543,6 +641,11 @@ func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([
 }
 
 func init() {
+	socketConnectVpnCmd.Flags().StringVarP(&clientIp, "client-ip", "", "10.42.0.1", "Ip to allocate to vpn client")
+	socketConnectVpnCmd.Flags().StringVarP(&serverIp, "server-ip", "", "10.42.0.2", "Ip to allocate to vpn server")
+	socketConnectVpnCmd.Flags().StringSliceVarP(&routes, "route", "", []string{}, "Routes to advertise to clients")
+	socketConnectCmd.AddCommand(socketConnectVpnCmd)
+
 	rootCmd.AddCommand(socketCmd)
 	socketCmd.AddCommand(socketsListCmd)
 	socketCmd.AddCommand(socketCreateCmd)
