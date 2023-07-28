@@ -6,22 +6,58 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// FIXME: this should be exported as part of the Border0 Go SDK
+// FIXME: this should be part of the Border0 Go SDK
 
-// border0GrpcTunnelCredentials represents the authentication mechanism
+const (
+	// ConnectorControlStreamMetadataKeyToken is the GRPC
+	// stream metadata key for the authorization token.
+	ConnectorControlStreamMetadataKeyToken = "token"
+
+	// ConnectorControlStreamMetadataKeyConnectorId is
+	// the GRPC stream metadata key for the connector id.
+	ConnectorControlStreamMetadataKeyConnectorId = "connector_id"
+)
+
+// ConnectorControlStreamCredentials represents the authentication mechanism
 // against the Border0 API's connector-control-plain (GRPC) server.
-type border0GrpcTunnelCredentials struct {
-	token    string
-	insecure bool
+type ConnectorControlStreamCredentials struct {
+	token             string
+	connectorId       string
+	insecureTransport bool
 }
 
 // ensures border0GrpcTunnelCredentials implements credentials.PerRPCCredentials
 // (the generic authentication interface for GRPC) at compile-time.
-var _ credentials.PerRPCCredentials = (*border0GrpcTunnelCredentials)(nil)
+var _ credentials.PerRPCCredentials = (*ConnectorControlStreamCredentials)(nil)
 
-// Border0GrpcTunnelCredentials constructor
-func newBorder0GrpcTunnelCredentials(token string, insecure bool) *border0GrpcTunnelCredentials {
-	return &border0GrpcTunnelCredentials{token: token, insecure: insecure}
+// CredentialOption is the constructor option type for ConnectorControlStreamCredentials.
+type CredentialOption func(*ConnectorControlStreamCredentials)
+
+// WithToken is the CredentialOption to set the token.
+func WithToken(token string) CredentialOption {
+	return func(c *ConnectorControlStreamCredentials) { c.token = token }
+}
+
+// WithConnectorId is the CredentialOption to set the connector id.
+func WithConnectorId(connectorId string) CredentialOption {
+	return func(c *ConnectorControlStreamCredentials) { c.connectorId = connectorId }
+}
+
+// WithInsecureTransport is the CredentialOption to toggle insecure transport.
+func WithInsecureTransport(insecureTransport bool) CredentialOption {
+	return func(c *ConnectorControlStreamCredentials) { c.insecureTransport = insecureTransport }
+}
+
+// NewConnectorControlStreamCredentials returns a new ConnectorControlStreamCredentials
+// object initialized with the given options.
+func NewConnectorControlStreamCredentials(opts ...CredentialOption) *ConnectorControlStreamCredentials {
+	creds := &ConnectorControlStreamCredentials{
+		insecureTransport: false,
+	}
+	for _, opt := range opts {
+		opt(creds)
+	}
+	return creds
 }
 
 // GetRequestMetadata gets the current request metadata, refreshing tokens
@@ -35,17 +71,21 @@ func newBorder0GrpcTunnelCredentials(token string, insecure bool) *border0GrpcTu
 // to this call.
 //
 // ^ copied straight from the interface defintion.
-func (c *border0GrpcTunnelCredentials) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": c.token,
-		"content-type":  "application/grpc",
-	}, nil
+func (c *ConnectorControlStreamCredentials) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	md := map[string]string{}
+	if c.token != "" {
+		md[ConnectorControlStreamMetadataKeyToken] = c.token
+	}
+	if c.connectorId != "" {
+		md[ConnectorControlStreamMetadataKeyConnectorId] = c.connectorId
+	}
+	return md, nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
 // transport security.
 //
 // ^ copied straight from the interface defintion.
-func (c *border0GrpcTunnelCredentials) RequireTransportSecurity() bool {
-	return !c.insecure
+func (c *ConnectorControlStreamCredentials) RequireTransportSecurity() bool {
+	return !c.insecureTransport
 }

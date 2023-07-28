@@ -54,12 +54,12 @@ type ConnectorService struct {
 	discoveryResultChan chan *plugin.PluginDiscoveryResults
 }
 
-func NewConnectorService(ctx context.Context, l *zap.Logger, version string) *ConnectorService {
-	config, err := config.GetConfiguration(ctx)
-	if err != nil {
-		l.Fatal("failed to get configuration", zap.Error(err))
-	}
-
+func NewConnectorService(
+	ctx context.Context,
+	l *zap.Logger,
+	version string,
+	config *config.Configuration,
+) *ConnectorService {
 	cs := &ConnectorService{
 		config:              config,
 		version:             version,
@@ -229,11 +229,17 @@ func (c *ConnectorService) controlStream() error {
 }
 
 func (c *ConnectorService) newConnectorClient(ctx context.Context) (*grpc.ClientConn, error) {
+
+	ccsOpts := []CredentialOption{
+		WithToken(c.config.Token),
+		WithInsecureTransport(c.config.ConnectorInsecureTransport),
+	}
+	if c.config.ConnectorId != "" {
+		ccsOpts = append(ccsOpts, WithConnectorId(c.config.ConnectorId))
+	}
+
 	grpcOpts := []grpc.DialOption{
-		grpc.WithPerRPCCredentials(newBorder0GrpcTunnelCredentials(
-			c.config.Token,
-			c.config.ConnectorInsecureTransport,
-		)),
+		grpc.WithPerRPCCredentials(NewConnectorControlStreamCredentials(ccsOpts...)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                20 * time.Second,
 			Timeout:             10 * time.Second,
