@@ -88,8 +88,7 @@ var (
 	disableBrowser          bool
 	awsEc2InstanceId        string
 	awsEc2InstanceConnect   bool
-	clientIp                string
-	serverIp                string
+	vpnSubnet               string
 	routes                  []string
 )
 
