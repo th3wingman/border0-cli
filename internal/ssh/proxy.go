@@ -53,7 +53,7 @@ type ProxyConfig struct {
 	ECSSSMProxy        *ECSSSMProxy
 	awsConfig          aws.Config
 	AwsUpstreamType    string
-	Logger              *zap.Logger
+	Logger             *zap.Logger
 }
 
 type ECSSSMProxy struct {
@@ -96,7 +96,7 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 	}
 
 	proxyConfig := &ProxyConfig{
-		Logger:              logger,
+		Logger:             logger,
 		Hostname:           socket.ConnectorData.TargetHostname,
 		Port:               socket.ConnectorData.Port,
 		Username:           socket.ConnectorLocalData.UpstreamUsername,

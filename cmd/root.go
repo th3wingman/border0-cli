@@ -88,6 +88,9 @@ var (
 	disableBrowser          bool
 	awsEc2InstanceId        string
 	awsEc2InstanceConnect   bool
+	clientIp                string
+	serverIp                string
+	routes                  []string
 )
 
 // rootCmd represents the base command when called without any subcommands
