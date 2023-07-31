@@ -56,6 +56,8 @@ func (u *UpstreamDataBuilder) setupSSHUpstreamValues(s *models.Socket, configMap
 func (u *UpstreamDataBuilder) setupSSH(s *models.Socket, configMap types.ConnectorServiceUpstreamConfig) error {
 	s.ConnectorData.TargetHostname = configMap.Hostname
 	s.ConnectorData.Port = configMap.Port
+	s.TargetHostname = configMap.Hostname
+	s.TargetPort = configMap.Port
 	s.UpstreamType = UpstreamTypeSSH
 
 	if configMap.SSHConfiguration.UpstreamAuthenticationType == types.UpstreamAuthenticationTypeUsernamePassword {
