@@ -44,6 +44,8 @@ func (u *UpstreamDataBuilder) setupSSHUpstreamValues(s *models.Socket, configMap
 		u.setupAWSSSM(s, *configMap.SSHConfiguration.AwsSSMDetails)
 	case types.UpstreamConnectionTypeAwsEC2Connection:
 		u.setupEc2Connect(s, *configMap.SSHConfiguration.AwsEC2ConnectDetails)
+	case types.UpstreamAuthenticationTypeBorder0Cert:
+		u.setupBorder0Certificate(s, configMap.SSHConfiguration.Border0CertificateDetails)
 	default:
 		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)
 	}
@@ -78,6 +80,14 @@ func (u *UpstreamDataBuilder) setupAWSSSM(s *models.Socket, ssmDetails types.Aws
 	s.ConnectorLocalData.AwsEC2InstanceId = u.fetchVariableFromSource(ssmDetails.InstanceID)
 	s.ConnectorLocalData.AWSRegion = u.fetchVariableFromSource(ssmDetails.Region)
 	s.AWSRegion = u.fetchVariableFromSource(ssmDetails.Region)
+
+	return nil
+}
+
+func (u *UpstreamDataBuilder) setupBorder0Certificate(s *models.Socket, details *types.Border0CertificateDetails) error {
+	if details != nil && details.Username != "" {
+		s.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(details.Username)
+	}
 
 	return nil
 }
