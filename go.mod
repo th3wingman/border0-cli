@@ -6,9 +6,10 @@ require (
 	cloud.google.com/go/cloudsqlconn v1.2.4
 	github.com/ActiveState/termtest/conpty v0.5.0
 	github.com/AlecAivazis/survey/v2 v2.3.6
+	github.com/Code-Hex/go-generics-cache v1.3.1
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/aws/aws-sdk-go v1.44.271
-	github.com/aws/aws-sdk-go-v2 v1.19.0
+	github.com/aws/aws-sdk-go-v2 v1.20.0
 	github.com/aws/aws-sdk-go-v2/config v1.18.25
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.24
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.5
@@ -22,7 +23,7 @@ require (
 	github.com/bluele/factory-go v0.0.1
 	github.com/borderzero/border0-go v0.1.21
 	github.com/borderzero/border0-proto v1.0.3
-	github.com/borderzero/discovery v0.1.19
+	github.com/borderzero/discovery v0.1.21
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/creack/pty v1.1.18
@@ -68,15 +69,15 @@ require (
 require (
 	cloud.google.com/go/compute v1.19.3 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.35 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.29 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.37 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.31 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.34 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.29 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.31 // indirect
 	github.com/aws/aws-sdk-go-v2/service/rds v1.48.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.12.10 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.10 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.20.0 // indirect
-	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.21.0 // indirect
+	github.com/aws/smithy-go v1.14.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -105,6 +106,7 @@ require (
 	github.com/twinj/uuid v0.0.0-20151029044442-89173bcdda19 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	golang.org/x/exp v0.0.0-20220328175248-053ad81199eb // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
 	google.golang.org/api v0.124.0 // indirect

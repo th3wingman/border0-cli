@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	gcache "github.com/Code-Hex/go-generics-cache"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -19,6 +21,12 @@ import (
 	"github.com/borderzero/discovery/discoverers"
 	"github.com/borderzero/discovery/engines"
 	"go.uber.org/zap"
+)
+
+var (
+	// common cache shared across all instances of all plugins that perform network reachability checks.
+	reachabilityResultsCache         = gcache.New[string, bool](gcache.WithJanitorInterval[string, bool](time.Hour))
+	reachabilityResultsCacheItemOpts = []gcache.ItemOption{gcache.WithExpiration(30 * time.Minute)}
 )
 
 func newPlugin(id string, logger *zap.Logger, engine discovery.Engine) Plugin {
@@ -63,6 +71,10 @@ func newAwsEc2DiscoveryPlugin(
 				// TODO: add to config eventually under some kind of "advanced settings"
 				discoverers.WithAwsEc2DiscovererNetworkReachabilityCheck(true),
 				discoverers.WithAwsEc2DiscovererReachabilityRequired(false),
+				discoverers.WithAwsEc2DiscovererNetworkReachabilityCheckCache(
+					reachabilityResultsCache,
+					reachabilityResultsCacheItemOpts...,
+				),
 			),
 			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
 		))
