@@ -259,7 +259,7 @@ func handleSsmClient(conn net.Conn, config ProxyConfig) {
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to accept ssh connection: %s", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to accept ssh connection: %s", err)
 		return
 	}
 
@@ -269,7 +269,7 @@ func handleSsmClient(conn net.Conn, config ProxyConfig) {
 
 	for newChannel := range chans {
 		if newChannel == nil {
-			fmt.Printf("sshauthproxy: proxy channel closed")
+			config.Logger.Sugar().Errorf("sshauthproxy: proxy channel closed")
 			return
 		}
 
@@ -280,7 +280,7 @@ func handleSsmClient(conn net.Conn, config ProxyConfig) {
 
 		channel, requests, err := newChannel.Accept()
 		if err != nil {
-			fmt.Printf("sshauthproxy: failed to accept channel: %s", err)
+			config.Logger.Sugar().Errorf("sshauthproxy: failed to accept channel: %s", err)
 			return
 		}
 
@@ -566,7 +566,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 		Target: &config.AwsSSMTarget,
 	})
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to start ssm session: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to start ssm session: %s\n", err)
 		return
 	}
 
@@ -583,7 +583,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 	sessionLogger := ssmLog.Logger(false, "border0")
 
 	if err = s.OpenDataChannel(sessionLogger); err != nil {
-		fmt.Printf("sshauthproxy: failed to execute ssm session: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to execute ssm session: %s\n", err)
 		return
 	}
 
@@ -594,7 +594,7 @@ func handleSSMShell(channel ssh.Channel, config *ProxyConfig) {
 
 	s.Initialize(sessionLogger, &s)
 	if s.SetSessionHandlers(sessionLogger); err != nil {
-		fmt.Printf("sshauthproxy: failed to execute ssm session: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to execute ssm session: %s\n", err)
 	}
 }
 
@@ -603,13 +603,13 @@ func handleSshClient(conn net.Conn, config ProxyConfig) {
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to accept ssh connection: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to accept ssh connection: %s\n", err)
 		return
 	}
 
 	go ssh.DiscardRequests(reqs)
 	if err := handleChannels(sshConn, chans, config); err != nil {
-		fmt.Printf("sshauthproxy: failed to handle channels: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to handle channels: %s", err)
 		return
 	}
 }
@@ -619,14 +619,14 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config.sshServerConfig)
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to accept ssh connection: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to accept ssh connection: %s\n", err)
 		return
 	}
 
 	user := sshConn.User()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to generate key: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to generate key: %s\n", err)
 		return
 	}
 
@@ -638,7 +638,7 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 
 	signer, err := ssh.ParsePrivateKey(privateKeyPEM)
 	if err != nil {
-		fmt.Printf("sshauthproxy: unable to parse private key: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: unable to parse private key: %s\n", err)
 		return
 	}
 
@@ -650,7 +650,7 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 
 	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		fmt.Printf("sshauthproxy: unable to generate public key: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: unable to generate public key: %s\n", err)
 		return
 	}
 
@@ -665,13 +665,13 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 	})
 
 	if err != nil {
-		fmt.Printf("sshauthproxy: failed to send ssh public key: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to send ssh public key: %s\n", err)
 		return
 	}
 
 	go ssh.DiscardRequests(reqs)
 	if err := handleChannels(sshConn, chans, config); err != nil {
-		fmt.Printf("sshauthproxy: failed to handle channels: %s\n", err)
+		config.Logger.Sugar().Errorf("sshauthproxy: failed to handle channels: %s\n", err)
 		return
 	}
 }
