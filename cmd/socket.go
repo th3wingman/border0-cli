@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -325,35 +326,75 @@ var socketConnectVpnCmd = &cobra.Command{
 			}
 		}()
 
+		// Create an IP pool that will be used to assign IPs to clients
+		ipPool, err := vpnlib.NewIPPool(vpnSubnet)
+		if err != nil {
+			log.Fatalf("Failed to create IP Pool: %v", err)
+		}
+		subnetSize := ipPool.GetSubnetSize()
+		serverIp := ipPool.GetServerIp()
+
+		// create the connection map
+		cm := vpnlib.NewConnectionMap()
+
 		iface, err := water.New(water.Config{DeviceType: water.TUN})
 		if err != nil {
 			return fmt.Errorf("failed to create TUN iface: %v", err)
 		}
-		logger.Logger.Info("Created TUN interface", zap.String("interface_name", iface.Name()))
+		defer iface.Close()
+		logger.Logger.Info("Started VPN server", zap.String("interface", iface.Name()), zap.String("server_ip", serverIp), zap.String(" vpn_subnet ", vpnSubnet))
 
-		if err = vpnlib.AddIpToIface(iface.Name(), serverIp, clientIp); err != nil {
-			return fmt.Errorf("failed to add static IPs to interface: %v", err)
+		if err = vpnlib.AddServerIp(iface.Name(), serverIp, subnetSize); err != nil {
+			return fmt.Errorf("failed to add server IP to interface: %v", err)
 		}
 
-		// define control message
-		controlMessage := &vpnlib.ControlMessage{
-			ClientIp:     clientIp,
-			ServerIp:     serverIp,
-			SubnetLength: 30,
-			Routes:       routes,
+		if runtime.GOOS != "linux" {
+			// On linux the routes are added to the interface when creating the interface and adding the IP
+			if err = vpnlib.AddRoutesToIface(iface.Name(), []string{vpnSubnet}); err != nil {
+				logger.Logger.Warn("failed to add routes to interface", zap.Error(err))
+			}
 		}
-		controlMessageBytes, err := controlMessage.Build()
-		if err != nil {
-			return fmt.Errorf("failed to build control message: %v", err)
-		}
+
+		// Now start the Tun to Conn goroutine
+		// This will listen for packets on the TUN interface and forward them to the right connection
+		go vpnlib.TunToConnCopy(iface, cm, false, nil)
 
 		for {
 			conn, err := l.Accept()
 			if err != nil {
 				fmt.Printf("Failed to accept new vpn connection: %v\n", err)
+				continue
 			}
 
+			// dispatch new connection handler
 			go func() {
+				defer conn.Close()
+
+				// get an ip for the new client
+				clientIp, err := ipPool.Allocate()
+				if err != nil {
+					fmt.Printf("Failed to allocate client IP: %v\n", err)
+					return
+				}
+				defer ipPool.Release(clientIp)
+
+				// attach the connection to the client ip
+				cm.Set(clientIp, conn)
+				defer cm.Delete(clientIp)
+
+				// define control message
+				controlMessage := &vpnlib.ControlMessage{
+					ClientIp:   clientIp,
+					ServerIp:   serverIp,
+					SubnetSize: uint8(subnetSize),
+					Routes:     routes,
+				}
+				controlMessageBytes, err := controlMessage.Build()
+				if err != nil {
+					fmt.Printf("failed to build control message: %v\n", err)
+					return
+				}
+
 				// write configuration message
 				n, err := conn.Write(controlMessageBytes)
 				if err != nil {
@@ -364,12 +405,12 @@ var socketConnectVpnCmd = &cobra.Command{
 					fmt.Printf("failed to write entire control message bytes (is %d, wrote %d)\n", controlMessageBytes, n)
 					return
 				}
-				// note: this blocks
-				if err = vpnlib.PacketCopy(conn, iface); err != nil {
-					if errors.Is(err, io.EOF) {
-						return
+
+				if err = vpnlib.ConnToTunCopy(conn, iface); err != nil {
+					if !errors.Is(err, io.EOF) {
+						fmt.Printf("failed to forward between tls conn and TUN iface: %v\n", err)
 					}
-					fmt.Printf("failed to forward between tls conn and TUN iface: %v\n", err)
+					return
 				}
 			}()
 		}
@@ -641,8 +682,7 @@ func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([
 }
 
 func init() {
-	socketConnectVpnCmd.Flags().StringVarP(&clientIp, "client-ip", "", "10.42.0.1", "Ip to allocate to vpn client")
-	socketConnectVpnCmd.Flags().StringVarP(&serverIp, "server-ip", "", "10.42.0.2", "Ip to allocate to vpn server")
+	socketConnectVpnCmd.Flags().StringVarP(&vpnSubnet, "vpn-subnet", "", "10.42.0.0/22", "Ip range used to allocate to vpn clients")
 	socketConnectVpnCmd.Flags().StringSliceVarP(&routes, "route", "", []string{}, "Routes to advertise to clients")
 	socketConnectCmd.AddCommand(socketConnectVpnCmd)
 
