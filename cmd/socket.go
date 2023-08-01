@@ -283,6 +283,54 @@ var socketShowCmd = &cobra.Command{
 		return nil
 	},
 }
+var socketConnectProxyCmd = &cobra.Command{
+	Use:               "proxy",
+	Short:             "start a forward proxy on the TLS socket",
+	ValidArgsFunction: AutocompleteSocket,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		border0API := api.NewAPI(api.WithVersion(version))
+
+		if socketID == "" && (len(args) == 0) {
+			return fmt.Errorf("error: no socket provided")
+		}
+		if len(args) > 0 {
+			socketID = args[0]
+		}
+
+		socket, err := border0.NewSocket(ctx, border0API, socketID)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		socket.WithVersion(version)
+
+		border0API.StartRefreshAccessTokenJob(ctx)
+
+		l, err := socket.Listen()
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		defer l.Close()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for {
+				<-c
+				os.Exit(0)
+			}
+		}()
+
+		err = http.StartHttpProxy(l)
+		fmt.Println("Proxy stopped: ", err)
+		return nil
+
+	},
+}
 
 var socketConnectVpnCmd = &cobra.Command{
 	Use:               "vpn",
@@ -682,6 +730,8 @@ func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([
 }
 
 func init() {
+	socketConnectCmd.AddCommand(socketConnectProxyCmd)
+
 	socketConnectVpnCmd.Flags().StringVarP(&vpnSubnet, "vpn-subnet", "", "10.42.0.0/22", "Ip range used to allocate to vpn clients")
 	socketConnectVpnCmd.Flags().StringSliceVarP(&routes, "route", "", []string{}, "Routes to advertise to clients")
 	socketConnectCmd.AddCommand(socketConnectVpnCmd)
