@@ -35,6 +35,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/cloudsql"
 	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/borderzero/border0-cli/internal/httpproxylib"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/borderzero/border0-cli/internal/util"
@@ -325,7 +326,7 @@ var socketConnectProxyCmd = &cobra.Command{
 			}
 		}()
 
-		err = http.StartHttpProxy(l)
+		err = httpproxylib.StartHttpProxy(l)
 		fmt.Println("Proxy stopped: ", err)
 		return nil
 
