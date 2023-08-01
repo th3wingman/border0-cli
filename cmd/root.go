@@ -90,6 +90,7 @@ var (
 	awsEc2InstanceConnect   bool
 	vpnSubnet               string
 	routes                  []string
+	allowedProxyHosts       []string
 )
 
 // rootCmd represents the base command when called without any subcommands

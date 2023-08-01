@@ -325,8 +325,8 @@ var socketConnectProxyCmd = &cobra.Command{
 				os.Exit(0)
 			}
 		}()
-
-		err = httpproxylib.StartHttpProxy(l)
+	
+		err = httpproxylib.StartHttpProxy(l, allowedProxyHosts)
 		fmt.Println("Proxy stopped: ", err)
 		return nil
 
@@ -731,6 +731,8 @@ func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([
 }
 
 func init() {
+
+	socketConnectProxyCmd.Flags().StringSliceVarP(&allowedProxyHosts, "allowed-host", "", []string{}, "Allowed host to proxy to, if ommited all proxy requests are allowed")
 	socketConnectCmd.AddCommand(socketConnectProxyCmd)
 
 	socketConnectVpnCmd.Flags().StringVarP(&vpnSubnet, "vpn-subnet", "", "10.42.0.0/22", "Ip range used to allocate to vpn clients")
