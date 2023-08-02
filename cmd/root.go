@@ -91,6 +91,7 @@ var (
 	vpnSubnet               string
 	routes                  []string
 	allowedProxyHosts       []string
+	numStreams              int
 )
 
 // rootCmd represents the base command when called without any subcommands

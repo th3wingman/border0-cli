@@ -27,6 +27,7 @@ import (
 	"github.com/borderzero/border0-cli/cmd/logger"
 
 	"github.com/borderzero/border0-cli/cmd/client/hosts"
+	"github.com/borderzero/border0-cli/cmd/client/httpproxy"
 	"github.com/borderzero/border0-cli/cmd/client/ssh"
 	"github.com/borderzero/border0-cli/cmd/client/vpn"
 	"github.com/borderzero/border0-cli/internal/client"
@@ -146,4 +147,5 @@ func init() {
 	ssh.AddCommandsTo(clientCmd)
 	clientTls.AddCommandsTo(clientCmd)
 	vpn.AddCommandsTo(clientCmd)
+	httpproxy.AddCommandsTo(clientCmd)
 }
