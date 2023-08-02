@@ -92,6 +92,7 @@ var (
 	routes                  []string
 	allowedProxyHosts       []string
 	numStreams              int
+	tuiView                 bool
 )
 
 // rootCmd represents the base command when called without any subcommands
