@@ -35,6 +35,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/cloudsql"
 	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/borderzero/border0-cli/internal/httpproxylib"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/borderzero/border0-cli/internal/util"
@@ -281,6 +282,58 @@ var socketShowCmd = &cobra.Command{
 
 		fmt.Print(print_socket(socket, orgWidePolicies))
 		return nil
+	},
+}
+var socketConnectProxyCmd = &cobra.Command{
+	Use:               "proxy",
+	Short:             "start a forward proxy on the TLS socket",
+	ValidArgsFunction: AutocompleteSocket,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		border0API := api.NewAPI(api.WithVersion(version))
+
+		if socketID == "" && (len(args) == 0) {
+			return fmt.Errorf("error: no socket provided")
+		}
+		if len(args) > 0 {
+			socketID = args[0]
+		}
+
+		socket, err := border0.NewSocket(ctx, border0API, socketID)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		socket.WithVersion(version)
+
+		border0API.StartRefreshAccessTokenJob(ctx)
+
+		l, err := socket.Listen()
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		defer l.Close()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for {
+				<-c
+				os.Exit(0)
+			}
+		}()
+
+		err = httpproxylib.StartHttpProxy(l, allowedProxyHosts)
+		if err != nil {
+			log.Fatalf("Proxy stopped with error: %v", err)
+		} else {
+			fmt.Println("Proxy stopped")
+		}
+		return nil
+
 	},
 }
 
@@ -682,6 +735,10 @@ func AutocompleteSocket(cmd *cobra.Command, args []string, toComplete string) ([
 }
 
 func init() {
+
+	socketConnectProxyCmd.Flags().StringSliceVarP(&allowedProxyHosts, "allowed-host", "", []string{}, "Allowed host to proxy to, if ommited all proxy requests are allowed")
+	socketConnectCmd.AddCommand(socketConnectProxyCmd)
+
 	socketConnectVpnCmd.Flags().StringVarP(&vpnSubnet, "vpn-subnet", "", "10.42.0.0/22", "Ip range used to allocate to vpn clients")
 	socketConnectVpnCmd.Flags().StringSliceVarP(&routes, "route", "", []string{}, "Routes to advertise to clients")
 	socketConnectCmd.AddCommand(socketConnectVpnCmd)
