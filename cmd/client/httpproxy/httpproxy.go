@@ -21,17 +21,23 @@ import (
 )
 
 var (
-	hostname             string
-	httpProxyPort        int
-	numStreams           int
-	connectionsPerSecond int
-	connectionsPerMinute int
-	tuiView              bool
+	hostname                  string
+	httpProxyPort             int
+	numStreams                int
+	connectionsPerSecond      int
+	connectionsPerMinute      int
+	connectionsPerSecondMutex sync.Mutex
+	connectionsPerMinuteMutex sync.Mutex
+	tuiView                   bool
 )
 
 type SessionManager struct {
-	sessions      []*yamux.Session
-	loggingStream []*yamux.Stream
+	sessions       []*yamux.Session
+	loggingStream  []*yamux.Stream
+	info           *client.ResourceInfo
+	tlsConfig      *tls.Config
+	hostname       string
+	updateTextView func(string)
 }
 
 // clientProxyCmd represents the client tls command
@@ -46,6 +52,8 @@ var clientProxyCmd = &cobra.Command{
 
 		if numStreams < 1 {
 			return fmt.Errorf("number of streams must be greater than 0")
+		} else if numStreams > 10 {
+			return fmt.Errorf("number of streams must be less than 10")
 		}
 
 		if httpProxyPort == 0 {
@@ -79,8 +87,7 @@ var clientProxyCmd = &cobra.Command{
 			}
 		} else {
 			updateTextView = func(line string) {
-				timestamp := time.Now().Format("2006-01-02 15:04:05")
-				log.Printf("%s: %s\n", timestamp, line)
+				log.Println(line)
 			}
 		}
 
@@ -102,48 +109,16 @@ var clientProxyCmd = &cobra.Command{
 		// Create a multiplexed session over multiple TCP connections
 		//sessions := make([]*yamux.Session, numStreams)
 		sessionManager := &SessionManager{}
-		var logMutex sync.Mutex
 
 		for i := 0; i < numStreams; i++ {
-			conn, err := b0tls.EstablishConnection(info.ConnectorAuthenticationEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
-			if err != nil {
-				log.Fatalf("Failed to connect to proxy: %v", err)
-			}
 
-			//fmt.Printf("%d = Connected to %s:%d\n", i, hostname, info.Port)
+			_, session, logStream, err := sessionManager.createSession(&info, &tlsConfig, hostname, updateTextView)
+			if err != nil {
+				log.Fatalf("Failed to create upstream session: %v", err)
+			}
 			updateTextView(fmt.Sprintf("Upstream connection %d => Connected to %s:%d", i, hostname, info.Port))
 
-			session, err := yamux.Client(conn, nil)
-			if err != nil {
-				log.Fatalf("Failed to create yamux session: %v", err)
-			}
-
-			// Accept the first stream for logging
-			logStream, err := session.AcceptStream()
-			if err != nil {
-				log.Fatalf("Failed to accept logging stream: %v", err)
-			}
-
-			// Read log messages from the stream in a separate goroutine
-
-			go func() {
-				buf := make([]byte, 1024)
-				for {
-					n, err := logStream.Read(buf)
-					if err != nil {
-						if err != io.EOF {
-							log.Printf("Failed to read log message: %v", err)
-						}
-						break
-					}
-					logLine := string(buf[:n])
-					// should lock this probably
-					logMutex.Lock()
-					updateTextView(logLine) // Print the log message
-					logMutex.Unlock()
-				}
-			}()
-			sessionManager.addSession(session, logStream)
+			sessionManager.addSession(session, logStream, &info, &tlsConfig, hostname, updateTextView)
 
 		}
 
@@ -162,7 +137,9 @@ var clientProxyCmd = &cobra.Command{
 		go func() {
 			for {
 				time.Sleep(time.Second)
+				connectionsPerSecondMutex.Lock()
 				connectionsPerSecond = 0
+				connectionsPerSecondMutex.Unlock()
 			}
 		}()
 
@@ -170,7 +147,9 @@ var clientProxyCmd = &cobra.Command{
 		go func() {
 			for {
 				time.Sleep(time.Minute)
+				connectionsPerMinuteMutex.Lock()
 				connectionsPerMinute = 0
+				connectionsPerMinuteMutex.Unlock()
 			}
 		}()
 
@@ -182,8 +161,13 @@ var clientProxyCmd = &cobra.Command{
 			}
 
 			// Increment the counters
+			connectionsPerSecondMutex.Lock()
 			connectionsPerSecond++
+			connectionsPerSecondMutex.Unlock()
+
+			connectionsPerMinuteMutex.Lock()
 			connectionsPerMinute++
+			connectionsPerMinuteMutex.Unlock()
 
 			// Choose a session from the slice by using the index
 			//selectedSession := sessions[sessionIndex]
@@ -201,27 +185,82 @@ var clientProxyCmd = &cobra.Command{
 
 // SessionManager is a simple struct that holds a slice of yamux sessions
 // here we can add and remove sessions as they are created and closed
-func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.Stream) {
+func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.Stream, info *client.ResourceInfo, tlsConfig *tls.Config, hostname string, updateTextView func(string)) {
 	sm.sessions = append(sm.sessions, session)
 	sm.loggingStream = append(sm.loggingStream, logStream)
+	sm.info = info
+	sm.tlsConfig = tlsConfig
+	sm.hostname = hostname
+	sm.updateTextView = updateTextView
+
 	go func() {
 		<-session.CloseChan() // Wait for the session to close
 		sm.removeSession(session, logStream)
 	}()
 }
 
+func (sm *SessionManager) createSession(info *client.ResourceInfo, tlsConfig *tls.Config, hostname string, updateTextView func(string)) (net.Conn, *yamux.Session, *yamux.Stream, error) {
+	conn, err := b0tls.EstablishConnection(info.ConnectorAuthenticationEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), tlsConfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	session, err := yamux.Client(conn, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Accept the first stream for logging
+	logStream, err := session.AcceptStream()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to accept logging stream: %v", err)
+	}
+
+	// Read log messages from the stream in a separate goroutine
+
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := logStream.Read(buf)
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("Failed to read log message: %v", err)
+				}
+				break
+			}
+			logLine := string(buf[:n])
+
+			updateTextView(logLine) // Print the log message
+		}
+	}()
+	//sessionManager.addSession(session, logStream)
+	return conn, session, logStream, nil
+}
+
 // removeSession is a simple function that removes a session from the slice
 func (sm *SessionManager) removeSession(session *yamux.Session, logStream *yamux.Stream) {
 	for i, s := range sm.sessions {
 		if s == session {
-			log.Printf("one of the upstream connections went down and has been removed. Pool size is now %d\n", len(sm.sessions))
 			sm.sessions = append(sm.sessions[:i], sm.sessions[i+1:]...)
 			sm.loggingStream = append(sm.loggingStream[:i], sm.loggingStream[i+1:]...) // Remove the corresponding logging stream
 
-			// Todo, we could try to reconnect here and add one back to the pool
+			log.Printf("one of the upstream connections went down and has been removed. Pool size is now %d\n", len(sm.sessions))
+			log.Printf("attempting to reconnect to %s:%d\n", sm.hostname, sm.info.Port)
+
+			// Reconnect logic
+			_, session, logStream, err := sm.createSession(sm.info, sm.tlsConfig, sm.hostname, sm.updateTextView)
+			if err != nil {
+				log.Printf("Failed to create yamux session: %v\n", err)
+			}
+			// Add the new session back to the pool
+			sm.addSession(session, logStream, sm.info, sm.tlsConfig, sm.hostname, sm.updateTextView)
+
+			//sm.updateTextView(fmt.Sprintf("Upstream connection %d => Connected to %s:%d", i, hostname, sm.info.Port))
+			sm.updateTextView(fmt.Sprintf("Reconnect succesfull. Pool size is now %d\n", len(sm.sessions)))
+
 			break
 		}
 	}
+
 	if len(sm.sessions) == 0 {
 		log.Fatalf("All upstream sessions have been closed, no more upstream options available. Exiting.")
 	}

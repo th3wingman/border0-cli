@@ -88,11 +88,10 @@ var (
 	disableBrowser          bool
 	awsEc2InstanceId        string
 	awsEc2InstanceConnect   bool
-	vpnSubnet               string
-	routes                  []string
-	allowedProxyHosts       []string
-	numStreams              int
-	tuiView                 bool
+	vpnSubnet               string   // used in the socket connect vpn command
+	routes                  []string // used in the socket connect vpn command
+	allowedProxyHosts       []string // used in the socket connect proxy command
+
 )
 
 // rootCmd represents the base command when called without any subcommands

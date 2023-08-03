@@ -325,9 +325,13 @@ var socketConnectProxyCmd = &cobra.Command{
 				os.Exit(0)
 			}
 		}()
-	
+
 		err = httpproxylib.StartHttpProxy(l, allowedProxyHosts)
-		fmt.Println("Proxy stopped: ", err)
+		if err != nil {
+			log.Fatalf("Proxy stopped with error: %v", err)
+		} else {
+			fmt.Println("Proxy stopped")
+		}
 		return nil
 
 	},
