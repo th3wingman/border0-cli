@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	b0tls "github.com/borderzero/border0-cli/cmd/client/tls"
@@ -29,7 +30,8 @@ var (
 )
 
 type SessionManager struct {
-	sessions []*yamux.Session
+	sessions      []*yamux.Session
+	loggingStream []*yamux.Stream
 }
 
 // clientProxyCmd represents the client tls command
@@ -78,7 +80,7 @@ var clientProxyCmd = &cobra.Command{
 		} else {
 			updateTextView = func(line string) {
 				timestamp := time.Now().Format("2006-01-02 15:04:05")
-				fmt.Printf("%s: %s\n", timestamp, line)
+				log.Printf("%s: %s\n", timestamp, line)
 			}
 		}
 
@@ -100,6 +102,7 @@ var clientProxyCmd = &cobra.Command{
 		// Create a multiplexed session over multiple TCP connections
 		//sessions := make([]*yamux.Session, numStreams)
 		sessionManager := &SessionManager{}
+		var logMutex sync.Mutex
 
 		for i := 0; i < numStreams; i++ {
 			conn, err := b0tls.EstablishConnection(info.ConnectorAuthenticationEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
@@ -108,16 +111,39 @@ var clientProxyCmd = &cobra.Command{
 			}
 
 			//fmt.Printf("%d = Connected to %s:%d\n", i, hostname, info.Port)
-			updateTextView(fmt.Sprintf("%d = Connected to %s:%d\n", i, hostname, info.Port))
+			updateTextView(fmt.Sprintf("Upstream connection %d => Connected to %s:%d", i, hostname, info.Port))
 
 			session, err := yamux.Client(conn, nil)
 			if err != nil {
 				log.Fatalf("Failed to create yamux session: %v", err)
 			}
-			//fmt.Println("Created session number ", i)
-			updateTextView(fmt.Sprintf("created session number %d ", i))
-			//sessions[i] = session
-			sessionManager.addSession(session)
+
+			// Accept the first stream for logging
+			logStream, err := session.AcceptStream()
+			if err != nil {
+				log.Fatalf("Failed to accept logging stream: %v", err)
+			}
+
+			// Read log messages from the stream in a separate goroutine
+
+			go func() {
+				buf := make([]byte, 1024)
+				for {
+					n, err := logStream.Read(buf)
+					if err != nil {
+						if err != io.EOF {
+							log.Printf("Failed to read log message: %v", err)
+						}
+						break
+					}
+					logLine := string(buf[:n])
+					// should lock this probably
+					logMutex.Lock()
+					updateTextView(logLine) // Print the log message
+					logMutex.Unlock()
+				}
+			}()
+			sessionManager.addSession(session, logStream)
 
 		}
 
@@ -175,20 +201,22 @@ var clientProxyCmd = &cobra.Command{
 
 // SessionManager is a simple struct that holds a slice of yamux sessions
 // here we can add and remove sessions as they are created and closed
-func (sm *SessionManager) addSession(session *yamux.Session) {
+func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.Stream) {
 	sm.sessions = append(sm.sessions, session)
+	sm.loggingStream = append(sm.loggingStream, logStream)
 	go func() {
 		<-session.CloseChan() // Wait for the session to close
-		sm.removeSession(session)
+		sm.removeSession(session, logStream)
 	}()
 }
 
 // removeSession is a simple function that removes a session from the slice
-func (sm *SessionManager) removeSession(session *yamux.Session) {
+func (sm *SessionManager) removeSession(session *yamux.Session, logStream *yamux.Stream) {
 	for i, s := range sm.sessions {
 		if s == session {
 			log.Printf("one of the upstream connections went down and has been removed. Pool size is now %d\n", len(sm.sessions))
 			sm.sessions = append(sm.sessions[:i], sm.sessions[i+1:]...)
+			sm.loggingStream = append(sm.loggingStream[:i], sm.loggingStream[i+1:]...) // Remove the corresponding logging stream
 
 			// Todo, we could try to reconnect here and add one back to the pool
 			break
@@ -211,8 +239,8 @@ func handleClientConnection(clientConn net.Conn, session *yamux.Session, updateT
 	defer clientConn.Close()
 	//fmt.Println("New connection accepted from ", clientConn.RemoteAddr())
 
-	logLine := fmt.Sprintf("New connection accepted from %s", clientConn.RemoteAddr())
-	updateTextView(logLine)
+	//logLine := fmt.Sprintf("New connection accepted from %s", clientConn.RemoteAddr())
+	//updateTextView(logLine)
 
 	stream, err := session.OpenStream()
 	if err != nil {
@@ -275,6 +303,12 @@ func startTUI() (*tview.TextView, *tview.Application) {
 func AddCommandsTo(client *cobra.Command) {
 	client.AddCommand(clientProxyCmd)
 	clientProxyCmd.Flags().BoolVarP(&tuiView, "tui", "t", false, "Tui output")
+	// let's make this a hidden flag for now
+	// Still bit buggy, but works
+	if err := clientProxyCmd.Flags().MarkHidden("tui"); err != nil {
+		log.Fatalf("Failed to hide the 'tui' flag: %v", err)
+	}
+
 	clientProxyCmd.Flags().IntVarP(&httpProxyPort, "port", "p", 8080, "port number to listen on")
 
 	clientProxyCmd.Flags().IntVarP(&numStreams, "connections", "c", 1, "number of parallel connections to open to the Border0 service")

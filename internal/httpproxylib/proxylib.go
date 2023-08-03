@@ -1,11 +1,13 @@
 package httpproxylib
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/border0"
@@ -14,17 +16,17 @@ import (
 
 // here we handle the https requests, ie. connect method
 // IO copy after taking over the conn
-func handleTunneling(w http.ResponseWriter, r *http.Request) {
+func handleTunneling(w http.ResponseWriter, r *http.Request) int {
 	if r.Host == "" {
 		http.Error(w, "Not found", http.StatusNotFound)
-		return
+		return http.StatusNotFound
 	}
 
 	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
 		log.Printf("Failed to connect to host %s: %v", r.Host, err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		return http.StatusServiceUnavailable
 	}
 	// Write header before we take over the connection
 	w.WriteHeader(http.StatusOK)
@@ -32,24 +34,25 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError
 	}
 
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		return http.StatusServiceUnavailable
 	}
 
 	// Now Copy from clientConn to destConn and vice versa
 	border0.ProxyConnection(clientConn, destConn)
+	return http.StatusOK
 }
 
 // Proxy HTTP proxy requests
-func handleHTTP(w http.ResponseWriter, req *http.Request) {
+func handleHTTP(w http.ResponseWriter, req *http.Request) int {
 	if req.Host == "" {
 		http.Error(w, "Not found", http.StatusNotFound)
-		return
+		return http.StatusNotFound
 	}
 	req.URL.Host = req.Host
 	req.URL.Scheme = "http" // You can also dynamically set the scheme based on the original request
@@ -57,12 +60,14 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 	resp, err := http.DefaultTransport.RoundTrip(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		return http.StatusServiceUnavailable
 	}
+
 	defer resp.Body.Close()
 	copyHeader(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+	return resp.StatusCode
 }
 
 // Make sure we copy all headers from the original request
@@ -98,41 +103,8 @@ func checkIfAllowed(host string, allowedHosts []string) bool {
 	return false
 }
 
-func handleYamuxSession(conn net.Conn, handleStreamFunc func(net.Conn)) {
-	session, err := yamux.Server(conn, nil)
-	if err != nil {
-		log.Printf("Failed to create yamux session: %v", err)
-		return
-	}
-	for {
-		stream, err := session.AcceptStream()
-		if err != nil {
-			log.Printf("Failed to accept yamux stream: %v", err)
-			return
-		}
-		go handleStreamFunc(stream)
-	}
-}
-
 // Start the HTTP proxy server
 func StartHttpProxy(listener net.Listener, allowedProxyHosts []string) error {
-
-	// create HTTP proxy handler function
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Received request %s %s\n", r.Method, r.Host)
-
-		// check if host is in allowedHosts
-		// if not return not allowed
-		if !checkIfAllowed(r.Host, allowedProxyHosts) {
-			http.Error(w, "Not found", http.StatusMethodNotAllowed)
-			return
-		}
-		if r.Method == http.MethodConnect {
-			handleTunneling(w, r)
-		} else {
-			handleHTTP(w, r)
-		}
-	})
 
 	// Ok let's accept connections and process them
 	for {
@@ -143,10 +115,47 @@ func StartHttpProxy(listener net.Listener, allowedProxyHosts []string) error {
 		}
 
 		go func(conn net.Conn) {
+
 			yamuxSession, err := yamux.Server(conn, nil)
 			if err != nil {
 				log.Printf("Failed to create yamux session: %v", err)
 			}
+
+			// Open the first stream for logging
+			//loggingStream, err := yamuxSession.AcceptStream()
+			loggingStream, err := yamuxSession.OpenStream()
+
+			if err != nil {
+				log.Printf("Failed to accept logging stream: %v", err)
+				return
+			}
+			defer loggingStream.Close()
+			var logMutex sync.Mutex
+			var statusCode int = 0
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Log to the loggingStream instead of stdout
+
+				logMessage := fmt.Sprintf("Received request %s %s", r.Method, r.Host)
+				fmt.Println(logMessage)
+
+				// check if host is in allowedHosts
+				if !checkIfAllowed(r.Host, allowedProxyHosts) {
+					loggingStream.Write([]byte("Host not allowed"))
+					http.Error(w, "Not found", http.StatusMethodNotAllowed)
+					return
+				}
+				if r.Method == http.MethodConnect {
+					statusCode = handleTunneling(w, r)
+				} else {
+					statusCode = handleHTTP(w, r)
+				}
+				// Log the status code to the control stream
+				mgs := fmt.Sprintf("Completed request %d %s %s", statusCode, r.Method, r.Host)
+				logMutex.Lock()
+				loggingStream.Write([]byte(mgs))
+				logMutex.Unlock()
+			})
 
 			server := &http.Server{Handler: handler}
 			server.Serve(yamuxSession)
