@@ -11,8 +11,8 @@ type VariableSource interface {
 	//
 	// For example:
 	// {
-	//   "DB_USERNAME": "${env:DB_USERNAME}",
-	//   "DB_PASSWORD": "${file:~/.creds/password.txt}",
+	//   "DB_USERNAME": "from:env:DB_USERNAME",
+	//   "DB_PASSWORD": "from:file:~/.creds/password.txt",
 	// }
 	// would be translated to:
 	// {
@@ -26,6 +26,7 @@ type VariableSource interface {
 // NewDefaultVariableSource returns the default VariableSource implementation.
 func NewDefaultVariableSource() VariableSource {
 	return NewMultipleUpstreamVariableSource(
+		WithTopLevelPrefix("from:"),
 		WithEnvVariableUpstream(),
 		WithFileVariableUpstream(),
 		WithAWSSSMVariableUpstream(),

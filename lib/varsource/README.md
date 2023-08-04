@@ -13,10 +13,10 @@ Currently supported upstreams include:
 
 ```
 vs := varsource.NewDefaultVariableSource()
-	
+
 vars, err := vs.GetVariables(ctx, map[string]string{
-	"DB_USERNAME": "${env:DB_USERNAME}",
-	"DB_PASSWORD": "${aws:secretsmanager:my-password}",
+	"DB_USERNAME": "from:env:DB_USERNAME",
+	"DB_PASSWORD": "from:aws:secretsmanager:my-password",
 }
 if err != nil {
 	log.Fatalf("failed to fetch variables: %v", err)
