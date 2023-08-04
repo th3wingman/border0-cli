@@ -8,6 +8,8 @@ import (
 )
 
 const (
+	defaultTopLevelPrefix = "from:"
+
 	prefixAWSSecretsManager = "aws:secretsmanager:"
 	prefixAWSSSM            = "aws:ssm:"
 	prefixEnv               = "env:"
@@ -21,8 +23,9 @@ type variableUpstream interface {
 
 // MultipleUpstreamVariableSource is a VariableSource with multiple possible upstreams
 type MultipleUpstreamVariableSource struct {
-	prefixes  []string
-	upstreams map[string]variableUpstream
+	topLevelPrefix string
+	prefixes       []string
+	upstreams      map[string]variableUpstream
 }
 
 // ensures MultipleUpstreamVariableSource implements VariableSource at compile-time
@@ -31,6 +34,13 @@ var _ VariableSource = (*MultipleUpstreamVariableSource)(nil)
 // Option represents a constructor option to set configuration settings (e.g.
 // an entry in the upstreams map) for a new MultipleUpstreamVariableSource
 type Option func(muvs *MultipleUpstreamVariableSource)
+
+// WithTopLevelPrefix is the Option to set the top level prefix string.
+func WithTopLevelPrefix(prefix string) Option {
+	return func(m *MultipleUpstreamVariableSource) {
+		m.topLevelPrefix = prefix
+	}
+}
 
 // WithEnvVariableUpstream is the Option to set the environment
 // variable upstream source in a new MultipleUpstreamVariableSource
@@ -68,8 +78,9 @@ func WithAWSSecretsManagerVariableUpstream() Option {
 // a newly-initialized MultipleUpstreamVariableSource with all the given upstream sources set.
 func NewMultipleUpstreamVariableSource(opts ...Option) *MultipleUpstreamVariableSource {
 	varSource := &MultipleUpstreamVariableSource{
-		prefixes:  []string{},
-		upstreams: make(map[string]variableUpstream),
+		topLevelPrefix: defaultTopLevelPrefix,
+		prefixes:       []string{},
+		upstreams:      make(map[string]variableUpstream),
 	}
 	for _, opt := range opts {
 		opt(varSource)
@@ -99,31 +110,34 @@ func (vs *MultipleUpstreamVariableSource) GetVariables(ctx context.Context, vars
 }
 
 // GetVariable takes a single variable definition and returns the variable's
-// value i.e. fetches the variable's value based on the variable definition
+// value i.e. fetches the variable's value based on the variable definition.
+//
+// Note that variables that begin with one of the prefixes can have fetching
+// from upstream escaped using backslash ('\') e.g.:
+// - from:aws:ssm:/my/path --> agdkylfuiaoeifas (value in ssm was fetched)
+// - \from:aws:ssm:/my/path --> from:aws:ssm:/my/path
+// - \\from:aws:ssm:/my/path --> \from:aws:ssm:/my/path
 func (vs *MultipleUpstreamVariableSource) GetVariable(ctx context.Context, varDefn string) (string, error) {
-	// if the variable definition is an escaped variable definition
-	// e.g. "\${env:USERNAME}" simply remove the escaping and skip processing
-	if strings.HasPrefix(varDefn, `\${`) {
+	// if the variable definition is an escaped variable definition (starts with "\${TOP_LEVEL_PREFIX}...")
+	// e.g. "\from:file:myfile.txt" simply remove the escaping and return "from:file:myfile.txt".
+	if strings.HasPrefix(varDefn, fmt.Sprintf(`\%s`, vs.topLevelPrefix)) {
 		return strings.TrimPrefix(varDefn, `\`), nil
-
 	}
 
-	// if the variable definition does not have start and end curly braces
-	// (i.e. is not of the form ${VARIABLE}) we simply skip processing (i.e. assume
-	// that the variable definition is the variable value - does not need fetching)
-	if !(strings.HasPrefix(varDefn, "${") && strings.HasSuffix(varDefn, "}")) {
+	// if the variable does not start with the top level prefix, we just return the whole variable e.g.
+	// this variable's value is a literal string and does not need to be fetched from anywhere.
+	if !strings.HasPrefix(varDefn, vs.topLevelPrefix) {
 		return varDefn, nil
 	}
 
-	// remove the upstream variable indicators (the curly braces)
-	upstreamVarDefn := strings.TrimSuffix(strings.TrimPrefix(varDefn, "${"), "}")
+	varDefn = strings.TrimPrefix(varDefn, vs.topLevelPrefix)
 
 	// iterate over the sorted prefixes (in order of longest
 	// to shortest prefix) breaking after the first match
 	// (e.g. 'aws:ssm:' would match before 'aws:')
 	for _, prefix := range vs.prefixes {
-		if strings.HasPrefix(upstreamVarDefn, prefix) {
-			value, err := vs.upstreams[prefix].GetVariable(ctx, strings.TrimPrefix(upstreamVarDefn, prefix))
+		if strings.HasPrefix(varDefn, prefix) {
+			value, err := vs.upstreams[prefix].GetVariable(ctx, strings.TrimPrefix(varDefn, prefix))
 			if err != nil {
 				return "", fmt.Errorf("failed to get value for variable definition \"%s\": %v", varDefn, err)
 			}
