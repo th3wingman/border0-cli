@@ -106,7 +106,7 @@ func Login(org string) (token string, claims jwt.MapClaims, err error) {
 	if runtime.GOOS == "darwin" && sudoUsername != "" {
 		err = exec.Command("sudo", "-u", sudoUsername, "open", url).Run()
 		if err == nil {
-			// If for some reason this failed, we'll try again to old way
+			// This means, it's successull. So set sudo attemtp to True.
 			sudoAttempt = true
 		}
 	}
