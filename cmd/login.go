@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -79,7 +81,21 @@ var loginCmd = &cobra.Command{
 
 			/// check if the disableBrowser flag is set
 			if !disableBrowser {
-				_ = open.Run(url)
+
+				// check if we're on DARWIN and if we're running as sudo, if so, make sure we open the browser as the user
+				// this prevents folsk from not having access to credentials , sessions, etc
+				sudoUsername := os.Getenv("SUDO_USER")
+				sudoAttempt := false
+				if runtime.GOOS == "darwin" && sudoUsername != "" {
+					err = exec.Command("sudo", "-u", sudoUsername, "open", url).Run()
+					if err == nil {
+						// If for some reason this failed, we'll try again to old way
+						sudoAttempt = true
+					}
+				}
+				if !sudoAttempt {
+					_ = open.Run(url)
+				}
 			}
 
 			// Polling for token

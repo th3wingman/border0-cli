@@ -9,8 +9,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/borderzero/border0-cli/internal/api"
@@ -46,11 +48,37 @@ func TokenFilePath() string {
 }
 
 func tokenfile() string {
+
 	tokenfile := ""
 	if runtime.GOOS == "windows" {
 		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("APPDATA"))
 	} else {
-		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("HOME"))
+		homedir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Unable to determine users homedir ", err)
+		}
+
+		// check if this is being run as sudo, if so, use the sudo user's home dir
+		username := os.Getenv("SUDO_USER")
+		if username != "" {
+			// means we're running as sudo
+
+			if runtime.GOOS == "darwin" {
+				// This is because of:
+				// https://github.com/golang/go/issues/24383
+				// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
+				// So we'll just hard code for MACOS
+				homedir = "/Users/" + username
+			} else {
+				u, err := user.Lookup(username)
+				if err != nil {
+					log.Fatal(err)
+				}
+				homedir = u.HomeDir
+			}
+		}
+
+		tokenfile = fmt.Sprintf("%s/.border0/token", homedir)
 	}
 	return tokenfile
 }
@@ -193,6 +221,29 @@ func MFAChallenge(code string) error {
 		return err
 	}
 
+	// If running as sudo, we need to change ownership of the token file to the user
+	username := os.Getenv("SUDO_USER")
+	if username != "" {
+		//create a new user struct
+		currentUser, err := user.Lookup(username)
+		if err != nil {
+			return fmt.Errorf("couldn't get user details: %w", err)
+		}
+
+		uid, err := strconv.Atoi(currentUser.Uid)
+		if err != nil {
+			return fmt.Errorf("couldn't convert UID to integer: %w", err)
+		}
+
+		gid, err := strconv.Atoi(currentUser.Gid)
+		if err != nil {
+			return fmt.Errorf("couldn't convert GID to integer: %w", err)
+		}
+		if err = os.Chown(tokenfile(), uid, gid); err != nil {
+			return fmt.Errorf("couldn't change owner for token file: %w", err)
+		}
+	}
+
 	defer f.Close()
 	_, err2 := f.WriteString(fmt.Sprintf("%s\n", c.token))
 	if err2 != nil {
@@ -293,6 +344,29 @@ func SaveTokenInDisk(accessToken string) error {
 
 	if err := os.Chmod(tokenfile(), 0600); err != nil {
 		return err
+	}
+
+	// If running as sudo, we need to change ownership of the token file to the user
+	username := os.Getenv("SUDO_USER")
+	if username != "" {
+		//create a new user struct
+		currentUser, err := user.Lookup(username)
+		if err != nil {
+			return fmt.Errorf("couldn't get user details: %w", err)
+		}
+
+		uid, err := strconv.Atoi(currentUser.Uid)
+		if err != nil {
+			return fmt.Errorf("couldn't convert UID to integer: %w", err)
+		}
+
+		gid, err := strconv.Atoi(currentUser.Gid)
+		if err != nil {
+			return fmt.Errorf("couldn't convert GID to integer: %w", err)
+		}
+		if err = os.Chown(tokenfile(), uid, gid); err != nil {
+			return fmt.Errorf("couldn't change owner for token file: %w", err)
+		}
 	}
 
 	defer f.Close()

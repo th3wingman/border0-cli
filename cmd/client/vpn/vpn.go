@@ -3,6 +3,7 @@ package vpn
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"time"
@@ -77,11 +78,11 @@ var clientVpnCmd = &cobra.Command{
 		logger.Logger.Info("Received control message", zap.Any("control_message", ctrl))
 
 		if err = vpnlib.AddIpToIface(iface.Name(), ctrl.ClientIp, ctrl.ServerIp, ctrl.SubnetSize); err != nil {
-			return fmt.Errorf("failed to add static IPs to interface: %v", err)
+			log.Println("failed to add IPs to interface", err)
 		}
 
 		if err = vpnlib.AddRoutesToIface(iface.Name(), ctrl.Routes); err != nil {
-			return fmt.Errorf("failed to add routes to interface: %v", err)
+			log.Println("failed to add routes to interface", err)
 		}
 
 		// create the connection map

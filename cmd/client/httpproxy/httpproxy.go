@@ -207,6 +207,12 @@ func (sm *SessionManager) removeSession(session *yamux.Session, logStream *yamux
 
 // selectSession is a simple function that selects a session from the slice
 func (sm *SessionManager) selectSession(index int) *yamux.Session {
+	if len(sm.sessions) == 0 {
+		// Handle the error appropriately here.
+		// You could log an error, return a special value, etc.
+		log.Fatalf("All upstream sessions have been closed, no more upstream options available. Exiting.")
+		return nil // Returning nil as an example.
+	}
 	return sm.sessions[index%len(sm.sessions)]
 }
 

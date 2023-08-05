@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,7 +98,21 @@ func Login(org string) (token string, claims jwt.MapClaims, err error) {
 	// close the new tab / browser session, or may want to authenticate in a different browser / session. In the
 	// event that opening the browser fails, the customer may still complete authenticating by navigating to the
 	// URL in a different device.
-	_ = open.Run(url)
+
+	// check if we're on DARWIN and if we're running as sudo, if so, make sure we open the browser as the user
+	// this prevents folsk from not having access to credentials , sessions, etc
+	sudoUsername := os.Getenv("SUDO_USER")
+	sudoAttempt := false
+	if runtime.GOOS == "darwin" && sudoUsername != "" {
+		err = exec.Command("sudo", "-u", sudoUsername, "open", url).Run()
+		if err == nil {
+			// If for some reason this failed, we'll try again to old way
+			sudoAttempt = true
+		}
+	}
+	if !sudoAttempt {
+		_ = open.Run(url)
+	}
 
 	token, err = pollForToken(
 		org,
@@ -214,13 +230,36 @@ func pollForToken(
 }
 
 func saveToken(token string) error {
+
 	currentUser, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("couldn't get currently logged in operating system user: %w", err)
 	}
+	homedir := currentUser.HomeDir
+
+	// check if this is being run as sudo, if so, use the sudo user's home dir
+	sudoMode := false
+	username := os.Getenv("SUDO_USER")
+	if username != "" {
+		sudoMode = true
+		//create a new user struct
+		currentUser, err = user.Lookup(username)
+		if err != nil {
+			return fmt.Errorf("couldn't get user details: %w", err)
+		}
+		if runtime.GOOS == "darwin" {
+			// This is because of:
+			// https://github.com/golang/go/issues/24383
+			// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
+			// So we'll just hard code for MACOS
+			homedir = "/Users/" + username
+		} else {
+			homedir = currentUser.HomeDir
+		}
+	}
 
 	// Write to client token file
-	tokenFile := ClientTokenFile(currentUser.HomeDir)
+	tokenFile := ClientTokenFile(homedir)
 
 	// create dir if not exists
 	configPath := filepath.Dir(tokenFile)
@@ -237,6 +276,22 @@ func saveToken(token string) error {
 	defer f.Close()
 	if err = os.Chmod(tokenFile, 0600); err != nil {
 		return fmt.Errorf("couldn't change permission for token file: %w", err)
+	}
+
+	// Make sure to change the owner of the token file to the user who ran the command
+	if sudoMode {
+		uid, err := strconv.Atoi(currentUser.Uid)
+		if err != nil {
+			return fmt.Errorf("couldn't convert UID to integer: %w", err)
+		}
+
+		gid, err := strconv.Atoi(currentUser.Gid)
+		if err != nil {
+			return fmt.Errorf("couldn't convert GID to integer: %w", err)
+		}
+		if err = os.Chown(tokenFile, uid, gid); err != nil {
+			return fmt.Errorf("couldn't change owner for token file: %w", err)
+		}
 	}
 
 	if _, err = f.WriteString(fmt.Sprintf("%s\n", token)); err != nil {
@@ -256,6 +311,26 @@ func IsExistingClientTokenValid(homeDir string) (valid bool, token, email string
 		}
 		homeDir = currentUser.HomeDir
 	}
+
+	// check if this is being run as sudo, if so, use the sudo user's home dir
+	username := os.Getenv("SUDO_USER")
+	if username != "" {
+		//create a new user struct
+		currentUser, err := user.Lookup(username)
+		if err != nil {
+			fmt.Println("couldn't get user details: %w", err)
+		}
+		if runtime.GOOS == "darwin" {
+			// This is because of:
+			// https://github.com/golang/go/issues/24383
+			// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
+			// So we'll just hard code for MACOS
+			homeDir = "/Users/" + username
+		} else {
+			homeDir = currentUser.HomeDir
+		}
+	}
+
 	token, err = GetClientToken(homeDir)
 	if err != nil {
 		err = fmt.Errorf("couldn't get client token: %w", err)

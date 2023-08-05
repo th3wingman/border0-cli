@@ -265,7 +265,7 @@ func TunToConnCopy(iface *water.Interface, cm *ConnectionMap, returnOnErr bool, 
 			var exists bool
 
 			if recipientConn, exists = cm.Get(dstIp.String()); !exists {
-				fmt.Printf("No connection exists for IP: %s\n", dstIp)
+				//fmt.Printf("No connection exists for IP: %s\n", dstIp)
 				continue
 			}
 		} else {
