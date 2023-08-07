@@ -57,3 +57,38 @@ func validateIPv4(packet []byte) error {
 	}
 	return nil
 }
+
+// Check if an IP address is local or not.
+// Ie if it is routed via the default gateway or not.
+// returns True if the IP can reached via a local network interface.
+func IsLocalIp(ipAddress string) (bool, error) {
+	targetIP := net.ParseIP(ipAddress)
+	if targetIP == nil {
+		return false, fmt.Errorf("invalid IP address")
+
+	}
+
+	localIPs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false, fmt.Errorf("failed to get local IP addresses: %v", err)
+	}
+
+	isLocal := false
+	for _, address := range localIPs {
+		_, ipNet, err := net.ParseCIDR(address.String())
+		if err != nil {
+			continue
+		}
+
+		if ipNet.Contains(targetIP) {
+			isLocal = true
+			break
+		}
+	}
+
+	if isLocal {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}

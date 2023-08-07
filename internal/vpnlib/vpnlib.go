@@ -4,12 +4,14 @@
 package vpnlib
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -80,6 +82,180 @@ func GetControlMessage(conn net.Conn) (*ControlMessage, error) {
 	}
 
 	return ctrlMessage, nil
+}
+
+func GetDefaultGateway() (net.IP, string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return getDefaultGatewayDarwin()
+	case "linux":
+		return getDefaultGatewayLinux()
+	case "windows":
+		return getDefaultGatewayWindows()
+	default:
+		return nil, "", fmt.Errorf("runtime %s not supported", runtime.GOOS)
+	}
+}
+
+func getDefaultGatewayDarwin() (net.IP, string, error) {
+	output, err := exec.Command("netstat", "-nr").Output()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get default route: %v", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "default") {
+			fields := strings.Fields(line)
+			if len(fields) >= 4 {
+				ip := net.ParseIP(fields[1])
+				if ip != nil {
+					return ip, fields[3], nil
+				}
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("default gateway not found")
+}
+
+func getDefaultGatewayLinux() (net.IP, string, error) {
+	output, err := exec.Command("ip", "route").Output()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get default route: %v", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "default") {
+			fields := strings.Fields(line)
+			if len(fields) >= 5 {
+				ip := net.ParseIP(fields[2])
+				if ip != nil {
+					return ip, fields[4], nil
+				}
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("default gateway not found")
+}
+
+func getDefaultGatewayWindows() (net.IP, string, error) {
+	output, err := exec.Command("cmd", "/C", "route print 0.0.0.0").Output()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get default route: %v", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "0.0.0.0") {
+			fields := strings.Fields(line)
+			if len(fields) >= 5 {
+				ip := net.ParseIP(fields[3])
+				if ip != nil {
+					return ip, fields[4], nil
+				}
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("default gateway not found")
+}
+
+// AddRoutesViaGateway adds routes through a specified gateway IP.
+func AddRoutesViaGateway(gateway string, routes []string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return addRoutesViaGatewayDarwin(gateway, routes)
+	case "linux":
+		return addRoutesViaGatewayLinux(gateway, routes)
+	case "windows":
+		return addRoutesViaGatewayWindows(gateway, routes)
+	default:
+		return fmt.Errorf("runtime %s not supported", runtime.GOOS)
+	}
+}
+
+func addRoutesViaGatewayDarwin(gateway string, routes []string) error {
+	for _, route := range routes {
+		if err := exec.Command("route", "-n", "add", "-net", route, gateway).Run(); err != nil {
+			return fmt.Errorf("error adding route %s via gateway %s: %v", route, gateway, err)
+		}
+	}
+	return nil
+}
+
+func addRoutesViaGatewayLinux(gateway string, routes []string) error {
+	for _, route := range routes {
+		if err := exec.Command("ip", "route", "add", route, "via", gateway).Run(); err != nil {
+			return fmt.Errorf("error adding route %s via gateway %s: %v", route, gateway, err)
+		}
+	}
+	return nil
+}
+
+func addRoutesViaGatewayWindows(gateway string, routes []string) error {
+	for _, route := range routes {
+		// Convert route in CIDR notation to network and mask.
+		_, ipNet, err := net.ParseCIDR(route)
+		if err != nil {
+			return fmt.Errorf("invalid CIDR notation %s: %v", route, err)
+		}
+		network := ipNet.IP.String()
+		mask := net.IP(ipNet.Mask).String()
+
+		if err := exec.Command("route", "add", network, "mask", mask, gateway).Run(); err != nil {
+			return fmt.Errorf("error adding route %s via gateway %s: %v", route, gateway, err)
+		}
+	}
+	return nil
+}
+
+// DeleteRoutesViaGateway removes routes that go through a specified gateway IP.
+func DeleteRoutesViaGateway(gateway string, routes []string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return deleteRoutesViaGatewayDarwin(gateway, routes)
+	case "linux":
+		return deleteRoutesViaGatewayLinux(gateway, routes)
+	case "windows":
+		return deleteRoutesViaGatewayWindows(gateway, routes)
+	default:
+		return fmt.Errorf("runtime %s not supported", runtime.GOOS)
+	}
+}
+
+func deleteRoutesViaGatewayDarwin(gateway string, routes []string) error {
+	for _, route := range routes {
+		if err := exec.Command("route", "delete", "-net", route, gateway).Run(); err != nil {
+			return fmt.Errorf("error deleting route %s via gateway %s: %v", route, gateway, err)
+		}
+	}
+	return nil
+}
+
+func deleteRoutesViaGatewayLinux(gateway string, routes []string) error {
+	for _, route := range routes {
+		if err := exec.Command("ip", "route", "del", route, "via", gateway).Run(); err != nil {
+			return fmt.Errorf("error deleting route %s via gateway %s: %v", route, gateway, err)
+		}
+	}
+	return nil
+}
+
+func deleteRoutesViaGatewayWindows(gateway string, routes []string) error {
+	for _, route := range routes {
+		// Convert route in CIDR notation to network and mask.
+		_, ipNet, err := net.ParseCIDR(route)
+		if err != nil {
+			return fmt.Errorf("invalid CIDR notation %s: %v", route, err)
+		}
+		network := ipNet.IP.String()
+		mask := net.IP(ipNet.Mask).String()
+
+		if err := exec.Command("route", "delete", network, "mask", mask, gateway).Run(); err != nil {
+			return fmt.Errorf("error deleting route %s via gateway %s: %v", route, gateway, err)
+		}
+	}
+	return nil
 }
 
 // AddRoutesToIface adds routes to a network interface.
@@ -213,6 +389,81 @@ func addIpToIfaceWindows(iface, localIp string) error {
 		return fmt.Errorf("error adding ip %s to interface %s: %v", localIp, iface, err)
 	}
 	return nil
+}
+
+// GetDnsServers returns a list of all active resolvers used by the system
+func GetDnsServers() ([]string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return getDnsDarwin()
+	case "linux":
+		return getDnsLinux()
+	case "windows":
+		return getDnsWindows()
+	default:
+		return nil, fmt.Errorf("runtime %s not supported", runtime.GOOS)
+	}
+}
+
+func getDnsDarwin() ([]string, error) {
+	out, err := exec.Command("scutil", "--dns").Output()
+	if err != nil {
+		return nil, fmt.Errorf("error getting DNS servers: %v", err)
+	}
+
+	var servers []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "nameserver") {
+			ip := strings.TrimSpace(strings.Split(line, ":")[1])
+			if net.ParseIP(ip) != nil {
+				servers = append(servers, ip)
+			}
+
+		}
+	}
+	return servers, nil
+}
+
+func getDnsLinux() ([]string, error) {
+	file, err := os.Open("/etc/resolv.conf")
+	if err != nil {
+		return nil, fmt.Errorf("error getting DNS servers: %v", err)
+	}
+	defer file.Close()
+
+	var servers []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "nameserver") {
+			ip := strings.TrimSpace(strings.Split(line, " ")[1])
+			if net.ParseIP(ip) != nil {
+				servers = append(servers, ip)
+			}
+
+		}
+	}
+	return servers, nil
+}
+
+func getDnsWindows() ([]string, error) {
+	out, err := exec.Command("powershell", "Get-DnsClientServerAddress", "-AddressFamily", "IPv4").Output()
+	if err != nil {
+		return nil, fmt.Errorf("error getting DNS servers: %v", err)
+	}
+
+	var servers []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "ServerAddresses") {
+			for _, addr := range strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), ",") {
+				ip := strings.TrimSpace(addr)
+				if net.ParseIP(ip) != nil {
+					servers = append(servers, ip)
+				}
+			}
+		}
+	}
+	return servers, nil
 }
 
 // Start Tun to Conn thread
