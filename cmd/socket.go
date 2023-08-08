@@ -431,6 +431,8 @@ var socketConnectVpnCmd = &cobra.Command{
 				}
 				defer ipPool.Release(clientIp)
 
+				fmt.Printf("New client connected allocated IP: %s\n", clientIp)
+
 				// attach the connection to the client ip
 				cm.Set(clientIp, conn)
 				defer cm.Delete(clientIp)
