@@ -556,8 +556,9 @@ func ConnToTunCopy(conn net.Conn, iface *water.Interface) error {
 
 	for {
 		// read first ${headerByteSize} bytes from the connection
-		// to know how big the next incoming packet is
-		headerN, err := conn.Read(headerBuffer)
+		// to know how big the next incoming packet is.
+		// Make sure we read all the way to the end of the header using io.ReadFull()
+		headerN, err := io.ReadFull(conn, headerBuffer)
 		if err != nil {
 			if errors.Is(err, io.EOF) ||
 				errors.Is(err, io.ErrUnexpectedEOF) {
