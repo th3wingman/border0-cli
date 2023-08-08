@@ -19,6 +19,7 @@ import (
 	"github.com/borderzero/border0-cli/cmd/logger"
 	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/borderzero/border0-cli/internal/enum"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
@@ -195,7 +196,7 @@ var sshCmd = &cobra.Command{
 			}
 		}
 
-		home, err := os.UserHomeDir()
+		home, err := util.GetUserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to write ssh key: %w", err)
 		}

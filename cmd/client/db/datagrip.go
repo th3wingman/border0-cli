@@ -15,6 +15,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/borderzero/border0-cli/internal/client/datagrip"
 	"github.com/borderzero/border0-cli/internal/enum"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -89,7 +90,7 @@ var dataGripCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		home, err := os.UserHomeDir()
+		home, err := util.GetUserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home dir: %w", err)
 		}

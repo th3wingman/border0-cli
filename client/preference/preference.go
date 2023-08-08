@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/borderzero/border0-cli/internal/util"
 )
 
 func Read() (*Data, error) {
@@ -55,7 +57,7 @@ func Write(data *Data) error {
 
 var (
 	osUserConfigDir = os.UserConfigDir
-	osUserHomeDir   = os.UserHomeDir
+	osUserHomeDir   = util.GetUserHomeDir
 	osMkdir         = os.Mkdir
 )
 

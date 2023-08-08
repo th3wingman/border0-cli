@@ -20,6 +20,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/enum"
+	osutil "github.com/borderzero/border0-cli/internal/util"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/fatih/color"
 	jwt "github.com/golang-jwt/jwt"
@@ -235,7 +236,10 @@ func saveToken(token string) error {
 	if err != nil {
 		return fmt.Errorf("couldn't get currently logged in operating system user: %w", err)
 	}
-	homedir := currentUser.HomeDir
+	homedir, err := osutil.GetUserHomeDir()
+	if err != nil {
+		return fmt.Errorf("couldn't get user home directory: %w", err)
+	}
 
 	// check if this is being run as sudo, if so, use the sudo user's home dir
 	sudoMode := false
@@ -246,15 +250,6 @@ func saveToken(token string) error {
 		currentUser, err = user.Lookup(username)
 		if err != nil {
 			return fmt.Errorf("couldn't get user details: %w", err)
-		}
-		if runtime.GOOS == "darwin" {
-			// This is because of:
-			// https://github.com/golang/go/issues/24383
-			// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
-			// So we'll just hard code for MACOS
-			homedir = "/Users/" + username
-		} else {
-			homedir = currentUser.HomeDir
 		}
 	}
 
@@ -303,32 +298,10 @@ func saveToken(token string) error {
 
 func IsExistingClientTokenValid(homeDir string) (valid bool, token, email string, err error) {
 	if homeDir == "" {
-		var currentUser *user.User
-		currentUser, err = user.Current()
-		if err != nil {
-			err = fmt.Errorf("couldn't get currently logged in operating system user: %w", err)
-			return
-		}
-		homeDir = currentUser.HomeDir
+		homeDir, err = osutil.GetUserHomeDir()
 	}
-
-	// check if this is being run as sudo, if so, use the sudo user's home dir
-	username := os.Getenv("SUDO_USER")
-	if username != "" {
-		//create a new user struct
-		currentUser, err := user.Lookup(username)
-		if err != nil {
-			fmt.Println("couldn't get user details: %w", err)
-		}
-		if runtime.GOOS == "darwin" {
-			// This is because of:
-			// https://github.com/golang/go/issues/24383
-			// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
-			// So we'll just hard code for MACOS
-			homeDir = "/Users/" + username
-		} else {
-			homeDir = currentUser.HomeDir
-		}
+	if err != nil {
+		return
 	}
 
 	token, err = GetClientToken(homeDir)
