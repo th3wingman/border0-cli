@@ -19,6 +19,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector_v2/util"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
+	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/service/connector/types"
 	pb "github.com/borderzero/border0-proto/connector"
 	backoff "github.com/cenkalti/backoff/v4"
@@ -287,7 +288,7 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		Certificates: certificates,
 	}
 
-	var knowPlugins []string
+	knownPlugins := set.New[string]()
 
 	for _, config := range pluginConfig {
 		var action pb.Action
@@ -296,31 +297,20 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		} else {
 			action = pb.Action_CREATE
 		}
-
 		if err := c.handlePluginConfig(action, config); err != nil {
 			return fmt.Errorf("failed to handle plugin config: %w", err)
 		}
-
-		knowPlugins = append(knowPlugins, config.GetId())
+		knownPlugins.Add(config.GetId())
 	}
-
 	for id := range c.plugins {
-		var found bool
-		for _, knowPlugin := range knowPlugins {
-			if id == knowPlugin {
-				found = true
-				break
-			}
-		}
-
-		if !found {
+		if !knownPlugins.Has(id) {
 			if err := c.handlePluginConfig(pb.Action_DELETE, &pb.PluginConfig{Id: id}); err != nil {
 				return fmt.Errorf("failed to handle plugin config: %w", err)
 			}
 		}
 	}
 
-	var knowSockets []string
+	knownSockets := set.New[string]()
 
 	for _, config := range socketConfg {
 		var action pb.Action
@@ -329,24 +319,13 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		} else {
 			action = pb.Action_CREATE
 		}
-
 		if err := c.handleSocketConfig(action, config); err != nil {
 			return fmt.Errorf("failed to handle socket config: %w", err)
 		}
-
-		knowSockets = append(knowSockets, config.GetId())
+		knownSockets.Add(config.GetId())
 	}
-
 	for id := range c.sockets {
-		var found bool
-		for _, knowSocket := range knowSockets {
-			if id == knowSocket {
-				found = true
-				break
-			}
-		}
-
-		if !found {
+		if !knownSockets.Has(id) {
 			if err := c.handleSocketConfig(pb.Action_DELETE, &pb.SocketConfig{Id: id}); err != nil {
 				return fmt.Errorf("failed to handle socket config: %w", err)
 			}
