@@ -91,7 +91,6 @@ var dataGripCmd = &cobra.Command{
 			return err
 		}
 		home, err := util.GetUserHomeDir()
-
 		if err != nil {
 			return fmt.Errorf("failed to get home dir: %w", err)
 		}

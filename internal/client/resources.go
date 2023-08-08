@@ -237,7 +237,6 @@ func saveToken(token string) error {
 		return fmt.Errorf("couldn't get currently logged in operating system user: %w", err)
 	}
 	homedir, err := osutil.GetUserHomeDir()
-
 	if err != nil {
 		return fmt.Errorf("couldn't get user home directory: %w", err)
 	}
