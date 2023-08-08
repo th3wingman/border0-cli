@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
@@ -97,7 +99,7 @@ var clientVpnCmd = &cobra.Command{
 		sigCh := make(chan os.Signal, 1)
 
 		// Notify the `sigCh` channel for SIGINT (Ctrl+C) signals.
-		setupSignalHandling(sigCh)
+		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 
 		// Before we add new routes, we need to add a more specific route to the gateway gatewayIp
 		// This is because we want the VPN gateway IP to be routed through the existing gateway
@@ -124,7 +126,6 @@ var clientVpnCmd = &cobra.Command{
 				ctrl.Routes = append(ctrl.Routes[:i], ctrl.Routes[i+1:]...)
 				// and add two new routes
 				ctrl.Routes = append(ctrl.Routes, "0.0.0.0/1", "128.0.0.0/1")
-				fmt.Println("Rewrote default route to ", ctrl.Routes)
 
 				// Also get the DNS servers from the server and add them to the map
 				// so we can use them later
