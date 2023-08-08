@@ -46,6 +46,8 @@ func (u *UpstreamDataBuilder) setupSSHUpstreamValues(s *models.Socket, configMap
 		u.setupEc2Connect(s, *configMap.SSHConfiguration.AwsEC2ConnectDetails)
 	case types.UpstreamAuthenticationTypeBorder0Cert:
 		u.setupBorder0Certificate(s, configMap.SSHConfiguration.Border0CertificateDetails)
+	case types.UpstreamConnectionTypeBuiltInSshServer:
+		u.setupBuiltInSshServer(s)
 	default:
 		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)
 	}
@@ -103,12 +105,16 @@ func (u *UpstreamDataBuilder) setupEc2Connect(s *models.Socket, ec2Details types
 	return nil
 }
 
+func (u *UpstreamDataBuilder) setupBuiltInSshServer(s *models.Socket) error {
+	s.SSHServer = true
+	return nil
+}
+
 func (u *UpstreamDataBuilder) fetchVariableFromSource(field string) string {
 	val, err := u.vs.GetVariable(context.Background(), field)
 	if err != nil {
 		fmt.Printf("error evaluating variable %s: %v\n", field, err)
 		return field
 	}
-
 	return val
 }
