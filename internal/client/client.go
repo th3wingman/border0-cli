@@ -357,7 +357,7 @@ func GetResourceInfo(logger *zap.Logger, hostname string) (info ResourceInfo, er
 func MTLSTokenFile() string {
 	home, err := util.GetUserHomeDir()
 	if err != nil {
-		log.Fatal("Unable to determine the user's home directory", err)
+		log.Fatalln("Unable to determine the user's home directory", err)
 	}
 	if runtime.GOOS == "windows" {
 		home = os.Getenv("APPDATA")
