@@ -29,6 +29,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/client/password"
+	"github.com/borderzero/border0-cli/internal/util"
 	jwt "github.com/golang-jwt/jwt"
 	"github.com/moby/term"
 	"github.com/pavlo-v-chernykh/keystore-go/v4"
@@ -141,7 +142,7 @@ func MTLSLogin(logger *zap.Logger, hostname string) (string, jwt.MapClaims, erro
 }
 
 func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, crtPath string, keyPath string, err error) {
-	home, err := os.UserHomeDir()
+	home, err := util.GetUserHomeDir()
 	if err != nil {
 		err = fmt.Errorf("error: failed to get homedir : %w", err)
 		return
@@ -205,7 +206,7 @@ func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, crt
 }
 
 func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyPath string, err error) {
-	home, err := os.UserHomeDir()
+	home, err := util.GetUserHomeDir()
 	if err != nil {
 		err = fmt.Errorf("error: failed to get homedir : %w", err)
 		return
@@ -354,7 +355,10 @@ func GetResourceInfo(logger *zap.Logger, hostname string) (info ResourceInfo, er
 }
 
 func MTLSTokenFile() string {
-	home := os.Getenv("HOME")
+	home, err := util.GetUserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if runtime.GOOS == "windows" {
 		home = os.Getenv("APPDATA")
 	}
@@ -551,8 +555,7 @@ func GenSSHKey(token, orgID, hostname string) (*SSHSignResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid resource: %s", err)
 	}
-
-	home, err := os.UserHomeDir()
+	home, err := util.GetUserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to write ssh key: %v", err)
 	}
@@ -736,7 +739,7 @@ func Zeroing(buf []byte) {
 }
 
 func DownloadCertificateChain(hostname string) (certChainPath string, err error) {
-	home, err := os.UserHomeDir()
+	home, err := util.GetUserHomeDir()
 	if err != nil {
 		err = fmt.Errorf("failed to get home dir: %w", err)
 		return

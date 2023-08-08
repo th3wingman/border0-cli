@@ -17,6 +17,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/util"
 	jwt "github.com/golang-jwt/jwt"
 )
 
@@ -53,29 +54,10 @@ func tokenfile() string {
 	if runtime.GOOS == "windows" {
 		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("APPDATA"))
 	} else {
-		homedir, err := os.UserHomeDir()
+
+		homedir, err := util.GetUserHomeDir()
 		if err != nil {
 			log.Fatal("Unable to determine users homedir ", err)
-		}
-
-		// check if this is being run as sudo, if so, use the sudo user's home dir
-		username := os.Getenv("SUDO_USER")
-		if username != "" {
-			// means we're running as sudo
-
-			if runtime.GOOS == "darwin" {
-				// This is because of:
-				// https://github.com/golang/go/issues/24383
-				// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
-				// So we'll just hard code for MACOS
-				homedir = "/Users/" + username
-			} else {
-				u, err := user.Lookup(username)
-				if err != nil {
-					log.Fatal(err)
-				}
-				homedir = u.HomeDir
-			}
 		}
 
 		tokenfile = fmt.Sprintf("%s/.border0/token", homedir)

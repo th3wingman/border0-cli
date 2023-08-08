@@ -9,6 +9,7 @@ import (
 
 	"github.com/borderzero/border0-cli/cmd/logger"
 	"github.com/borderzero/border0-cli/internal/client"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,7 @@ var keySignCmd = &cobra.Command{
 			log.Fatalln(err)
 		}
 
-		home, err := os.UserHomeDir()
+		home, err := util.GetUserHomeDir()
 		if err != nil {
 			log.Fatalf("failed to write ssh key: %v", err)
 		}
