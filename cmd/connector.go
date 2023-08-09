@@ -211,7 +211,6 @@ func makeConfigPath() string {
 		}
 		homedir := u.HomeDir
 		serviceConfigPath = filepath.Join(homedir, "border0")
-
 	}
 
 	// check if serviceConfigPath exists and create it if not
@@ -379,6 +378,12 @@ func checkDaemonInstallation() (bool, error) {
 	return true, err
 }
 
+// replace all special characters except for '-' with a dash
+func replaceSpecialCharactersWithDash(input string) string {
+	reg := regexp.MustCompile(`[^a-zA-Z0-9-]`)
+	return reg.ReplaceAllString(input, "-")
+}
+
 var connectorInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "install the connector service on the machine",
@@ -414,6 +419,7 @@ var connectorInstallCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
+		myHostname = replaceSpecialCharactersWithDash(myHostname)
 
 		now := time.Now()
 		oneYearLater := now.AddDate(1, 0, 0)
@@ -433,36 +439,6 @@ var connectorInstallCmd = &cobra.Command{
 		}
 
 		configPath := makeConfigPath()
-		// check if current user has sudo permissions
-		// Also check for sudo users
-		username := os.Getenv("SUDO_USER")
-		if username != "" {
-			// we are in sudo mode
-			var homedir string
-			if runtime.GOOS == "darwin" {
-				// This is because of:
-				// https://github.com/golang/go/issues/24383
-				// os/user: LookupUser() doesn't find users on macOS when compiled with CGO_ENABLED=0
-				// So we'll just hard code for MACOS
-				homedir = "/Users/" + username
-			} else {
-				u, err := user.Lookup(username)
-				if err != nil {
-					log.Fatal(err)
-				}
-				homedir = u.HomeDir
-			}
-
-			// now copy the newly created token file to user's home directory
-			// lets determine the token file path
-			userTokenFile := fmt.Sprintf("%s/.border0/token", homedir)
-			// lets copy the token file
-			err := copyFile(http.TokenFilePath(), userTokenFile, username)
-			if err != nil {
-				fmt.Println("Error:", err)
-			}
-
-		}
 
 		//now write the randString fucntion
 		randString := func(n int) string {
