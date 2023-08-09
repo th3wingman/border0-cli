@@ -24,6 +24,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/install"
 	"github.com/borderzero/border0-cli/internal/service_daemon"
+	"github.com/borderzero/border0-cli/internal/util"
 
 	connectorv2 "github.com/borderzero/border0-cli/internal/connector_v2"
 	connectorv2config "github.com/borderzero/border0-cli/internal/connector_v2/config"
@@ -221,15 +222,6 @@ func makeConfigPath() string {
 	return filepath.Join(serviceConfigPath, defaultConfigFileName)
 }
 
-func checkRootPermission() {
-	if runtime.GOOS != "windows" {
-		if os.Geteuid() != 0 {
-			log.Printf("You need to run this command as root or with sudo")
-			os.Exit(1)
-		}
-	}
-}
-
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start the connector in foreground ad-hoc mode",
@@ -354,9 +346,8 @@ func connectorInstallAws(ctx context.Context) {
 		}
 	}()
 
-	err := install.RunCloudInstallWizardForAWS(ctx, version)
-	if err != nil {
-		fmt.Printf("\nERROR: %s\n", err)
+	if err := install.RunCloudInstallWizardForAWS(ctx, version); err != nil {
+		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
 	}
 }
@@ -364,32 +355,19 @@ func connectorInstallAws(ctx context.Context) {
 func connectorInstallLocal(ctx context.Context) {
 	err := install.RunInstallWizard(ctx, version)
 	if err != nil {
-		fmt.Printf("\nERROR: %s\n", err)
+		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func checkDaemonInstallation() (bool, error) {
-	service, err := service_daemon.New(serviceName, serviceDescription)
-	if err != nil {
-		return false, err
+func randString(n int) string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
 	}
-
-	status, err := service.Status()
-	if err != nil {
-		return false, err
-	}
-
-	if status == "service not installed" {
-		return false, err
-	}
-	return true, err
-}
-
-// replace all special characters except for '-' with a dash
-func replaceSpecialCharactersWithDash(input string) string {
-	reg := regexp.MustCompile(`[^a-zA-Z0-9-]`)
-	return reg.ReplaceAllString(input, "-")
+	return string(b)
 }
 
 var connectorInstallCmd = &cobra.Command{
@@ -406,14 +384,20 @@ var connectorInstallCmd = &cobra.Command{
 			return
 		}
 
+		if !util.RunningAsAdministrator() {
+			log.Println("Error: command must be ran as system administrator")
+			os.Exit(1)
+		}
 		service, err := service_daemon.New(serviceName, serviceDescription)
 		if err != nil {
 			log.Println("Error: ", err)
 			os.Exit(1)
 		}
-		checkRootPermission()
-		// check if the service is already isntalled
-		installed, _ := checkDaemonInstallation()
+		installed, err := service_daemon.IsInstalled(service)
+		if err != nil {
+			log.Printf("Error: failed to check whether service is already installed: %v", err)
+			os.Exit(1)
+		}
 		if installed {
 			log.Println("Service already installed")
 			os.Exit(1)
@@ -424,20 +408,19 @@ var connectorInstallCmd = &cobra.Command{
 
 		client, err := http.NewClient()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("Error: %v", err)
 		}
 
-		myHostname, err := os.Hostname()
+		hostname, err := util.GetFormattedHostname()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("Error: %v", err)
 		}
-		myHostname = replaceSpecialCharactersWithDash(myHostname)
 
 		now := time.Now()
 		oneYearLater := now.AddDate(1, 0, 0)
 		oneYearFromNow := oneYearLater.Unix()
 
-		tokenName := fmt.Sprintf("Connector on %s host", myHostname)
+		tokenName := fmt.Sprintf("Connector %s", hostname)
 		// s := models.Socket{}
 		t := models.Token{}
 		newToken := &models.Token{
@@ -452,18 +435,8 @@ var connectorInstallCmd = &cobra.Command{
 
 		configPath := makeConfigPath()
 
-		//now write the randString fucntion
-		randString := func(n int) string {
-			r := rand.New(rand.NewSource(time.Now().UnixNano()))
-			var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
-			b := make([]rune, n)
-			for i := range b {
-				b[i] = letters[r.Intn(len(letters))]
-			}
-			return string(b)
-		}
 		// staging with setting the new socket name
-		socketName := strings.ToLower(myHostname)
+		socketName := hostname
 		// function to check if the socket name exists
 		socketExists := func(name string) bool {
 			err := client.Request("GET", "socket/"+name, &models.Socket{}, nil)
@@ -475,7 +448,7 @@ var connectorInstallCmd = &cobra.Command{
 		if err == nil {
 			// ask user to provide a new socket name
 			fmt.Printf("Socket '%s' already exists.\n", socketName)
-			socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+			socketName = fmt.Sprintf("%s-%s", hostname, randString(5))
 			fmt.Printf("Provide a new socket name, eg: '%s'? :", socketName)
 			reader := bufio.NewReader(os.Stdin)
 			text, _ := reader.ReadString('\n')
@@ -495,13 +468,13 @@ var connectorInstallCmd = &cobra.Command{
 				fmt.Printf("Using '%s' as socket name.\n", socketName)
 			} else {
 				fmt.Println("Generating randomized name.")
-				socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+				socketName = fmt.Sprintf("%s-%s", hostname, randString(5))
 			}
 		}
 
 		// we are going to generate out template connector config yaml file
 		config := TemplateConnectorConfig{}
-		config.Connector.Name = fmt.Sprintf("%s-cntr", myHostname)
+		config.Connector.Name = fmt.Sprintf("%s-cntr", strings.ToLower(hostname))
 		config.Credentials.Token = t.Token
 
 		sshServerSocket := Socket{
@@ -543,7 +516,8 @@ var connectorInstallCmd = &cobra.Command{
 		}
 		fmt.Println(startResult)
 
-		socket := models.Socket{}
+		attempts := 10
+		var socket *models.Socket
 		for i := 0; i < 10; i++ {
 			// lets check if the socket exists
 			err = client.Request("GET", "socket/"+socketName, &socket, nil)
@@ -556,10 +530,13 @@ var connectorInstallCmd = &cobra.Command{
 		}
 		// now lets get the socket
 
+		if socket == nil {
+			log.Fatalf("Error: failed to get newly created socket after %d attempts", attempts)
+		}
+
 		socketURL := fmt.Sprintf("https://client.border0.com/#/ssh/%s", socket.Dnsname)
 		printThis := fmt.Sprintf("\n🚀 Service started successfully.\nYou can now connect to this machine using the following url: \n%s", socketURL)
 		fmt.Println(printThis)
-
 	},
 }
 
@@ -567,16 +544,22 @@ var connectorUnInstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "uninstall the connector service from the machine",
 	Run: func(cmd *cobra.Command, args []string) {
+		if !util.RunningAsAdministrator() {
+			log.Println("Error: command must be ran as system administrator")
+			os.Exit(1)
+		}
 		service, err := service_daemon.New(serviceName, serviceDescription)
 		if err != nil {
 			log.Println("Error: ", err)
 			os.Exit(1)
 		}
-		checkRootPermission()
-
-		installed, _ := checkDaemonInstallation()
+		installed, err := service_daemon.IsInstalled(service)
+		if err != nil {
+			log.Printf("Error: failed to check whether service is already installed: %v", err)
+			os.Exit(1)
+		}
 		if !installed {
-			log.Println("Service is NOT installed")
+			log.Printf("The service is NOT installed")
 			os.Exit(1)
 		}
 
