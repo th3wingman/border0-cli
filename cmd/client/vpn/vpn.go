@@ -138,15 +138,30 @@ var clientVpnCmd = &cobra.Command{
 					// Check if this is a local IP, or routed via default gateway
 					// If so, we don't want to add it to the static routes
 
-					isLocal, err := vpnlib.IsLocalIp(dnsServer)
+					networkInterfaces, err := vpnlib.GetLocalInterfacesForIp(dnsServer)
 					if err != nil {
 						log.Println("failed to check if IP is local", err)
 						continue
 					}
-					if isLocal {
-						// if it's on the local network
+
+					// if the map is not empty, then the IP is local
+					if len(networkInterfaces) > 0 {
 						// This is the case if the IP is on the same subnet as the local gateway, for example on the router
-						continue
+						// However we should make sure it's not on the newly added tun VPN interface
+
+						// we should make sure the list of interfaces is not empty, and doesn't contain iface.Name()
+						// if it does, we should continue
+						// check the list to and if the interface found is not the same as  iface.Name()
+						// Which is the VPN tunnel, then it's a local network, and we should continue
+						// ie. no by pass route is needed, since the IP address is locally connected.
+						vpnIfaceName := iface.Name()
+						for _, name := range networkInterfaces {
+							if name != vpnIfaceName {
+								// network found, not adding bypass route
+								continue
+							}
+
+						}
 					}
 
 					// For now we old support IPv4
