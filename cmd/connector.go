@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -43,15 +41,19 @@ var connectorCmd = &cobra.Command{
 }
 
 const (
-	// for Service
-	serviceDescription = "border0.com Service"
+	serviceName        = "border0" // must match binary name
+	serviceDescription = "Border0 Connector Service"
+
+	defaultConfigFileName = "border0.yaml"
 )
 
-var defaultConfigFileName = "border0.yaml"
-var serviceConfigPath = "/etc/border0/"
-var serviceName = "border0"
+var (
+	serviceConfigPath = "/etc/border0/"
+)
 
 // hidden variables used for connector v2 only
+var token string
+var daemonOnly bool
 var v2 bool
 var connectorId string
 
@@ -131,79 +133,6 @@ func displayServiceStatus(serviceName string) {
 	}
 }
 
-func copyFile(src, dst, username string) error {
-
-	// get uid and gid of the username
-	u, err := user.Lookup(username)
-	if err != nil {
-		return err
-	}
-	// Convert UID and GID strings to integers
-	uid, err := strconv.Atoi(u.Uid)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return err
-	}
-	gid, err := strconv.Atoi(u.Gid)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return err
-	}
-
-	// Open the source file for reading
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	//check of the .border0 directory exists
-	// if not create it and set the owner to the current user
-
-	// first fetch the directory from dst
-	border0dir := filepath.Dir(dst)
-
-	if _, err := os.Stat(border0dir); os.IsNotExist(err) {
-		if err := os.Mkdir(border0dir, 0700); err != nil {
-			return err
-		}
-	}
-	// set the ownership of the dir to the user
-	if err := os.Chown(border0dir, uid, gid); err != nil {
-		return err
-	}
-
-	// Create the destination file
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	// Copy the contents of the source file to the destination file
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	// Sync the file to ensure it is written to disk
-	err = dstFile.Sync()
-	if err != nil {
-		return err
-	}
-
-	if err := os.Chmod(dst, 0600); err != nil {
-		return err
-	}
-
-	// set the ownership of the file to the user
-	if err := os.Chown(dst, uid, gid); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func makeConfigPath() string {
 	if runtime.GOOS == "windows" {
 		u, err := user.Current()
@@ -235,7 +164,7 @@ var connectorStartCmd = &cobra.Command{
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			config, err := connectorv2config.GetConfiguration(ctx)
+			config, err := connectorv2config.GetConfiguration(ctx, connectorConfig)
 			if err != nil {
 				log.Fatal("failed to get connector (v2) configuration", zap.Error(err))
 			}
@@ -353,7 +282,7 @@ func connectorInstallAws(ctx context.Context) {
 }
 
 func connectorInstallLocal(ctx context.Context) {
-	err := install.RunInstallWizard(ctx, version)
+	err := install.RunInstallWizard(ctx, version, daemonOnly, token)
 	if err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
@@ -380,6 +309,7 @@ var connectorInstallCmd = &cobra.Command{
 				connectorInstallAws(cmd.Context())
 				return
 			}
+			loginCmd.Run(cmd, []string{})
 			connectorInstallLocal(cmd.Context())
 			return
 		}
@@ -518,7 +448,7 @@ var connectorInstallCmd = &cobra.Command{
 
 		attempts := 10
 		var socket *models.Socket
-		for i := 0; i < 10; i++ {
+		for i := 0; i < attempts; i++ {
 			// lets check if the socket exists
 			err = client.Request("GET", "socket/"+socketName, &socket, nil)
 			if err == nil {
@@ -644,14 +574,23 @@ var connectorStatusCmd = &cobra.Command{
 func init() {
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
 	connectorStartCmd.Flags().BoolVarP(&v2, "v2", "", false, "use connector v2")
-	connectorStartCmd.Flag("v2").Hidden = true
 	connectorStartCmd.Flags().StringVarP(&connectorId, "connector-id", "", "", "connector id to use with connector control stream")
+	connectorInstallCmd.Flags().BoolVarP(&v2, "v2", "", false, "use connector v2")
+	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
+	connectorInstallCmd.Flags().BoolVarP(&daemonOnly, "daemon-only", "d", false, "Install the daemon only, do not create connector")
+	connectorInstallCmd.Flags().StringVarP(&token, "token", "t", "", "Border0 token for use by the installed connector")
+
+	// hide connector v2 related flags for now
+	connectorStartCmd.Flag("v2").Hidden = true
 	connectorStartCmd.Flag("connector-id").Hidden = true
+	connectorInstallCmd.Flag("v2").Hidden = true
+	connectorInstallCmd.Flag("aws").Hidden = true
+	connectorInstallCmd.Flag("daemon-only").Hidden = true
+	connectorInstallCmd.Flag("token").Hidden = true
+
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
-
-	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
 	rootCmd.AddCommand(connectorCmd)

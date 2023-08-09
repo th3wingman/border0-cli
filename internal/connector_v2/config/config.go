@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-cli/lib/varsource"
 	"gopkg.in/yaml.v3"
 )
@@ -32,16 +33,16 @@ const (
 // Configuration represents (static) connector configuration
 type Configuration struct {
 	Token                      string            `yaml:"token"`
-	ConnectorId                string            `yaml:"connector_id"`
-	ConnectorServer            string            `yaml:"connector_server"`
-	ConnectorInsecureTransport bool              `yaml:"connector_insecure"`
-	TunnelServer               string            `yaml:"tunnel_server"`
+	ConnectorId                string            `yaml:"connector_id,omitempty"`
+	ConnectorServer            string            `yaml:"connector_server,omitempty"`
+	ConnectorInsecureTransport bool              `yaml:"connector_insecure,omitempty"`
+	TunnelServer               string            `yaml:"tunnel_server,omitempty"`
 	Variables                  map[string]string `yaml:"variables,omitempty"`
 }
 
 // GetConfiguration looks for credentials and variables in the standard variable chain.
 // i.e. environment variabels take priority and override any values in config files.
-func GetConfiguration(ctx context.Context) (*Configuration, error) {
+func GetConfiguration(ctx context.Context, configFilePath string) (*Configuration, error) {
 	vs := varsource.NewDefaultVariableSource()
 	config := &Configuration{
 		ConnectorServer:            defaultConnectorServer,
@@ -49,9 +50,14 @@ func GetConfiguration(ctx context.Context) (*Configuration, error) {
 		TunnelServer:               defaultTunnelServer,
 	}
 
-	// if a non-default config file path is provided via
-	// the environment, use it and error on any failure
-	path := os.Getenv(envNameConfigFile)
+	path := ""
+	if configFilePath != "" {
+		path = configFilePath
+	}
+	if os.Getenv(envNameConfigFile) != "" {
+		path = os.Getenv(envNameConfigFile)
+	}
+
 	if path != "" {
 		_, err := os.Stat(path)
 		if err != nil {
@@ -71,9 +77,12 @@ func GetConfiguration(ctx context.Context) (*Configuration, error) {
 			)
 		}
 	} else { // otherwise use the default configuration file path for config
-		path = fmt.Sprintf("%s/%s", os.Getenv("HOME"), defaultCredentialsFilePath)
-		_, err := os.Stat(path)
+		hd, err := util.GetUserHomeDir()
 		if err != nil {
+			return nil, fmt.Errorf("failed to get the user's home directory: %v", err)
+		}
+		path = fmt.Sprintf("%s/%s", hd, defaultCredentialsFilePath)
+		if _, err = os.Stat(path); err != nil {
 			// when the default config file path is used, we only error out when
 			// the failure is not due to a missing config file. This is because
 			// the token and config might still be present in the environment.

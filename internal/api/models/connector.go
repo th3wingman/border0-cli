@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+// ConnectorList represents a list of connectors
+type ConnectorList struct {
+	List []Connector `json:"list"`
+}
+
 // Connector represents a cloud-managed Border0 Connector.
 type Connector struct {
 	Name         string                 `json:"name"`

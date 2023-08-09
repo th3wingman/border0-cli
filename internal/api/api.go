@@ -358,6 +358,16 @@ func (a *Border0API) CreateConnector(ctx context.Context, name string, descripti
 	return &connector, nil
 }
 
+// ListConnectors lists an organization's connectors (v2)
+func (a *Border0API) ListConnectors(ctx context.Context) ([]models.Connector, error) {
+	var connectorList models.ConnectorList
+	err := a.Request(http.MethodGet, "connectors", &connectorList, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	return connectorList.List, nil
+}
+
 // CreateToken creates a new border0 admin token (api key)
 func (a *Border0API) CreateToken(ctx context.Context, name string, role string, expiresAt *time.Time) (*models.Token, error) {
 	payload := &models.Token{Name: name, Role: role}
@@ -376,7 +386,10 @@ func (a *Border0API) CreateToken(ctx context.Context, name string, role string, 
 
 // CreateConnectorToken creates a new border0 connector token
 func (a *Border0API) CreateConnectorToken(ctx context.Context, connectorId string, name string, expiresAt *time.Time) (*models.ConnectorToken, error) {
-	payload := &models.ConnectorTokenRequest{ConnectorId: connectorId, Name: name, ExpiresAt: expiresAt.Unix()}
+	payload := &models.ConnectorTokenRequest{ConnectorId: connectorId, Name: name}
+	if expiresAt != nil {
+		payload.ExpiresAt = expiresAt.Unix()
+	}
 
 	var tk models.ConnectorToken
 	err := a.Request(http.MethodPost, "connector/token", &tk, payload, true)
