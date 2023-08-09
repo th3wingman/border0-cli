@@ -22,8 +22,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
-	"github.com/borderzero/border0-cli/internal/connector/service_daemon"
 	"github.com/borderzero/border0-cli/internal/connector_v2/install"
+	"github.com/borderzero/border0-cli/internal/service_daemon"
 
 	connectorv2 "github.com/borderzero/border0-cli/internal/connector_v2"
 	connectorv2config "github.com/borderzero/border0-cli/internal/connector_v2/config"
@@ -341,7 +341,7 @@ func connectorInstallAws(ctx context.Context) {
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
 
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -355,6 +355,14 @@ func connectorInstallAws(ctx context.Context) {
 	}()
 
 	err := install.RunCloudInstallWizardForAWS(ctx, version)
+	if err != nil {
+		fmt.Printf("\nERROR: %s\n", err)
+		os.Exit(1)
+	}
+}
+
+func connectorInstallLocal(ctx context.Context) {
+	err := install.RunInstallWizard(ctx, version)
 	if err != nil {
 		fmt.Printf("\nERROR: %s\n", err)
 		os.Exit(1)
@@ -389,8 +397,12 @@ var connectorInstallCmd = &cobra.Command{
 	Short: "install the connector service on the machine",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		if aws {
-			connectorInstallAws(cmd.Context())
+		if v2 {
+			if aws {
+				connectorInstallAws(cmd.Context())
+				return
+			}
+			connectorInstallLocal(cmd.Context())
 			return
 		}
 
