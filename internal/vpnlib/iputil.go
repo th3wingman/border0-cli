@@ -58,11 +58,8 @@ func validateIPv4(packet []byte) error {
 	return nil
 }
 
-// Check if an IP address is local or not.
-// Ie if it is routed via the default gateway or not.
-// returns True if the IP can reached via a local network interface.
-// ALso returns a list of interfaces on which this IP network was found
-func IsLocalIp(ipAddress string) ([]string, error) {
+// Returns a list of interfaces on which this IP network was found
+func GetLocalInterfacesForIp(ipAddress string) ([]string, error) {
 	//create a list of network interfaces, so we can return those if a match is found
 	networkInterfaces := []string{}
 
