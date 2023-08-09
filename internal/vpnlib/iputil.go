@@ -62,19 +62,18 @@ func validateIPv4(packet []byte) error {
 // Ie if it is routed via the default gateway or not.
 // returns True if the IP can reached via a local network interface.
 // ALso returns a list of interfaces on which this IP network was found
-func IsLocalIp(ipAddress string) (bool, []string, error) {
-	isLocal := false
-	// also create a list of network interfaces, so we can return those if a match is found
+func IsLocalIp(ipAddress string) ([]string, error) {
+	//create a list of network interfaces, so we can return those if a match is found
 	networkInterfaces := []string{}
 
 	targetIP := net.ParseIP(ipAddress)
 	if targetIP == nil {
-		return false, networkInterfaces, fmt.Errorf("invalid IP address")
+		return networkInterfaces, fmt.Errorf("invalid IP address")
 	}
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return false, networkInterfaces, fmt.Errorf("failed to get local network interfaces: %v", err)
+		return networkInterfaces, fmt.Errorf("failed to get local network interfaces: %v", err)
 	}
 
 	for _, iface := range interfaces {
@@ -85,7 +84,7 @@ func IsLocalIp(ipAddress string) (bool, []string, error) {
 
 		addresses, err := iface.Addrs()
 		if err != nil {
-			return false, networkInterfaces, fmt.Errorf("failed to get addresses for interface %v: %v", iface.Name, err)
+			return networkInterfaces, fmt.Errorf("failed to get addresses for interface %v: %v", iface.Name, err)
 		}
 
 		for _, address := range addresses {
@@ -94,12 +93,11 @@ func IsLocalIp(ipAddress string) (bool, []string, error) {
 				continue
 			}
 			if ipNet.Contains(targetIP) {
-				isLocal = true
 				// append iface.Name to list of interfaces
 				networkInterfaces = append(networkInterfaces, iface.Name)
 			}
 		}
 	}
-	return isLocal, networkInterfaces, nil
+	return networkInterfaces, nil
 
 }
