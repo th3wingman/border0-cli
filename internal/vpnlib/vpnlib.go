@@ -566,7 +566,7 @@ func ConnToTunCopy(conn net.Conn, iface *water.Interface) error {
 				return err
 			} else {
 				fmt.Printf("Failed to read header: %v\n", err)
-				continue
+				return err
 			}
 
 		}
