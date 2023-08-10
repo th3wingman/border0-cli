@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -22,8 +20,9 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
-	"github.com/borderzero/border0-cli/internal/connector/service_daemon"
 	"github.com/borderzero/border0-cli/internal/connector_v2/install"
+	"github.com/borderzero/border0-cli/internal/service_daemon"
+	"github.com/borderzero/border0-cli/internal/util"
 
 	connectorv2 "github.com/borderzero/border0-cli/internal/connector_v2"
 	connectorv2config "github.com/borderzero/border0-cli/internal/connector_v2/config"
@@ -42,15 +41,19 @@ var connectorCmd = &cobra.Command{
 }
 
 const (
-	// for Service
-	serviceDescription = "border0.com Service"
+	serviceName        = "border0" // must match binary name
+	serviceDescription = "Border0 Connector Service"
+
+	defaultConfigFileName = "border0.yaml"
 )
 
-var defaultConfigFileName = "border0.yaml"
-var serviceConfigPath = "/etc/border0/"
-var serviceName = "border0"
+var (
+	serviceConfigPath = "/etc/border0/"
+)
 
 // hidden variables used for connector v2 only
+var token string
+var daemonOnly bool
 var v2 bool
 var connectorId string
 
@@ -130,79 +133,6 @@ func displayServiceStatus(serviceName string) {
 	}
 }
 
-func copyFile(src, dst, username string) error {
-
-	// get uid and gid of the username
-	u, err := user.Lookup(username)
-	if err != nil {
-		return err
-	}
-	// Convert UID and GID strings to integers
-	uid, err := strconv.Atoi(u.Uid)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return err
-	}
-	gid, err := strconv.Atoi(u.Gid)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return err
-	}
-
-	// Open the source file for reading
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	//check of the .border0 directory exists
-	// if not create it and set the owner to the current user
-
-	// first fetch the directory from dst
-	border0dir := filepath.Dir(dst)
-
-	if _, err := os.Stat(border0dir); os.IsNotExist(err) {
-		if err := os.Mkdir(border0dir, 0700); err != nil {
-			return err
-		}
-	}
-	// set the ownership of the dir to the user
-	if err := os.Chown(border0dir, uid, gid); err != nil {
-		return err
-	}
-
-	// Create the destination file
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	// Copy the contents of the source file to the destination file
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	// Sync the file to ensure it is written to disk
-	err = dstFile.Sync()
-	if err != nil {
-		return err
-	}
-
-	if err := os.Chmod(dst, 0600); err != nil {
-		return err
-	}
-
-	// set the ownership of the file to the user
-	if err := os.Chown(dst, uid, gid); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func makeConfigPath() string {
 	if runtime.GOOS == "windows" {
 		u, err := user.Current()
@@ -221,15 +151,6 @@ func makeConfigPath() string {
 	return filepath.Join(serviceConfigPath, defaultConfigFileName)
 }
 
-func checkRootPermission() {
-	if runtime.GOOS != "windows" {
-		if os.Geteuid() != 0 {
-			log.Printf("You need to run this command as root or with sudo")
-			os.Exit(1)
-		}
-	}
-}
-
 var connectorStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start the connector in foreground ad-hoc mode",
@@ -243,7 +164,7 @@ var connectorStartCmd = &cobra.Command{
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			config, err := connectorv2config.GetConfiguration(ctx)
+			config, err := connectorv2config.GetConfiguration(ctx, connectorConfig)
 			if err != nil {
 				log.Fatal("failed to get connector (v2) configuration", zap.Error(err))
 			}
@@ -341,7 +262,7 @@ func connectorInstallAws(ctx context.Context) {
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
 
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -354,34 +275,28 @@ func connectorInstallAws(ctx context.Context) {
 		}
 	}()
 
-	err := install.RunCloudInstallWizardForAWS(ctx, version)
-	if err != nil {
-		fmt.Printf("\nERROR: %s\n", err)
+	if err := install.RunCloudInstallWizardForAWS(ctx, version); err != nil {
+		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func checkDaemonInstallation() (bool, error) {
-	service, err := service_daemon.New(serviceName, serviceDescription)
+func connectorInstallLocal(ctx context.Context) {
+	err := install.RunInstallWizard(ctx, version, daemonOnly, token)
 	if err != nil {
-		return false, err
+		fmt.Printf("\nError: %s\n", err)
+		os.Exit(1)
 	}
-
-	status, err := service.Status()
-	if err != nil {
-		return false, err
-	}
-
-	if status == "service not installed" {
-		return false, err
-	}
-	return true, err
 }
 
-// replace all special characters except for '-' with a dash
-func replaceSpecialCharactersWithDash(input string) string {
-	reg := regexp.MustCompile(`[^a-zA-Z0-9-]`)
-	return reg.ReplaceAllString(input, "-")
+func randString(n int) string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 var connectorInstallCmd = &cobra.Command{
@@ -389,19 +304,30 @@ var connectorInstallCmd = &cobra.Command{
 	Short: "install the connector service on the machine",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		if aws {
-			connectorInstallAws(cmd.Context())
+		if v2 {
+			if aws {
+				connectorInstallAws(cmd.Context())
+				return
+			}
+			loginCmd.Run(cmd, []string{})
+			connectorInstallLocal(cmd.Context())
 			return
 		}
 
+		if !util.RunningAsAdministrator() {
+			log.Println("Error: command must be ran as system administrator")
+			os.Exit(1)
+		}
 		service, err := service_daemon.New(serviceName, serviceDescription)
 		if err != nil {
 			log.Println("Error: ", err)
 			os.Exit(1)
 		}
-		checkRootPermission()
-		// check if the service is already isntalled
-		installed, _ := checkDaemonInstallation()
+		installed, err := service_daemon.IsInstalled(service)
+		if err != nil {
+			log.Printf("Error: failed to check whether service is already installed: %v", err)
+			os.Exit(1)
+		}
 		if installed {
 			log.Println("Service already installed")
 			os.Exit(1)
@@ -412,20 +338,19 @@ var connectorInstallCmd = &cobra.Command{
 
 		client, err := http.NewClient()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("Error: %v", err)
 		}
 
-		myHostname, err := os.Hostname()
+		hostname, err := util.GetFormattedHostname()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("Error: %v", err)
 		}
-		myHostname = replaceSpecialCharactersWithDash(myHostname)
 
 		now := time.Now()
 		oneYearLater := now.AddDate(1, 0, 0)
 		oneYearFromNow := oneYearLater.Unix()
 
-		tokenName := fmt.Sprintf("Connector on %s host", myHostname)
+		tokenName := fmt.Sprintf("Connector %s", hostname)
 		// s := models.Socket{}
 		t := models.Token{}
 		newToken := &models.Token{
@@ -440,18 +365,8 @@ var connectorInstallCmd = &cobra.Command{
 
 		configPath := makeConfigPath()
 
-		//now write the randString fucntion
-		randString := func(n int) string {
-			r := rand.New(rand.NewSource(time.Now().UnixNano()))
-			var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyz")
-			b := make([]rune, n)
-			for i := range b {
-				b[i] = letters[r.Intn(len(letters))]
-			}
-			return string(b)
-		}
 		// staging with setting the new socket name
-		socketName := strings.ToLower(myHostname)
+		socketName := hostname
 		// function to check if the socket name exists
 		socketExists := func(name string) bool {
 			err := client.Request("GET", "socket/"+name, &models.Socket{}, nil)
@@ -463,7 +378,7 @@ var connectorInstallCmd = &cobra.Command{
 		if err == nil {
 			// ask user to provide a new socket name
 			fmt.Printf("Socket '%s' already exists.\n", socketName)
-			socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+			socketName = fmt.Sprintf("%s-%s", hostname, randString(5))
 			fmt.Printf("Provide a new socket name, eg: '%s'? :", socketName)
 			reader := bufio.NewReader(os.Stdin)
 			text, _ := reader.ReadString('\n')
@@ -483,13 +398,13 @@ var connectorInstallCmd = &cobra.Command{
 				fmt.Printf("Using '%s' as socket name.\n", socketName)
 			} else {
 				fmt.Println("Generating randomized name.")
-				socketName = fmt.Sprintf("%s-%s", myHostname, randString(5))
+				socketName = fmt.Sprintf("%s-%s", hostname, randString(5))
 			}
 		}
 
 		// we are going to generate out template connector config yaml file
 		config := TemplateConnectorConfig{}
-		config.Connector.Name = fmt.Sprintf("%s-cntr", myHostname)
+		config.Connector.Name = fmt.Sprintf("%s-cntr", strings.ToLower(hostname))
 		config.Credentials.Token = t.Token
 
 		sshServerSocket := Socket{
@@ -531,8 +446,9 @@ var connectorInstallCmd = &cobra.Command{
 		}
 		fmt.Println(startResult)
 
-		socket := models.Socket{}
-		for i := 0; i < 10; i++ {
+		attempts := 10
+		var socket *models.Socket
+		for i := 0; i < attempts; i++ {
 			// lets check if the socket exists
 			err = client.Request("GET", "socket/"+socketName, &socket, nil)
 			if err == nil {
@@ -544,10 +460,13 @@ var connectorInstallCmd = &cobra.Command{
 		}
 		// now lets get the socket
 
+		if socket == nil {
+			log.Fatalf("Error: failed to get newly created socket after %d attempts", attempts)
+		}
+
 		socketURL := fmt.Sprintf("https://client.border0.com/#/ssh/%s", socket.Dnsname)
 		printThis := fmt.Sprintf("\n🚀 Service started successfully.\nYou can now connect to this machine using the following url: \n%s", socketURL)
 		fmt.Println(printThis)
-
 	},
 }
 
@@ -555,16 +474,22 @@ var connectorUnInstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "uninstall the connector service from the machine",
 	Run: func(cmd *cobra.Command, args []string) {
+		if !util.RunningAsAdministrator() {
+			log.Println("Error: command must be ran as system administrator")
+			os.Exit(1)
+		}
 		service, err := service_daemon.New(serviceName, serviceDescription)
 		if err != nil {
 			log.Println("Error: ", err)
 			os.Exit(1)
 		}
-		checkRootPermission()
-
-		installed, _ := checkDaemonInstallation()
+		installed, err := service_daemon.IsInstalled(service)
+		if err != nil {
+			log.Printf("Error: failed to check whether service is already installed: %v", err)
+			os.Exit(1)
+		}
 		if !installed {
-			log.Println("Service is NOT installed")
+			log.Printf("The service is NOT installed")
 			os.Exit(1)
 		}
 
@@ -649,14 +574,23 @@ var connectorStatusCmd = &cobra.Command{
 func init() {
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
 	connectorStartCmd.Flags().BoolVarP(&v2, "v2", "", false, "use connector v2")
-	connectorStartCmd.Flag("v2").Hidden = true
 	connectorStartCmd.Flags().StringVarP(&connectorId, "connector-id", "", "", "connector id to use with connector control stream")
+	connectorInstallCmd.Flags().BoolVarP(&v2, "v2", "", false, "use connector v2")
+	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
+	connectorInstallCmd.Flags().BoolVarP(&daemonOnly, "daemon-only", "d", false, "Install the daemon only, do not create connector")
+	connectorInstallCmd.Flags().StringVarP(&token, "token", "t", "", "Border0 token for use by the installed connector")
+
+	// hide connector v2 related flags for now
+	connectorStartCmd.Flag("v2").Hidden = true
 	connectorStartCmd.Flag("connector-id").Hidden = true
+	connectorInstallCmd.Flag("v2").Hidden = true
+	connectorInstallCmd.Flag("aws").Hidden = true
+	connectorInstallCmd.Flag("daemon-only").Hidden = true
+	connectorInstallCmd.Flag("token").Hidden = true
+
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
-
-	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
 	rootCmd.AddCommand(connectorCmd)

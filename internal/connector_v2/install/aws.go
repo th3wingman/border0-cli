@@ -17,9 +17,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
-
-	border0 "github.com/borderzero/border0-cli/internal/api"
-	"github.com/borderzero/border0-cli/internal/api/models"
 )
 
 const (
@@ -79,7 +76,7 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to prompt for AWS VPC Subnet ID: %v", err)
 	}
 
-	border0ConnectorName, err := promptForBorder0ConnectorName(ctx, cfg)
+	border0ConnectorName, err := promptForBorder0ConnectorName(ctx, cliVersion, "my-connector")
 	if err != nil {
 		return fmt.Errorf("failed to prompt for Border0 connector name: %v", err)
 	}
@@ -89,7 +86,7 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to prompt for AWS SSM Parameter path for Border0 token: %v", err)
 	}
 
-	border0Connector, err := createNewBorder0Connector(ctx, border0ConnectorName, cliVersion)
+	border0Connector, err := createNewBorder0Connector(ctx, border0ConnectorName, "AWS Cloud-Install Border0 Connector", cliVersion)
 	if err != nil {
 		return fmt.Errorf("failed to create new Border0 connector: %v", err)
 	}
@@ -256,24 +253,6 @@ func promptForVpcSubnetId(ctx context.Context, cfg aws.Config, vpcId string) (st
 	return strings.Split(subnetIdChoice, " ")[0], nil
 }
 
-func promptForBorder0ConnectorName(ctx context.Context, cfg aws.Config) (string, error) {
-	var connectorNameTarget string
-	err := survey.AskOne(
-		&survey.Input{
-			Message: "What name would you like for your new Border0 Connector?",
-			Default: fmt.Sprintf("my-connector-%d", time.Now().Unix()),
-		},
-		&connectorNameTarget,
-		survey.WithValidator(survey.Required),
-		// TODO: validator for connector not already existing
-		// TODO: validator for connector name regex
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to ask survey question: %v", err)
-	}
-	return connectorNameTarget, nil
-}
-
 func promptForBorder0TokenSsmParameterPath(
 	ctx context.Context,
 	cfg aws.Config,
@@ -325,51 +304,6 @@ func getBorder0TokenSsmParameterPathValidator(ctx context.Context, cfg aws.Confi
 		// success!
 		return nil
 	}
-}
-
-func createNewBorder0Connector(
-	ctx context.Context,
-	connectorName string,
-	cliVersion string,
-) (*models.Connector, error) {
-	border0Client := border0.NewAPI(border0.WithVersion(cliVersion))
-
-	connector, err := border0Client.CreateConnector(ctx, connectorName, fmt.Sprintf("AWS Cloud-Install Border0 Connector"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new Border0 connector via the Border0 API: %v", err)
-	}
-
-	fmt.Printf("🚀 Border0 connector \"%s\" created successfully!\n", connectorName)
-
-	return connector, nil
-}
-
-func generateNewBorder0ConnectorToken(
-	ctx context.Context,
-	connectorId string,
-	cliVersion string,
-	tokenName string,
-) (*models.ConnectorToken, error) {
-	border0Client := border0.NewAPI(border0.WithVersion(cliVersion))
-
-	oneYearFromNow := time.Now().AddDate(1, 0, 0)
-
-	createTokenCtx, createTokenCtxCancel := context.WithTimeout(ctx, timeoutCreateBorder0Token)
-	defer createTokenCtxCancel()
-
-	token, err := border0Client.CreateConnectorToken(
-		createTokenCtx,
-		connectorId,
-		fmt.Sprintf("connector-token-%d", time.Now().Unix()),
-		&oneYearFromNow,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new Border0 token for connector via the Border0 API: %v", err)
-	}
-
-	fmt.Printf("🚀 Border0 connector token \"%s\" created successfully!\n", token.Name)
-
-	return token, nil
 }
 
 func saveBorder0TokenInSsmParameterStore(

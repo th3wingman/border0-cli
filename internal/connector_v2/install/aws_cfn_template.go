@@ -27,6 +27,21 @@ Parameters:
     Type: AWS::SSM::Parameter::Name
     Description: The name/path of the SSM parameter for the Border0 token (which the connector instance uses to authenticate against your Border0 organization)
 
+  Border0LogLevel:
+    Type: String
+    Description: The minimum severity level of events to log
+    Default: info
+
+  Border0ConnectorServer:
+    Type: String
+    Description: The host and port of the Border0 connector control plane GRPC server.
+    Default: capi.border0.com:443
+
+  Border0TunnelServer:
+    Type: String
+    Description: The host and port of the Border0 connector data plane tunnel server.
+    Default: tunnel.border0.com
+
 ####################################
 ##           RESOURCES            ##
 ####################################
@@ -110,11 +125,11 @@ Resources:
             #!/bin/bash -xe
             sudo curl https://download.border0.com/linux_arm64/border0 -o /usr/local/bin/border0
             sudo chmod +x /usr/local/bin/border0
-            export BORDER0_TUNNEL=tunnel.staging.border0.com
-            export BORDER0_CONNECTOR_SERVER=capi.staging.border0.com:443
-            export BORDER0_LOG_LEVEL=debug
-            export BORDER0_TOKEN=from:aws:ssm:${Border0TokenSsmParameter}
             export AWS_REGION=${AWS::Region}
+            export BORDER0_TOKEN=from:aws:ssm:${Border0TokenSsmParameter}
+            export BORDER0_TUNNEL=${Border0TunnelServer}
+            export BORDER0_CONNECTOR_SERVER=${Border0ConnectorServer}
+            export BORDER0_LOG_LEVEL=${Border0LogLevel}
             border0 connector start --v2
 
   ConnectorInstanceAutoScalingGroup:

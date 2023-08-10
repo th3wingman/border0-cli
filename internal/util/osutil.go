@@ -39,3 +39,13 @@ func GetUserHomeDir() (string, error) {
 	}
 	return homedir, nil
 }
+
+// RunningAsAdministrator returns true if the
+// runtime has administrative privileges.
+func RunningAsAdministrator() bool {
+	if runtime.GOOS != "windows" {
+		return os.Geteuid() == 0
+	}
+	// FIXME: handle windows
+	return true
+}
