@@ -258,7 +258,9 @@ var connectorStopCmd = &cobra.Command{
 	},
 }
 
-func connectorInstallAws(ctx context.Context) {
+func connectorInstallAws(cmd *cobra.Command) {
+	ctx := cmd.Context()
+
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
 
@@ -281,8 +283,11 @@ func connectorInstallAws(ctx context.Context) {
 	}
 }
 
-func connectorInstallLocal(ctx context.Context) {
-	err := install.RunInstallWizard(ctx, version, daemonOnly, token)
+func connectorInstallLocal(cmd *cobra.Command) {
+	if !daemonOnly {
+		loginCmd.Run(cmd, []string{})
+	}
+	err := install.RunInstallWizard(cmd.Context(), version, daemonOnly, token)
 	if err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
@@ -306,11 +311,10 @@ var connectorInstallCmd = &cobra.Command{
 
 		if v2 {
 			if aws {
-				connectorInstallAws(cmd.Context())
+				connectorInstallAws(cmd)
 				return
 			}
-			loginCmd.Run(cmd, []string{})
-			connectorInstallLocal(cmd.Context())
+			connectorInstallLocal(cmd)
 			return
 		}
 
