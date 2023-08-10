@@ -76,31 +76,30 @@ func GetConfiguration(ctx context.Context, configFilePath string) (*Configuratio
 				err,
 			)
 		}
-	} else { // otherwise use the default configuration file path for config
-		hd, err := util.GetUserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get the user's home directory: %v", err)
-		}
-		path = fmt.Sprintf("%s/%s", hd, defaultCredentialsFilePath)
-		if _, err = os.Stat(path); err != nil {
-			// when the default config file path is used, we only error out when
-			// the failure is not due to a missing config file. This is because
-			// the token and config might still be present in the environment.
-			if !errors.Is(err, os.ErrNotExist) {
-				return nil, fmt.Errorf(
-					"failed to read default configuration file (%s): %v",
-					defaultCredentialsFilePath,
-					err,
-				)
-			}
-			// pass
-		} else {
-			if err = unmarshalConfiguration(path, config); err != nil {
-				return nil, fmt.Errorf(
-					"failed to read the default configuration file (%s): %v",
-					path,
-					err,
-				)
+	} else {
+		// otherwise try the default configuration file path for config
+		if hd, err := util.GetUserHomeDir(); err == nil {
+			path = fmt.Sprintf("%s/%s", hd, defaultCredentialsFilePath)
+			if _, err = os.Stat(path); err != nil {
+				// when the default config file path is used, we only error out when
+				// the failure is not due to a missing config file. This is because
+				// the token and config might still be present in the environment.
+				if !errors.Is(err, os.ErrNotExist) {
+					return nil, fmt.Errorf(
+						"failed to read default configuration file (%s): %v",
+						defaultCredentialsFilePath,
+						err,
+					)
+				}
+				// pass
+			} else {
+				if err = unmarshalConfiguration(path, config); err != nil {
+					return nil, fmt.Errorf(
+						"failed to read the default configuration file (%s): %v",
+						path,
+						err,
+					)
+				}
 			}
 		}
 	}
