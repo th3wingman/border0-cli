@@ -3,6 +3,7 @@ package upstreamdata
 import (
 	"context"
 	"fmt"
+	"os/user"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/lib/varsource"
@@ -47,7 +48,7 @@ func (u *UpstreamDataBuilder) setupSSHUpstreamValues(s *models.Socket, configMap
 	case types.UpstreamAuthenticationTypeBorder0Cert:
 		u.setupBorder0Certificate(s, configMap.SSHConfiguration.Border0CertificateDetails)
 	case types.UpstreamConnectionTypeBuiltInSshServer:
-		u.setupBuiltInSshServer(s)
+		u.setupBuiltInSshServer(s, configMap.SSHConfiguration.BuiltInSshServerDetails)
 	default:
 		return fmt.Errorf("unknown upstream connection type: %s", configMap.UpstreamConnectionType)
 	}
@@ -105,8 +106,25 @@ func (u *UpstreamDataBuilder) setupEc2Connect(s *models.Socket, ec2Details types
 	return nil
 }
 
-func (u *UpstreamDataBuilder) setupBuiltInSshServer(s *models.Socket) error {
+func (u *UpstreamDataBuilder) setupBuiltInSshServer(s *models.Socket, builtInServerDetails *types.BuiltInSshServerDetails) error {
 	s.SSHServer = true
+
+	switch builtInServerDetails.UsernameProvider {
+	case types.UsernameProviderUseConnectorUser:
+		currentUser, err := user.Current()
+		if err != nil {
+			return fmt.Errorf("failed to get the current user: %v", err)
+		}
+		s.ConnectorLocalData.UpstreamUsername = currentUser.Name
+	case types.UsernameProviderDefined:
+		s.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(builtInServerDetails.Username)
+		return nil
+	case types.UsernameProviderPromptClient:
+		// do nothing
+	default:
+		// do nothing
+	}
+
 	return nil
 }
 
