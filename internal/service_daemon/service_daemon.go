@@ -5,7 +5,6 @@ package service_daemon
 
 import (
 	"runtime"
-	"strings"
 
 	"github.com/takama/daemon"
 )
@@ -21,16 +20,4 @@ func New(name, description string) (daemon.Daemon, error) {
 		return nil, err
 	}
 	return daemon, err
-}
-
-// IsInstalled returns true if a given service is installed.
-func IsInstalled(service daemon.Daemon) (bool, error) {
-	status, err := service.Status()
-	if err != nil {
-		if err.Error() != "Service is not installed" {
-			return false, err
-		}
-		return false, nil
-	}
-	return strings.Contains(status, "is running"), nil
 }
