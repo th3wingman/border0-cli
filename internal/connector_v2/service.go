@@ -571,7 +571,13 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 
 	switch {
 	case socket.Socket.SSHServer && socket.SocketType == "ssh":
-		sshServer, err := ssh.NewServer(logger, c.organization.Certificates["ssh_public_key"])
+		opts := []ssh.Option{}
+		if socket.Socket != nil &&
+			socket.Socket.ConnectorLocalData != nil &&
+			socket.Socket.ConnectorLocalData.UpstreamUsername != "" {
+			opts = append(opts, ssh.WithUsername(socket.Socket.ConnectorLocalData.UpstreamUsername))
+		}
+		sshServer, err := ssh.NewServer(logger, c.organization.Certificates["ssh_public_key"], opts...)
 		if err != nil {
 			logger.Error("failed to create ssh server", zap.String("socket", socket.SocketID), zap.Error(err))
 			return
