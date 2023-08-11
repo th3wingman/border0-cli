@@ -108,15 +108,49 @@ build-linux:
 	cp $(BINARY_NAME) border0
 
 build-all:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(FLAGS) -o $(BINARY_NAME)_windows_amd64
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(FLAGS) -o $(BINARY_NAME)_linux_amd64
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(FLAGS) -o $(BINARY_NAME)_linux_arm64
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build $(FLAGS) -o $(BINARY_NAME)_linux_arm
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build $(FLAGS) -o $(BINARY_NAME)_linux_armv6
-	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build $(FLAGS) -o $(BINARY_NAME)_linux_386
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(FLAGS) -o $(BINARY_NAME)_darwin_amd64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(FLAGS) -o $(BINARY_NAME)_darwin_arm64
-	CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build $(FLAGS) -o $(BINARY_NAME)_openbsd_amd64
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_windows_amd64
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_amd64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_arm64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_arm
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_armv6
+	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_386
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_darwin_amd64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_darwin_arm64
+	CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_openbsd_amd64
+
+build-linux-multiarch:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_amd64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_arm64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_arm
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_armv6
+	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build $(FLAGS) -o ./bin/$(BINARY_NAME)_linux_386
+
+deb-package-amd64:
+	./build-deb.sh $(VERSION) amd64
+
+deb-package-arm64:
+	./build-deb.sh $(VERSION) arm64
+
+deb-package-arm:
+	./build-deb.sh $(VERSION) arm
+
+deb-package-armv6:
+	./build-deb.sh $(VERSION) armv6
+
+deb-package-386:
+	./build-deb.sh $(VERSION) 386
+
+deb-package-multiarch:
+	@echo "Creating DEB packages under ./repos repository structure"
+	./build-deb.sh $(VERSION) amd64
+	./build-deb.sh $(VERSION) arm64
+	./build-deb.sh $(VERSION) arm
+	./build-deb.sh $(VERSION) armv6
+	./build-deb.sh $(VERSION) 386
+
+deb-repository:
+	@echo "Creating Release for ./repos and signing it"
+	./generate-release.sh
 
 lint:
 	@echo "running go fmt"

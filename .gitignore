@@ -14,9 +14,10 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 bin/
-/mysocketctl
+repos/
+/mysocketctl_*
 /mysocketctl-go
-/border0
+/border0_*
 /border0-cli
 *.swp
 .vscode/
