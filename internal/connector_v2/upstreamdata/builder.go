@@ -115,7 +115,7 @@ func (u *UpstreamDataBuilder) setupBuiltInSshServer(s *models.Socket, builtInSer
 		if err != nil {
 			return fmt.Errorf("failed to get the current user: %v", err)
 		}
-		s.ConnectorLocalData.UpstreamUsername = currentUser.Name
+		s.ConnectorLocalData.UpstreamUsername = currentUser.Username
 	case types.UsernameProviderDefined:
 		s.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(builtInServerDetails.Username)
 		return nil

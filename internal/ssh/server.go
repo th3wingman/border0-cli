@@ -19,11 +19,32 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-func NewServer(logger *zap.Logger, ca string) (*ssh.Server, error) {
+type options struct {
+	username string
+}
+
+// Option represents a configuration option for the ssh server.
+type Option func(*options)
+
+// WithUsername is the option to override the ssh username.
+func WithUsername(username string) Option { return func(o *options) { o.username = username } }
+
+// NewServer returns a new ssh server.
+func NewServer(logger *zap.Logger, ca string, opts ...Option) (*ssh.Server, error) {
+	o := &options{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
 	handler := ssh.Handler(func(s ssh.Session) {
-		user, err := user.Lookup(s.User())
+		username := s.User()
+		if o.username != "" {
+			username = o.username
+		}
+
+		user, err := user.Lookup(username)
 		if err != nil {
-			logger.Sugar().Errorf("could not find user: %s", err)
+			logger.Sugar().Errorf("could not find user \"%s\": %v", username, err)
 			return
 		}
 
@@ -45,7 +66,7 @@ func NewServer(logger *zap.Logger, ca string) (*ssh.Server, error) {
 			return
 		}
 
-		logger.Sugar().Infof("new ssh session for %s (as user %s)", cert.KeyId, s.User())
+		logger.Sugar().Infof("new ssh session for %s (as user %s)", cert.KeyId, username)
 
 		uid, _ := strconv.ParseUint(user.Uid, 10, 32)
 		gid, _ := strconv.ParseUint(user.Gid, 10, 32)
