@@ -17,6 +17,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector/discover"
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
+	"github.com/borderzero/border0-go/lib/types/pointer"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -306,22 +307,105 @@ func (c *ConnectorCore) checkTunnelConnections(ctx context.Context, socketApiMap
 	return nil
 }
 
-func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, localSocket models.Socket) (*models.Socket, error) {
-	check := stringSlicesEqual(apiSocket.AllowedEmailAddresses, localSocket.AllowedEmailAddresses) &&
-		stringSlicesEqual(localSocket.AllowedEmailAddresses, apiSocket.AllowedEmailAddresses) &&
-		stringSlicesEqual(apiSocket.AllowedEmailDomains, localSocket.AllowedEmailDomains) &&
-		stringSlicesEqual(localSocket.AllowedEmailDomains, apiSocket.AllowedEmailDomains)
-
-	if len(apiSocket.PolicyNames) > 0 || len(localSocket.PolicyNames) > 0 {
-		check = check && stringSlicesEqual(apiSocket.PolicyNames, localSocket.PolicyNames) &&
-			stringSlicesEqual(localSocket.PolicyNames, apiSocket.PolicyNames)
+func (c *ConnectorCore) shouldUpdateSocket(apiSocket, localSocket models.Socket) bool {
+	// check allowed email addresses
+	if !stringSlicesEqual(apiSocket.AllowedEmailAddresses, localSocket.AllowedEmailAddresses) {
+		c.logger.Debug(
+			"socket needs update, AllowedEmailAddresses mismatch",
+			zap.Any("api_allowed_email_addresses", apiSocket.AllowedEmailAddresses),
+			zap.Any("local_allowed_email_addresses", localSocket.AllowedEmailAddresses),
+		)
+		return true
+	}
+	if !stringSlicesEqual(localSocket.AllowedEmailAddresses, apiSocket.AllowedEmailAddresses) {
+		c.logger.Debug(
+			"socket needs update, AllowedEmailAddresses mismatch",
+			zap.Any("api_allowed_email_addresses", apiSocket.AllowedEmailAddresses),
+			zap.Any("local_allowed_email_addresses", localSocket.AllowedEmailAddresses),
+		)
+		return true
+	}
+	// check allowed email domains
+	if !stringSlicesEqual(apiSocket.AllowedEmailDomains, localSocket.AllowedEmailDomains) {
+		c.logger.Debug(
+			"socket needs update, AllowedEmailDomains mismatch",
+			zap.Any("api_allowed_email_domains", apiSocket.AllowedEmailDomains),
+			zap.Any("local_allowed_email_addresses", localSocket.AllowedEmailDomains),
+		)
+		return true
+	}
+	if !stringSlicesEqual(localSocket.AllowedEmailDomains, apiSocket.AllowedEmailDomains) {
+		c.logger.Debug(
+			"socket needs update, AllowedEmailDomains mismatch",
+			zap.Any("api_allowed_email_domains", apiSocket.AllowedEmailDomains),
+			zap.Any("local_allowed_email_addresses", localSocket.AllowedEmailDomains),
+		)
+		return true
 	}
 
-	if !check || apiSocket.UpstreamHttpHostname != localSocket.UpstreamHttpHostname ||
-		(apiSocket.UpstreamUsername != nil && *apiSocket.UpstreamUsername != "") || (apiSocket.UpstreamPassword != nil && *apiSocket.UpstreamPassword != "") ||
-		apiSocket.UpstreamType != localSocket.UpstreamType ||
-		apiSocket.ConnectorAuthenticationEnabled != localSocket.ConnectorAuthenticationEnabled {
+	// check policy names
+	if !stringSlicesEqual(apiSocket.PolicyNames, localSocket.PolicyNames) {
+		c.logger.Debug(
+			"socket needs update, PolicyNames mismatch",
+			zap.Any("api_policy_names", apiSocket.PolicyNames),
+			zap.Any("local_policy_names", localSocket.PolicyNames),
+		)
+		return true
+	}
+	if !stringSlicesEqual(localSocket.PolicyNames, apiSocket.PolicyNames) {
+		c.logger.Debug(
+			"socket needs update, PolicyNames mismatch",
+			zap.Any("api_policy_names", apiSocket.PolicyNames),
+			zap.Any("local_policy_names", localSocket.PolicyNames),
+		)
+		return true
+	}
 
+	// check http hostname
+	if apiSocket.UpstreamHttpHostname != localSocket.UpstreamHttpHostname {
+		c.logger.Debug(
+			"socket needs update, UpstreamHttpHostname mismatch",
+			zap.Any("api_upstream_http_hostname", apiSocket.UpstreamHttpHostname),
+			zap.Any("local_upstream_http_hostname", localSocket.UpstreamHttpHostname),
+		)
+		return true
+	}
+
+	// check upstream username
+	if pointer.ValueOrZero(apiSocket.UpstreamUsername) != pointer.ValueOrZero(localSocket.UpstreamUsername) {
+		c.logger.Debug(
+			"socket needs update, UpstreamUsername mismatch",
+			zap.Any("api_upstream_username", pointer.ValueOrZero(apiSocket.UpstreamUsername)),
+			zap.Any("local_upstream_username", pointer.ValueOrZero(localSocket.UpstreamUsername)),
+		)
+		return true
+	}
+
+	// check upstream password
+	if pointer.ValueOrZero(apiSocket.UpstreamPassword) != pointer.ValueOrZero(localSocket.UpstreamPassword) {
+		c.logger.Debug(
+			"socket needs update, UpstreamPassword mismatch",
+			zap.Any("api_upstream_password", pointer.ValueOrZero(apiSocket.UpstreamPassword)),
+			zap.Any("local_upstream_password", pointer.ValueOrZero(localSocket.UpstreamPassword)),
+		)
+		return true
+	}
+
+	// check connector authentication enabled
+	if apiSocket.ConnectorAuthenticationEnabled != localSocket.ConnectorAuthenticationEnabled {
+		c.logger.Debug(
+			"socket needs update, ConnectorAuthenticationEnabled mismatch",
+			zap.Any("api_connector_authentication_enabled", apiSocket.ConnectorAuthenticationEnabled),
+			zap.Any("local_connector_authentication_enabled", localSocket.ConnectorAuthenticationEnabled),
+		)
+		return true
+	}
+
+	return false
+}
+
+func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, localSocket models.Socket) (*models.Socket, error) {
+	if c.shouldUpdateSocket(apiSocket, localSocket) {
 		apiSocket.AllowedEmailAddresses = localSocket.AllowedEmailAddresses
 		apiSocket.AllowedEmailDomains = localSocket.AllowedEmailDomains
 		apiSocket.UpstreamHttpHostname = localSocket.UpstreamHttpHostname
