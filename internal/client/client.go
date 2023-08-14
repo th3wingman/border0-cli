@@ -844,17 +844,7 @@ func ConnectorAuthConnect(addr string, tlsConfig *tls.Config) (conn net.Conn, er
 		return
 	}
 
-	connectorConn := tls.Client(conn, tlsConfig)
-	if err = connectorConn.Handshake(); err != nil {
-		log.Printf("failed to authenticate to connector: %v", err.Error())
-		return
-	}
-
-	_, err = conn.Write([]byte("BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"))
-	if err != nil {
-		log.Printf("failed to write to proxy: %v", err.Error())
-		conn.Close()
-	}
+	err = ConnectorAuthConnectWithConn(conn, tlsConfig)
 
 	return
 }
@@ -866,14 +856,11 @@ func ConnectorAuthConnectWithConn(conn net.Conn, tlsConfig *tls.Config) error {
 		return err
 	}
 
-	i, err := conn.Write([]byte("BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"))
+	_, err := conn.Write([]byte("BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"))
 	if err != nil {
 		log.Printf("failed to write to proxy: %v", err.Error())
 		conn.Close()
 	}
-
-	fmt.Println("wrote", i, "bytes")
-	time.Sleep(1 * time.Second)
 
 	return err
 }
