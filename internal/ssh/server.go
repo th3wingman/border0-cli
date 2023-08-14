@@ -80,7 +80,7 @@ func NewServer(logger *zap.Logger, ca string, opts ...Option) (*ssh.Server, erro
 
 		cmd.Dir = user.HomeDir
 
-		execCmd(s, cmd, uid, gid)
+		execCmd(s, cmd, uid, gid, username)
 	})
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

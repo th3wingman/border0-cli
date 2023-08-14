@@ -4,18 +4,19 @@
 package ssh
 
 import (
-	"github.com/ActiveState/termtest/conpty"
-	"github.com/gliderlabs/ssh"
-	"golang.org/x/sys/windows"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"sync"
 	"syscall"
+
+	"github.com/ActiveState/termtest/conpty"
+	"github.com/gliderlabs/ssh"
+	"golang.org/x/sys/windows"
 )
 
-func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
+func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64, username string) {
 	ptyReq, winCh, isPty := s.Pty()
 
 	vsn := windows.RtlGetVersion()
