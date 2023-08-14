@@ -21,7 +21,7 @@ import (
 	"github.com/opencontainers/selinux/go-selinux"
 )
 
-func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
+func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64, username string) {
 
 	euid := os.Geteuid()
 	var loginCmd string
@@ -48,9 +48,9 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64) {
 		if euid == 0 && loginCmd != "" {
 			cmd.Path = loginCmd
 			if isAlpine() {
-				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", s.User()})
+				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", username})
 			} else {
-				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", s.User()}, cmd.Args...)
+				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", username}, cmd.Args...)
 			}
 		} else {
 			sysProcAttr.Credential = &syscall.Credential{
