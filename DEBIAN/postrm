@@ -1,0 +1,35 @@
+#!/bin/sh
+
+case "$1" in
+remove | purge)
+    # Package is being removed (but not purged)
+
+    # check if border0 systemd unit is enabled and disable it if it is
+    if systemctl is-enabled --quiet border0.service; then systemctl disable border0.service; fi
+
+    # check if border0 service is running and stop it if it is
+    if systemctl is-active --quiet border0.service; then systemctl stop border0.service; fi
+
+    # check if border0 systemd unit exists and delete it if it does
+    if [ -f /etc/systemd/system/border0.service ]; then rm /etc/systemd/system/border0.service; fi
+
+    # reload systemd daemon
+    systemctl daemon-reload
+
+    # check if file /us/local/bin/border0 exists and delete if if it does
+    if [ -f /usr/local/bin/border0 ]; then rm /usr/local/bin/border0; fi
+    if [ -f /usr/bin/border0 ]; then rm /usr/bin/border0; fi
+
+    # check if /etc/border0 dorectory exists and delete it if it does
+    if [ -d /etc/border0 ]; then rm -rf /etc/border0; fi
+    ;;
+upgrade)
+    # This is an upgrade
+    # $2 contains the version being upgraded from
+    # we will handle this separately in the binary
+    # For now this is an NO-OP
+    ;;
+*)
+    echo "Unknown argument: $1"
+    ;;
+esac

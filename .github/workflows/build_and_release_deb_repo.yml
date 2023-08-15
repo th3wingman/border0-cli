@@ -1,0 +1,97 @@
+name: Build and release DEB repository
+run-name: Build and release DEB repository (${{ github.ref_type }}=${{ github.ref_name }})
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - client/**
+      - cmd/**
+      - internal/**
+      - lib/**
+      - vendor/**
+      - mocks/**
+      - DEBIAN/**
+      - Makefile
+      - go.mod
+      - go.sum
+      - *.sh
+      - release.conf
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  build-and-release-deb:
+    runs-on: ubuntu-latest
+    env:
+      ENV: "prod"
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+      PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-east-2
+          role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
+          role-session-name: BuildAndDeploy4border0cli
+          role-duration-seconds: 1800 # 30 minutes
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.20.1' # The Go version to download (if necessary) and use.
+      - run: go version
+
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+
+      - name: Install required packages
+        run: |
+            apt-get update && apt-get install -y \
+            gnupg \
+            make
+
+      - name: Import PGP Key
+        run: |
+            echo "${PGP_PRIVATE_KEY}" | gpg --import
+
+      - name: where am i?
+        run: |
+          gpg -k
+          pwd
+          ls
+
+      - name: Run Make all
+        run: |
+            make all
+
+      - name: Run Make build-linux-multiarch
+        run: |
+            make build-linux-multiarch
+
+      - name: Run Make deb-package-multiarch
+        run: |
+            make deb-package-multiarch
+
+      - name: Run Make deb-repository
+        run: |
+            make deb-repository
+
+      - name: Publish repo to S3 bucket
+        run: |
+          aws  s3 sync ./repos/ s3://pub-mysocketctl-bin/repos/
+
+      - name: Invalidate CloudFront cache for download.border0.com
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
