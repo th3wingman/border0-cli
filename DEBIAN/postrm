@@ -2,7 +2,7 @@
 
 case "$1" in
 remove | purge)
-    # Package is being removed (but not purged)
+    echo "Package is being removed/purged"
 
     # check if border0 systemd unit is enabled and disable it if it is
     if systemctl is-enabled --quiet border0.service; then systemctl disable border0.service; fi
