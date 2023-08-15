@@ -16,7 +16,6 @@ on:
       - Makefile
       - go.mod
       - go.sum
-      - *.sh
       - release.conf
 
 permissions:
