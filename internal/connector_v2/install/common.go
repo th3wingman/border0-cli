@@ -92,7 +92,7 @@ func createNewBorder0Connector(
 ) (*models.Connector, error) {
 	border0Client := border0.NewAPI(border0.WithVersion(cliVersion))
 
-	connector, err := border0Client.CreateConnector(ctx, connectorName, connectorDescription)
+	connector, err := border0Client.CreateConnector(ctx, connectorName, connectorDescription, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new Border0 connector via the Border0 API: %v", err)
 	}
