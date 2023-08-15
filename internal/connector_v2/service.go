@@ -496,17 +496,20 @@ func (c *ConnectorService) GetUserID() (string, error) {
 		return "", fmt.Errorf("failed to parse token")
 	}
 
-	connectorID, ok := claims["connector_id"]
-	if !ok {
-		return "", fmt.Errorf("failed to parse token")
+	connectorId, connectorIdPresent := claims["connector_id"]
+	if connectorIdPresent {
+		connectorIdStr, ok := connectorId.(string)
+		if !ok {
+			return "", fmt.Errorf("failed to parse token")
+		}
+		return strings.ReplaceAll(connectorIdStr, "-", ""), nil
 	}
 
-	connectorIDStr, ok := connectorID.(string)
-	if !ok {
-		return "", fmt.Errorf("failed to parse token")
+	if c.config.ConnectorId != "" {
+		return strings.ReplaceAll(c.config.ConnectorId, "-", ""), nil
 	}
 
-	return strings.ReplaceAll(connectorIDStr, "-", ""), nil
+	return "", fmt.Errorf("failed to get user id")
 }
 
 func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publicKey []byte) (string, string, error) {
