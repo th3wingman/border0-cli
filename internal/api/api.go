@@ -346,8 +346,8 @@ func (a *Border0API) DetachPolicies(ctx context.Context, socketID string, policy
 }
 
 // CreateConnector creates a new border0 connector (v2)
-func (a *Border0API) CreateConnector(ctx context.Context, name string, description string) (*models.Connector, error) {
-	payload := &models.Connector{Name: name, Description: description}
+func (a *Border0API) CreateConnector(ctx context.Context, name string, description string, enableBuiltInSshServer bool) (*models.Connector, error) {
+	payload := &models.Connector{Name: name, Description: description, BuiltInSshServerEnabled: enableBuiltInSshServer}
 
 	var connector models.Connector
 	err := a.Request(http.MethodPost, "connector", &connector, payload, true)
