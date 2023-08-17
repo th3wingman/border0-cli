@@ -76,9 +76,9 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to prompt for AWS VPC Subnet ID: %v", err)
 	}
 
-	border0ConnectorName, err := promptForBorder0ConnectorName(ctx, cliVersion, "my-connector")
+	border0ConnectorName, err := getUniqueConnectorName(ctx, cliVersion, "aws-cloud-install-connector")
 	if err != nil {
-		return fmt.Errorf("failed to prompt for Border0 connector name: %v", err)
+		return fmt.Errorf("failed to determine unique name for connector: %v", err)
 	}
 
 	border0TokenSsmParameter, err := promptForBorder0TokenSsmParameterPath(ctx, cfg, border0ConnectorName)
