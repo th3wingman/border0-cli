@@ -1,4 +1,4 @@
-package types
+package connector
 
 const (
 	// PluginTypeAwsEc2Discovery is the plugin type for aws ec2 instance discovery.

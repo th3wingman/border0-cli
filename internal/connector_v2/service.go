@@ -20,7 +20,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/borderzero/border0-go/lib/types/set"
-	"github.com/borderzero/border0-go/service/connector/types"
+	"github.com/borderzero/border0-go/types/connector"
+	"github.com/borderzero/border0-go/types/service"
 	pb "github.com/borderzero/border0-proto/connector"
 	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/golang-jwt/jwt"
@@ -338,7 +339,7 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 }
 
 func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.PluginConfig) error {
-	var innerConfig *types.PluginConfiguration
+	var innerConfig *connector.PluginConfiguration
 	if err := util.AsStruct(config.GetConfig(), &innerConfig); err != nil {
 		return fmt.Errorf("failed to decode plugin configuration: %v", err)
 	}
@@ -453,7 +454,7 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 }
 
 func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, error) {
-	var configMap types.ConnectorServiceUpstreamConfig
+	var configMap service.Configuration
 	if err := util.AsStruct(config.GetConfig(), &configMap); err != nil {
 		return nil, fmt.Errorf("failed to parse socket config: %w", err)
 	}
@@ -471,7 +472,7 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 		s.ConnectorData = &models.ConnectorData{}
 	}
 
-	if err := upstreamdata.NewUpstreamDataBuilder().Build(s, configMap); err != nil {
+	if err := upstreamdata.NewUpstreamDataBuilder(c.logger).Build(s, configMap); err != nil {
 		return nil, fmt.Errorf("failed to build upstream data: %w", err)
 	}
 

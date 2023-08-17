@@ -21,3 +21,6 @@ repos/
 /border0-cli
 *.swp
 .vscode/
+
+border0
+mysocketctl
