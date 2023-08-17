@@ -149,8 +149,36 @@ deb-package-multiarch:
 	./build-deb.sh $(VERSION) 386
 
 deb-repository:
-	@echo "Creating Release for ./repos and signing it"
-	./generate-release.sh
+	@echo "Creating DEB repo and signing it"
+	./generate-deb-repo.sh
+
+rpm-package-amd64:
+	./build-rpm.sh $(VERSION) amd64
+
+rpm-package-arm64:
+	./build-rpm.sh $(VERSION) arm64
+
+rpm-package-arm:
+	./build-rpm.sh $(VERSION) arm
+
+rpm-package-armv6:
+	./build-rpm.sh $(VERSION) armv6
+
+rpm-package-386:
+	./build-rpm.sh $(VERSION) 386
+
+rpm-package-multiarch:
+	@echo "Creating DEB packages under ./repos repository structure"
+	./build-rpm.sh $(VERSION) amd64
+	./build-rpm.sh $(VERSION) arm64
+	./build-rpm.sh $(VERSION) arm
+	./build-rpm.sh $(VERSION) armv6
+	./build-rpm.sh $(VERSION) 386
+
+rpm-repository:
+	@echo "Creating repo for RPM"
+	./generate-rpm-repo.sh
+
 
 lint:
 	@echo "running go fmt"
