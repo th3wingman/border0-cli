@@ -14,12 +14,12 @@ For DEB based Linux distributions (Debian, Ubuntu, etc):
 Add the Border0 GPG key to your system
 ```
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.border0.com/repos/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/border0.gpg
+curl -fsSL https://download.border0.com/deb/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/border0.gpg
 ```
 
 Add the repository to your sources list
 ```
-echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/border0.gpg] https://download.border0.com/repos/ stable main" | sudo tee /etc/apt/sources.list.d/border0.list
+echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/border0.gpg] https://download.border0.com/deb/ stable main" | sudo tee /etc/apt/sources.list.d/border0.list
 ```
 
 Install the border0 package
@@ -38,8 +38,8 @@ Eaxmple cloud-init metadata for AWS EC2 instance:
 apt-get -y update
 apt-get -y install curl gnupg
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.border0.com/repos/gpg | gpg --dearmor -o /etc/apt/keyrings/border0.gpg
-echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/border0.gpg] https://download.border0.com/repos/ stable main" > /etc/apt/sources.list.d/border0.list
+curl -fsSL https://download.border0.com/deb/gpg | gpg --dearmor -o /etc/apt/keyrings/border0.gpg
+echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/border0.gpg] https://download.border0.com/deb/ stable main" > /etc/apt/sources.list.d/border0.list
 apt-get -y update
 BORDER0_CONNECTOR_TOKEN=PUT_YOUR_CONNECTOR_TOKEN_HERE apt-get -y install border0 
 

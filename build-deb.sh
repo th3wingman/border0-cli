@@ -40,11 +40,11 @@ dpkg-deb -Zxz --build border0_${VERSION}_${ARCH}
 # rm -fr border0_${VERSION}_${ARCH}
 
 echo "Copying package to repo..."
-mkdir -p repos/pool/main/
-cp border0_${VERSION}_${ARCH}.deb repos/pool/main/
-mkdir -p repos/dists/stable/main/binary-${ARCH}
+mkdir -p deb/pool/main/
+cp border0_${VERSION}_${ARCH}.deb deb/pool/main/
+mkdir -p deb/dists/stable/main/binary-${ARCH}
 
-cd repos
+cd deb
 dpkg-scanpackages --arch ${ARCH} pool/ > dists/stable/main/binary-${ARCH}/Packages
 cat dists/stable/main/binary-${ARCH}/Packages | gzip -9 > dists/stable/main/binary-${ARCH}/Packages.gz
 cd -
