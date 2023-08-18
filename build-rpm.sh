@@ -15,7 +15,15 @@ fi
 # Variables
 YOUR_EMAIL_ADDRESS="support@border0.com"
 YOUR_NAME="border0"
-ARCH=$2
+FILE_ARCH=$2
+# we mar ARCH values between debian and redhat
+if [[ "$FILE_ARCH" == "amd64" ]]; then
+    ARCH="x86_64"
+fi
+if [[ "$FILE_ARCH" == "arm64" ]]; then
+    ARCH="aarch64"
+fi
+
 RPM_PATH="$HOME/rpmbuild/RPMS/$ARCH/border0-$VERSION-$RELEASE.el9.$ARCH.rpm"
 REPO_DIR="$HOME/rpm"
 
@@ -29,9 +37,12 @@ fi
 # # Install required tools
 # sudo dnf install -y rpm-build rpm-sign rpmdevtools createrepo
 
+
 # RPM Build
 rpmdev-setuptree
-cp ./bin/mysocketctl_linux_${ARCH} $HOME/rpmbuild/SOURCES/
+echo "setting up directories..."
+
+cp ./bin/mysocketctl_linux_${FILE_ARCH} $HOME/rpmbuild/SOURCES/border0
 
 # Write the SPEC file
 cat <<EOL > $HOME/rpmbuild/SPECS/border0.spec
@@ -39,7 +50,7 @@ Name:       border0
 Version:    $VERSION
 Release:    $RELEASE%{?dist}
 
-Summary:    My custom program
+Summary:    Border0 Connector and CLI tooling
 
 License:    Proprietary
 URL:        https://border0.com
@@ -76,7 +87,7 @@ fi
 EOL
 
 # Build the RPM package
-rpmbuild -ba $HOME/rpmbuild/SPECS/border0.spec
+rpmbuild -ba $HOME/rpmbuild/SPECS/border0.spec 
 
 # Configure RPM for Signing
 echo "Configuring RPM for signing..."
