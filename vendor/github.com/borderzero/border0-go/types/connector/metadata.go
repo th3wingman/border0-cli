@@ -1,7 +1,7 @@
-package types
+package connector
 
-// ConnectorMetadata represents informational data about a connector.
-type ConnectorMetadata struct {
+// Metadata represents informational data about a connector.
+type Metadata struct {
 	AwsEc2IdentityMetadata *AwsEc2IdentityMetadata `json:"aws_ec2_identity_metadata,omitempty"`
 }
 

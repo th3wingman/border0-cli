@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/borderzero/border0-go/service/connector/types"
+	"github.com/borderzero/border0-go/types/connector"
 	"github.com/borderzero/discovery"
 	"go.uber.org/zap"
 )
@@ -25,21 +25,21 @@ func NewPlugin(
 	logger *zap.Logger,
 	pluginId string,
 	pluginType string,
-	config *types.PluginConfiguration,
+	config *connector.PluginConfiguration,
 ) (Plugin, error) {
 	logger = logger.With(zap.String("plugin_id", pluginId))
 	switch pluginType {
-	case types.PluginTypeAwsEc2Discovery:
+	case connector.PluginTypeAwsEc2Discovery:
 		return newAwsEc2DiscoveryPlugin(ctx, logger, pluginId, config.AwsEc2DiscoveryPluginConfiguration)
-	case types.PluginTypeAwsEcsDiscovery:
+	case connector.PluginTypeAwsEcsDiscovery:
 		return newAwsEcsDiscoveryPlugin(ctx, logger, pluginId, config.AwsEcsDiscoveryPluginConfiguration)
-	case types.PluginTypeAwsRdsDiscovery:
+	case connector.PluginTypeAwsRdsDiscovery:
 		return newAwsRdsDiscoveryPlugin(ctx, logger, pluginId, config.AwsRdsDiscoveryPluginConfiguration)
-	case types.PluginTypeKubernetesDiscovery:
+	case connector.PluginTypeKubernetesDiscovery:
 		return newKubernetesDiscoveryPlugin(ctx, logger, pluginId, config.KubernetesDiscoveryPluginConfiguration)
-	case types.PluginTypeDockerDiscovery:
+	case connector.PluginTypeDockerDiscovery:
 		return newDockerDiscoveryPlugin(ctx, logger, pluginId, config.DockerDiscoveryPluginConfiguration)
-	case types.PluginTypeNetworkDiscovery:
+	case connector.PluginTypeNetworkDiscovery:
 		return newNetworkDiscoveryPlugin(ctx, logger, pluginId, config.NetworkDiscoveryPluginConfiguration)
 	default:
 		return nil, fmt.Errorf("plugin type %s is not supported", pluginType)

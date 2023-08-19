@@ -16,7 +16,7 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/slice"
-	"github.com/borderzero/border0-go/service/connector/types"
+	"github.com/borderzero/border0-go/types/connector"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/discoverers"
 	"github.com/borderzero/discovery/engines"
@@ -41,7 +41,7 @@ func newAwsEc2DiscoveryPlugin(
 	ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
-	config *types.AwsEc2DiscoveryPluginConfiguration,
+	config *connector.AwsEc2DiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("received nil ec2 discovery plugin configuration for plugin %s", pluginId)
@@ -87,7 +87,7 @@ func newAwsEcsDiscoveryPlugin(
 	ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
-	config *types.AwsEcsDiscoveryPluginConfiguration,
+	config *connector.AwsEcsDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("received nil ecs discovery plugin configuration for plugin %s", pluginId)
@@ -119,7 +119,7 @@ func newAwsRdsDiscoveryPlugin(
 	ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
-	config *types.AwsRdsDiscoveryPluginConfiguration,
+	config *connector.AwsRdsDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("received nil rds discovery plugin configuration for plugin %s", pluginId)
@@ -151,7 +151,7 @@ func newAwsRdsDiscoveryPlugin(
 func newKubernetesDiscoveryPlugin(ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
-	config *types.KubernetesDiscoveryPluginConfiguration,
+	config *connector.KubernetesDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("received nil kubernetes discovery plugin configuration for plugin %s", pluginId)
@@ -204,7 +204,7 @@ func newKubernetesDiscoveryPlugin(ctx context.Context,
 func newDockerDiscoveryPlugin(ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
-	config *types.DockerDiscoveryPluginConfiguration,
+	config *connector.DockerDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("received nil docker discovery plugin configuration for plugin %s", pluginId)
@@ -226,7 +226,7 @@ func newDockerDiscoveryPlugin(ctx context.Context,
 func newNetworkDiscoveryPlugin(ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
-	config *types.NetworkDiscoveryPluginConfiguration,
+	config *connector.NetworkDiscoveryPluginConfiguration,
 ) (Plugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("received nil network discovery plugin configuration for plugin %s", pluginId)
@@ -257,7 +257,7 @@ func newNetworkDiscoveryPlugin(ctx context.Context,
 }
 
 // returns slice of aws configurations based on an aws-based plugin's configuration
-func getAwsConfigs(ctx context.Context, awsPluginConfig types.BaseAwsPluginConfiguration) ([]aws.Config, error) {
+func getAwsConfigs(ctx context.Context, awsPluginConfig connector.BaseAwsPluginConfiguration) ([]aws.Config, error) {
 	optFns := []func(*config.LoadOptions) error{}
 
 	awsCredentials := awsPluginConfig.AwsCredentials
