@@ -12,13 +12,19 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForHttpService(s *models.Socket, 
 		return fmt.Errorf("got http service with no http service configuration")
 	}
 
-	hostname, port := u.fetchVariableFromSource(config.Hostname), int(config.Port)
+	if config.HttpServiceType == service.HttpServiceTypeStandard {
+		hostname := config.StandardHttpServiceConfiguration.Hostname
+		port := config.StandardHttpServiceConfiguration.Port
+		hostSniHeader := config.StandardHttpServiceConfiguration.HostSniHeader
 
-	s.ConnectorData.TargetHostname = hostname
-	s.ConnectorData.Port = port
-	s.TargetHostname = hostname
-	s.TargetPort = port
-	s.UpstreamHttpHostname = &hostname
+		hostname = u.fetchVariableFromSource(hostname)
+
+		s.ConnectorData.TargetHostname = hostname
+		s.ConnectorData.Port = int(port)
+		s.TargetHostname = hostname
+		s.TargetPort = int(port)
+		s.UpstreamHttpHostname = &hostSniHeader
+	}
 
 	return nil
 }

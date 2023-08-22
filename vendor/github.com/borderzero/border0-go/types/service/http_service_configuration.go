@@ -23,11 +23,18 @@ type HttpServiceConfiguration struct {
 // StandardHttpServiceConfiguration represents service
 // configuration for standard http services (fka sockets).
 type StandardHttpServiceConfiguration struct {
-	HostnameAndPort // inherited
+	HostnameAndPort        // inherited
+	HostSniHeader   string `json:"host_sni_header,omitempty"`
 }
 
 // FileServerHttpServiceConfiguration represents service
 // configuration for the connector built-in file webserver.
 type FileServerHttpServiceConfiguration struct {
 	TopLevelDirectory string `json:"top_level_directory,omitempty"`
+}
+
+// Validate validates the HttpServiceConfiguration.
+func (c *HttpServiceConfiguration) Validate() error {
+	// TODO
+	return nil
 }
