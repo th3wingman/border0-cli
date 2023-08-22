@@ -1,7 +1,6 @@
 package upstreamdata
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
@@ -12,6 +11,17 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForHttpService(s *models.Socket, 
 	if config == nil {
 		return fmt.Errorf("got http service with no http service configuration")
 	}
-	// FIXME: implement
-	return errors.New("Have not implemented handling upstream data for http services")
+
+	if config.HttpServiceType == service.HttpServiceTypeStandard {
+		hostname := config.StandardHttpServiceConfiguration.Hostname
+		port := config.StandardHttpServiceConfiguration.Port
+
+		hostname = u.fetchVariableFromSource(hostname)
+
+		s.TargetHostname = hostname
+		s.TargetPort = int(port)
+		s.UpstreamHttpHostname = &hostname
+	}
+
+	return nil
 }

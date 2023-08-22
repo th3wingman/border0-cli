@@ -242,12 +242,16 @@ github.com/aws/smithy-go/waiter
 # github.com/bluele/factory-go v0.0.1
 ## explicit; go 1.15
 github.com/bluele/factory-go/factory
-# github.com/borderzero/border0-go v1.2.1
+# github.com/borderzero/border0-go v1.3.4
 ## explicit; go 1.20
 github.com/borderzero/border0-go/lib/types/maps
+github.com/borderzero/border0-go/lib/types/netaddr
+github.com/borderzero/border0-go/lib/types/null
 github.com/borderzero/border0-go/lib/types/pointer
+github.com/borderzero/border0-go/lib/types/regex
 github.com/borderzero/border0-go/lib/types/set
 github.com/borderzero/border0-go/lib/types/slice
+github.com/borderzero/border0-go/types/common
 github.com/borderzero/border0-go/types/connector
 github.com/borderzero/border0-go/types/service
 # github.com/borderzero/border0-proto v1.0.3

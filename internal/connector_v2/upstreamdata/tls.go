@@ -1,7 +1,6 @@
 package upstreamdata
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
@@ -12,6 +11,13 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForTlsService(s *models.Socket, c
 	if config == nil {
 		return fmt.Errorf("got tls service with no tls service configuration")
 	}
-	// FIXME: implement
-	return errors.New("Have not implemented handling upstream data for tls services")
+
+	// hostname, port := u.fetchVariableFromSource(config.Hostname), int(config.Port)
+
+	// s.ConnectorData.TargetHostname = hostname
+	// s.ConnectorData.Port = port
+	// s.TargetHostname = hostname
+	// s.TargetPort = port
+
+	return nil
 }
