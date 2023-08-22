@@ -362,15 +362,13 @@ func (c *ConnectorCore) shouldUpdateSocket(apiSocket, localSocket models.Socket)
 	}
 
 	// check http hostname
-	if apiSocket.UpstreamHttpHostname != nil && localSocket.UpstreamHttpHostname != nil {
-		if *apiSocket.UpstreamHttpHostname != *localSocket.UpstreamHttpHostname {
-			c.logger.Debug(
-				"socket needs update, UpstreamHttpHostname mismatch",
-				zap.Any("api_upstream_http_hostname", apiSocket.UpstreamHttpHostname),
-				zap.Any("local_upstream_http_hostname", localSocket.UpstreamHttpHostname),
-			)
-			return true
-		}
+	if pointer.ValueOrZero(apiSocket.UpstreamHttpHostname) != pointer.ValueOrZero(localSocket.UpstreamHttpHostname) {
+		c.logger.Debug(
+			"socket needs update, UpstreamHttpHostname mismatch",
+			zap.Any("api_upstream_http_hostname", apiSocket.UpstreamHttpHostname),
+			zap.Any("local_upstream_http_hostname", localSocket.UpstreamHttpHostname),
+		)
+		return true
 	}
 
 	// check upstream username
