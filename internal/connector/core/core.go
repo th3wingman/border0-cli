@@ -371,6 +371,16 @@ func (c *ConnectorCore) shouldUpdateSocket(apiSocket, localSocket models.Socket)
 		return true
 	}
 
+	// check upstream type
+	if apiSocket.UpstreamType != localSocket.UpstreamType {
+		c.logger.Debug(
+			"socket needs update, UpstreamType mismatch",
+			zap.Any("api_upstream_type", apiSocket.UpstreamType),
+			zap.Any("local_upstream_type", localSocket.UpstreamType),
+		)
+		return true
+	}
+
 	// check upstream username
 	if pointer.ValueOrZero(apiSocket.UpstreamUsername) != pointer.ValueOrZero(localSocket.UpstreamUsername) {
 		c.logger.Debug(
