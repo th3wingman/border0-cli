@@ -73,6 +73,7 @@ jobs:
           docker run --rm \
             -v $PWD/bin:/root/bin \
             -v $PWD/rpm:/root/rpm \
+            -v $PWD/CENTOS:/root/CENTOS \
             --env FILE_ARCH="amd64" \
             --env PGP_PRIVATE_KEY="$PGP_PRIVATE_KEY" \
             --env BORDER0_VERSION="$BORDER0_VERSION" \

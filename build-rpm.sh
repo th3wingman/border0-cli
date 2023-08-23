@@ -71,6 +71,7 @@ rpmdev-setuptree
 echo "setting up directories..."
 
 cp $HOME/bin/mysocketctl_linux_${FILE_ARCH} $HOME/rpmbuild/SOURCES/border0
+cp $HOME/CENTOS/post-install.sh  $HOME/rpmbuild/SOURCES/post-install.sh 
 
 # Write the SPEC file
 cat <<EOL >$HOME/rpmbuild/SPECS/border0.spec
@@ -96,16 +97,9 @@ mkdir -p %{buildroot}/usr/bin
 cp %{SOURCE0} %{buildroot}/usr/bin/border0
 chmod +x %{buildroot}/usr/bin/border0
 
-%post
-echo "Post install script received: $1"
-if [ $1 -eq 1 ]; then
-    # This is a fresh install
-    echo "Fresh install script goes here"
-elif [ $1 -eq 2 ]; then
-    # This is an upgrade
-    echo "Upgrading script gpes here"
-fi
+%post -f %{_sourcedir}/post-install.sh 
 
+%postun -f %{_sourcedir}/post-install.sh 
 
 %files
 /usr/bin/border0
