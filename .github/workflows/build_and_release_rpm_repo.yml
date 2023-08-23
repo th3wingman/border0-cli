@@ -55,7 +55,6 @@ jobs:
 
       - name: where am i?
         run: |
-          gpg -k
           pwd
           ls
 
@@ -71,7 +70,7 @@ jobs:
         run: |
           mkdir -p $PWD/rpm
           docker build -t rpm-builder -f .github/docker/Dockerfile .
-          docker run -ti --rm \
+          docker run --rm \
             -v $PWD/bin:/root/bin \
             -v $PWD/rpm:/root/rpm \
             --env FILE_ARCH="amd64" \
