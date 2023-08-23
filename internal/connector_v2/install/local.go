@@ -46,11 +46,6 @@ func RunInstallWizard(
 		return errors.New("service already installed")
 	}
 
-	// flag validation
-	if !daemonOnly && token != "" {
-		return errors.New("--token can only be populated when --daemon-only is set")
-	}
-
 	connectorToken := ""
 	if !daemonOnly {
 		// get the system hostname to derive the connector name off of

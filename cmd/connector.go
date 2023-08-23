@@ -284,6 +284,11 @@ func connectorInstallAws(cmd *cobra.Command) {
 }
 
 func connectorInstallLocal(cmd *cobra.Command) {
+	// flag validation
+	if !daemonOnly && token != "" {
+		fmt.Printf("\nError: --token can only be populated when --daemon-only is set")
+		os.Exit(1)
+	}
 	if !daemonOnly {
 		loginCmd.Run(cmd, []string{})
 	}

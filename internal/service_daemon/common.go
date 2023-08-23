@@ -22,5 +22,5 @@ func IsInstalled(service Service) (bool, error) {
 		}
 		return false, nil
 	}
-	return strings.Contains(status, "is running"), nil
+	return strings.Contains(status, "is running") || strings.Contains(status, "stopped"), nil
 }
