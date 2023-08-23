@@ -41,7 +41,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
-          role-session-name: BuildAndDeploy4border0cli
+          role-session-name: DEBBuildAndDeploy4border0cli
           role-duration-seconds: 1800 # 30 minutes
 
       - uses: actions/setup-go@v3
@@ -85,7 +85,7 @@ jobs:
         run: |
             make deb-repository
 
-      - name: Publish repo to S3 bucket
+      - name: Publish repo ${BORDER0_VERSION} to S3 bucket
         run: |
           aws s3 sync ./deb/ s3://pub-mysocketctl-bin/deb/
 

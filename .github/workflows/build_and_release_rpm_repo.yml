@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build-and-release-rpm:
-    runs-on: self-hosted  # Since GitHub Actions doesn't offer CentOS runners, you need to use self-hosted runners
+    runs-on: ubuntu-latest # Since GitHub Actions doesn't offer CentOS runners, you need to use dockeer inside the runner to build the RPMs
     env:
       ENV: "prod"
       CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
@@ -39,7 +39,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
-          role-session-name: BuildAndDeploy4border0cli
+          role-session-name: RPMBuildAndDeploy4border0cli
           role-duration-seconds: 1800 # 30 minutes
 
       - uses: actions/setup-go@v3
@@ -52,15 +52,6 @@ jobs:
           BORDER0_VERSION=$(git describe --long --dirty --tags)
           echo ${BORDER0_VERSION}
           echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
-
-      - name: Install required packages
-        run: |
-            sudo yum update -y
-            sudo yum install -y gnupg make rpm-build rpm-sign rpmdevtools createrepo
-
-      - name: Import PGP Key
-        run: |
-            echo "${PGP_PRIVATE_KEY}" | gpg --import
 
       - name: where am i?
         run: |
@@ -76,17 +67,21 @@ jobs:
         run: |
             make build-linux-amd64
 
-      - name: Run Make rpm-package-amd64
+      - name: Build and run Docker container for RPM creation
         run: |
-            make rpm-package-amd64
+          mkdir -p $PWD/rpm
+          docker build -t rpm-builder -f .github/docker/Dockerfile .
+          docker run -ti --rm \
+            -v $PWD/bin:/root/bin \
+            -v $PWD/rpm:/root/rpm \
+            --env FILE_ARCH="amd64" \
+            --env PGP_PRIVATE_KEY="$PGP_PRIVATE_KEY" \
+            --env BORDER0_VERSION="$BORDER0_VERSION" \
+            rpm-builder
 
-      - name: Run Make rpm-repository
+      - name: Publish repo ${BORDER0_VERSION} to S3 bucket
         run: |
-            make rpm-repository
-
-      - name: Publish repo to S3 bucket
-        run: |
-          aws s3 sync ~/rpm/ s3://pub-mysocketctl-bin/rpm/
+          aws s3 sync $PWD/rpm/ s3://pub-mysocketctl-bin/rpm/
 
       - name: Invalidate CloudFront cache for download.border0.com
         run: |

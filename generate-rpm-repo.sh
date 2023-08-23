@@ -3,7 +3,7 @@
 REPO_DIR="$HOME/rpm"
 REPO_FILE_PATH="$REPO_DIR/border0.repo"
 
-gpg --armor --export YOUR_EMAIL_ADDRESS > $REPO_DIR/RPM-GPG-KEY
+gpg --armor --export support@border0.com > $REPO_DIR/RPM-GPG-KEY
 echo "GPG key exported to $REPO_DIR/RPM-GPG-KEY"
 
 createrepo $REPO_DIR
@@ -11,7 +11,7 @@ echo "Repo created in $REPO_DIR"
 
 # Generate .repo file
 echo "Generating .repo file..."
-cat <<EOL | sudo tee $REPO_FILE_PATH
+cat <<EOL | tee $REPO_FILE_PATH
 [rpm]
 name=Border0 Public RPM Repository
 baseurl=http://download.border0.com/rpm/
