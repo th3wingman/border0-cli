@@ -8,8 +8,9 @@ token: ${BORDER0_CONNECTOR_TOKEN}
 }
 function check_and_replace {
   if [ -f /usr/local/bin/border0 ]; then
-    echo "Replacing /usr/local/bin/border0 with symlink to /usr/bin/border0"
-    rm /usr/local/bin/border0
+    rm -f /usr/local/bin/border0
+    ln -s /usr/bin/border0 /usr/local/bin/border0
+  else
     ln -s /usr/bin/border0 /usr/local/bin/border0
   fi
 }
