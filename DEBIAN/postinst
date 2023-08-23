@@ -1,41 +1,39 @@
 #!/bin/bash
-# postinst
 
-# create a config file function
 function create_config_file {
   echo "Creating config file..."
-  # create config file
   echo """
 token: ${BORDER0_CONNECTOR_TOKEN}
 """ >/etc/border0/border0.yaml
 }
+function check_and_replace {
+  if [ -f /usr/local/bin/border0 ]; then
+    echo "Replacing /usr/local/bin/border0 with symlink to /usr/bin/border0"
+    rm /usr/local/bin/border0
+    ln -s /usr/bin/border0 /usr/local/bin/border0
+  fi
+}
 
 case "$1" in
 configure)
-  # This is a fresh installation or a reconfiguration
-  # Check if we are running in a non-interactive environment
+  check_and_replace
   if [ "$DEBIAN_FRONTEND" = "noninteractive" ]; then
-    # Non-interactive behavior here
     echo "Running in non-interactive mode."
     if [ -n "$BORDER0_CONNECTOR_TOKEN" ]; then
-      # if token is set, run automated install in noninteractive mode
       border0 connector install --v2 --daemon-only
       create_config_file
     else
       echo -e "BORDER0_CONNECTOR_TOKEN is not set.\nPlease run the install manually... \n'border0 connector install --v2'"
     fi
   elif [ -n "$BORDER0_CONNECTOR_TOKEN" ]; then
-    # if token is set, run automated install in interactive mode
     border0 connector install --v2 --daemon-only
     create_config_file
   else
-    # check if border0.service is already installed and exit if it is
     if [ -f /etc/systemd/system/border0.service ]; then
       echo "Looks like border0.service is already installed."
       exit 0
     fi
     echo "Running Border0 Connector Install."
-    # Interactive behavior
     attempts=3
     while [ $attempts -gt 0 ]; do
       read -p "Do you want to proceed? (y/n) " choice
@@ -64,10 +62,11 @@ configure)
 
   ;;
 upgrade)
-  # This is an upgrade
-  # $2 contains the version being upgraded from
-  # we will handle this separately in the binary
-  # For now this is an NO-OP
+  echo "Upgrading Border0 Connector..."
+  if systemctl is-active --quiet border0.service; then
+    echo "Restarting border0.service..."
+    systemctl restart border0.service
+  fi
   ;;
 *)
   echo "Unknown argument: $1"

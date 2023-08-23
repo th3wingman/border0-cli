@@ -7,22 +7,22 @@ border0 is a CLI tool for interacting with https://border0.com and a wrapper aro
 
 Please check the full documentation here: [https://docs.border0.com/](https://docs.border0.com/docs)
 
-Installation
+## Installation
 --------------------
+## DEB Repository
 For DEB based Linux distributions (Debian, Ubuntu, etc):
 
 Add the Border0 GPG key to your system
 ```
+sudo apt-get update && sudo apt-get -y install gpg curl
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.border0.com/deb/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/border0.gpg
 ```
-
 Add the repository to your sources list
 ```
 echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/border0.gpg] https://download.border0.com/deb/ stable main" | sudo tee /etc/apt/sources.list.d/border0.list
 ```
-
-Install the border0 package
+#### Install the border0 package
 ```
 sudo apt-get update
 sudo apt-get install border0
@@ -30,6 +30,28 @@ sudo apt-get install border0
 alternatively, we can specify the token as an environment variable:
 ```
 sudo BORDER0_CONNECTOR_TOKEN=eFs...dGI sudo apt-get install border0
+```
+
+### RPM Repository
+For RPM based Linux distributions (RHEL, Centos, Fedora):
+
+Add the Border0 GPG key to your system
+```
+dnf -y install curl gpg
+rpm --import https://download.border0.com/rpm/RPM-GPG-KEY
+```
+Add the repository to your sources list
+```
+curl -o /etc/yum.repos.d/bordero.repo https://download.border0.com/rpm/border0.repo
+```
+
+#### Install the border0 package
+```
+dnf install border0
+```
+alternatively, we can specify the token as an environment variable:
+```
+BORDER0_CONNECTOR_TOKEN=eFs...dGI dnf install border0
 ```
 
 Eaxmple cloud-init metadata for AWS EC2 instance:
