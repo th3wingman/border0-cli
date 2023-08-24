@@ -9,6 +9,10 @@ echo "GPG key exported to $REPO_DIR/RPM-GPG-KEY"
 createrepo $REPO_DIR
 echo "Repo created in $REPO_DIR"
 
+# sign the repo
+echo "Signing the repo..."
+gpg --detach-sign --armor $REPO_DIR/repodata/repomd.xml
+
 # Generate .repo file
 echo "Generating .repo file..."
 cat <<EOL | tee $REPO_FILE_PATH
