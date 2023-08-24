@@ -7,6 +7,5 @@ if [ -f /etc/systemd/system/border0.service ]; then rm /etc/systemd/system/borde
 
 systemctl daemon-reload
 
-if [ -f /usr/local/bin/border0 ]; then rm /usr/local/bin/border0; fi
 if [ -f /usr/bin/border0 ]; then rm /usr/bin/border0; fi
 if [ -d /etc/border0 ]; then rm -rf /etc/border0; fi
