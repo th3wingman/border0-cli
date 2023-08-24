@@ -7,18 +7,9 @@ token: ${BORDER0_CONNECTOR_TOKEN}
 """ >/etc/border0/border0.yaml
 }
 
-function check_and_replace {
-  if [ -f /usr/local/bin/border0 ]; then
-    echo "Replacing /usr/local/bin/border0 with symlink to /usr/bin/border0"
-    rm /usr/local/bin/border0
-    ln -s /usr/bin/border0 /usr/local/bin/border0
-  fi
-}
-
 case "$1" in
 1)
   # This corresponds to initial installation
-  check_and_replace
   if [ -n "$BORDER0_CONNECTOR_TOKEN" ]; then
     border0 connector install --v2 --daemon-only
     create_config_file
