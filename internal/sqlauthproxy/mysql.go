@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
 	"github.com/borderzero/border0-cli/internal/border0"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/server"
 	"go.uber.org/zap"
@@ -50,11 +50,10 @@ func newMysqlHandler(c Config) (*mysqlHandler, error) {
 	var options []func(*client.Conn)
 	var awsCredentials aws.CredentialsProvider
 	if c.RdsIam {
-		cfg, err := config.LoadDefaultConfig(context.TODO())
+		cfg, err := util.GetAwsConfig(context.Background(), c.AwsRegion, c.AwsCredentials)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load aws config: %s", err)
+			return nil, fmt.Errorf("failed to initialize AWS client: %v", err)
 		}
-
 		awsCredentials = cfg.Credentials
 	}
 
