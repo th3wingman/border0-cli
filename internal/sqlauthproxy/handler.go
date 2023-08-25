@@ -7,6 +7,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/cloudsql"
+	"github.com/borderzero/border0-go/types/common"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +28,7 @@ type Config struct {
 	UpstreamKeyFile  string
 	UpstreamTLS      bool
 	AwsRegion        string
+	AwsCredentials   *common.AwsCredentials
 	DialerFunc       func(context.Context, string, string) (net.Conn, error)
 }
 
@@ -72,6 +74,7 @@ func BuildHandlerConfig(logger *zap.Logger, socket models.Socket) (*Config, erro
 		Password:         socket.ConnectorLocalData.UpstreamPassword,
 		UpstreamType:     socket.UpstreamType,
 		AwsRegion:        socket.ConnectorLocalData.AWSRegion,
+		AwsCredentials:   socket.ConnectorLocalData.AwsCredentials,
 		UpstreamCAFile:   socket.ConnectorLocalData.UpstreamCACertFile,
 		UpstreamCertFile: socket.ConnectorLocalData.UpstreamCertFile,
 		UpstreamKeyFile:  socket.ConnectorLocalData.UpstreamKeyFile,

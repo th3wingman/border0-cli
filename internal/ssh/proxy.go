@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
@@ -27,6 +26,8 @@ import (
 	ssmLog "github.com/aws/session-manager-plugin/src/log"
 	"github.com/aws/session-manager-plugin/src/message"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/util"
+	"github.com/borderzero/border0-go/types/common"
 	"github.com/manifoldco/promptui"
 	"golang.org/x/crypto/ssh"
 )
@@ -54,6 +55,7 @@ type ProxyConfig struct {
 	awsConfig          aws.Config
 	AwsUpstreamType    string
 	Logger             *zap.Logger
+	AwsCredentials     *common.AwsCredentials
 }
 
 type ECSSSMProxy struct {
@@ -107,6 +109,7 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 		AwsSSMTarget:       socket.ConnectorLocalData.AwsEC2InstanceId, // when instance id empty and ecs cluster is given, target will be constructed during connection
 		AWSRegion:          AWSRegion,
 		AWSProfile:         AWSProfile,
+		AwsCredentials:     socket.ConnectorLocalData.AwsCredentials,
 	}
 
 	switch {
@@ -134,25 +137,27 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 	var handler func(net.Conn, ProxyConfig)
 
 	if c.AwsUpstreamType != "" {
-		var awsConfig aws.Config
-		var err error
 
-		if c.AWSProfile == "" {
-			awsConfig, err = config.LoadDefaultConfig(context.TODO())
-		} else {
-			awsConfig, err = config.LoadDefaultConfig(context.TODO(),
-				config.WithSharedConfigProfile(c.AWSProfile))
+		// Use the aws profile from the top level config only
+		// if the AwsCredentials object does not have an aws
+		// profile defined. The aws profile on the aws creds
+		// object comes from socket upstream configuration, so
+		// it has higher priority than the aws profile defined
+		// in the connector's configuration.
+		if c.AWSProfile != "" {
+			if c.AwsCredentials == nil {
+				c.AwsCredentials = &common.AwsCredentials{}
+			}
+			if c.AwsCredentials.AwsProfile == nil {
+				c.AwsCredentials.AwsProfile = &c.AWSProfile
+			}
 		}
 
+		cfg, err := util.GetAwsConfig(context.Background(), c.AWSRegion, c.AwsCredentials)
 		if err != nil {
-			return fmt.Errorf("failed to load aws config: %s", err)
+			return fmt.Errorf("failed to initialize AWS client: %v", err)
 		}
-
-		if c.AWSRegion != "" {
-			awsConfig.Region = c.AWSRegion
-		}
-
-		c.awsConfig = awsConfig
+		c.awsConfig = *cfg
 	}
 
 	switch c.AwsUpstreamType {

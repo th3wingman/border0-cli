@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/borderzero/border0-go/types/common"
 )
 
 const (
@@ -57,6 +59,7 @@ type ConnectorLocalData struct {
 	AWSECSContainers             []string
 	AwsEC2InstanceId             string
 	AWSEC2InstanceConnectEnabled bool
+	AwsCredentials               *common.AwsCredentials
 }
 
 func (c *ConnectorData) Tags() map[string]string {

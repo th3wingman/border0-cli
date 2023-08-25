@@ -39,6 +39,7 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsEc2Ic(s *models.S
 	s.ConnectorLocalData.AwsEC2InstanceId = config.Ec2InstanceId
 	s.AWSRegion = config.Ec2InstanceRegion
 	s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
+	s.ConnectorLocalData.AwsCredentials = config.AwsCredentials
 
 	return nil
 }
@@ -55,8 +56,8 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsSsm(s *models.Soc
 		}
 		s.UpstreamType = UpstreamTypeAwsSSM
 		s.ConnectorLocalData.AwsEC2InstanceId = config.AwsSsmEc2TargetConfiguration.Ec2InstanceId
-		s.ConnectorLocalData.AWSRegion = config.AwsSsmEc2TargetConfiguration.Ec2InstanceRegion
 		s.AWSRegion = config.AwsSsmEc2TargetConfiguration.Ec2InstanceRegion
+		s.ConnectorLocalData.AwsCredentials = config.AwsSsmEc2TargetConfiguration.AwsCredentials
 		return nil
 
 	case service.SsmTargetTypeEcs:
@@ -66,9 +67,9 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsSsm(s *models.Soc
 
 		s.UpstreamType = UpstreamTypeAwsSSM
 		s.ConnectorLocalData.AWSECSCluster = config.AwsSsmEcsTargetConfiguration.EcsClusterName
-		s.ConnectorLocalData.AWSECSServices = []string{config.AwsSsmEcsTargetConfiguration.EcsServiceName}
-		s.ConnectorLocalData.AWSRegion = config.AwsSsmEcsTargetConfiguration.EcsClusterRegion
 		s.AWSRegion = config.AwsSsmEcsTargetConfiguration.EcsClusterRegion
+		s.ConnectorLocalData.AWSECSServices = []string{config.AwsSsmEcsTargetConfiguration.EcsServiceName}
+		s.ConnectorLocalData.AwsCredentials = config.AwsSsmEcsTargetConfiguration.AwsCredentials
 		return nil
 
 	default:
