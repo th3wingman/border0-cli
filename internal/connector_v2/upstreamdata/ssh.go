@@ -41,6 +41,14 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsEc2Ic(s *models.S
 	s.ConnectorLocalData.AWSEC2InstanceConnectEnabled = true
 	s.ConnectorLocalData.AwsCredentials = config.AwsCredentials
 
+	switch config.UsernameProvider {
+	case service.UsernameProviderDefined, "":
+		s.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.Username)
+	case service.UsernameProviderPromptClient:
+		// do nothing
+	default:
+		return fmt.Errorf("username provider \"%s\" is not supported", config.UsernameProvider)
+	}
 	return nil
 }
 
