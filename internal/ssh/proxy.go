@@ -628,7 +628,6 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 		return
 	}
 
-	user := sshConn.User()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		config.Logger.Sugar().Errorf("failed to generate key: %s\n", err)
@@ -651,7 +650,16 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 		ssh.PublicKeys(signer),
 	}
 
-	config.sshClientConfig.User = user
+	sshConnUser := sshConn.User()
+
+	// We only use the user from the ssh connection if
+	// the ssh client config does not have a user defined.
+	// If the user in the ssh client config at this point
+	// is not empty string, then it came from the socket's
+	// upstream configuration (so we use that).
+	if config.sshClientConfig.User == "" {
+		config.sshClientConfig.User = sshConnUser
+	}
 
 	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
@@ -665,7 +673,7 @@ func handleEc2InstanceConnectClient(conn net.Conn, config ProxyConfig) {
 	ec2ConnectClient := ec2instanceconnect.NewFromConfig(config.awsConfig)
 	_, err = ec2ConnectClient.SendSSHPublicKey(context.TODO(), &ec2instanceconnect.SendSSHPublicKeyInput{
 		InstanceId:     &config.AwsEC2InstanceId,
-		InstanceOSUser: &user,
+		InstanceOSUser: &config.sshClientConfig.User,
 		SSHPublicKey:   &publicKeyString,
 	})
 

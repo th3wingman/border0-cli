@@ -1,13 +1,12 @@
 package service
 
 import (
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 
 	"github.com/borderzero/border0-go/lib/types/null"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/types/common"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -124,6 +123,8 @@ type AwsSsmEcsTargetConfiguration struct {
 // for aws ec2 instance connect ssh services (fka sockets).
 type AwsEc2ICSshServiceConfiguration struct {
 	HostnameAndPort
+	UsernameProvider  string                 `json:"username_provider,omitempty"`
+	Username          string                 `json:"username,omitempty"`
 	Ec2InstanceId     string                 `json:"ec2_instance_id"`
 	Ec2InstanceRegion string                 `json:"ec2_instance_region"`
 	AwsCredentials    *common.AwsCredentials `json:"aws_credentials,omitempty"`
@@ -203,7 +204,7 @@ func (c *SshServiceConfiguration) Validate() error {
 				"ssh service type \"%s\" can only have built in ssh service configuration defined",
 				SshServiceTypeConnectorBuiltIn)
 		}
-		if c.StandardSshServiceConfiguration == nil {
+		if c.BuiltInSshServiceConfiguration == nil {
 			return fmt.Errorf(
 				"ssh service configuration for ssh service type \"%s\" must have built in ssh service configuration defined",
 				SshServiceTypeConnectorBuiltIn,
@@ -241,6 +242,13 @@ func (c *AwsEc2ICSshServiceConfiguration) Validate() error {
 	if err := c.HostnameAndPort.Validate(); err != nil {
 		return err
 	}
+	if err := validateUsernameWithProvider(
+		c.UsernameProvider,
+		c.Username,
+		set.New(UsernameProviderPromptClient),
+	); err != nil {
+		return err
+	}
 	if c.Ec2InstanceId == "" {
 		return fmt.Errorf("ec2_instance_id is a required field")
 	}
@@ -275,7 +283,7 @@ func (c *AwsSsmSshServiceConfiguration) Validate() error {
 		return nil
 
 	case SsmTargetTypeEcs:
-		if !null.All(c.AwsSsmEcsTargetConfiguration) {
+		if !null.All(c.AwsSsmEc2TargetConfiguration) {
 			return fmt.Errorf("ssm services with ssm target type \"%s\" can only have ecs target configuration defined", SsmTargetTypeEcs)
 		}
 		if c.AwsSsmEcsTargetConfiguration == nil {
@@ -403,7 +411,7 @@ func (c *AwsSsmEcsTargetConfiguration) Validate() error {
 	}
 	if c.AwsCredentials != nil {
 		if err := c.AwsCredentials.Validate(); err != nil {
-			return fmt.Errorf("invalid aws credentials: %v", err)
+			return fmt.Errorf("invalid aws_credentials: %v", err)
 		}
 	}
 	return nil
@@ -431,12 +439,8 @@ func (c *PrivateKeyAuthConfiguration) Validate() error {
 		return fmt.Errorf("private_key is a required field")
 	}
 
-	privKeyBytes := []byte(c.PrivateKey)
-	block, _ := pem.Decode(privKeyBytes)
-	if block != nil {
-		privKeyBytes = block.Bytes
-	}
-	if _, err := x509.ParsePKCS1PrivateKey(privKeyBytes); err != nil {
+	_, err := ssh.ParseRawPrivateKey([]byte(c.PrivateKey))
+	if err != nil {
 		return fmt.Errorf("private_key is not a valid PEM or DER encoded private key")
 	}
 
