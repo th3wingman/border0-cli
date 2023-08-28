@@ -63,7 +63,8 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess'
         - 'arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess'
       Policies:
-        # There is no AWS-Managed ECS ReadOnly policy
+        # ECS ReadOnly Policy for ECS discovery and providing Border0 clients
+        # with the menu with all available tasks and containers in ecs service.
         - PolicyName: AmazonECSReadOnlyAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -82,6 +83,7 @@ Resources:
                   - 'ecs:ListTaskDefinitions'
                   - 'ecs:ListTasks'
                 Resource: '*'
+        # SSM Parameter ReadOnly access to the SSM parameter of the connector's token.
         - PolicyName: AccessToBorder0TokenSsmParameter
           PolicyDocument:
             Version: '2012-10-17'
@@ -94,6 +96,28 @@ Resources:
                   - 'ssm:GetParameter'
                   - 'ssm:GetParameters'
                 Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Border0TokenSsmParameter}'
+        # Allow sending public keys to any ec2 instance (for ec2 instance connect).
+        - PolicyName: SendSshPublicKeysToEc2Instances
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'ec2-instance-connect:SendSSHPublicKey'
+                Resource: !Sub 'arn:aws:ec2:*:${AWS::AccountId}:instance/*'
+        # Allow starting and terminating ssm sessions to any instance (for ssm)
+        - PolicyName: StartAndTerminateSsmSessions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'ssm:StartSession'
+                Resource:
+                  - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:instance/*'
+                  - !Sub 'arn:aws:ssm:*:${AWS::AccountId}:document/AWS-StartSSHSession'
+              - Effect: Allow
+                Action: 'ssm:TerminateSession'
+                Resource:
+                  - !Sub 'arn:aws:ssm:*:${AWS::AccountId}:session/*'
 
   ConnectorInstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
@@ -114,7 +138,7 @@ Resources:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     Properties:
       IamInstanceProfile: !Ref ConnectorInstanceProfile
-      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-arm64}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64}}'
       InstanceType: !Ref InstanceType
       SecurityGroups:
         - !Ref ConnectorInstanceSecurityGroup
