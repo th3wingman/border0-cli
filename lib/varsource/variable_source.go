@@ -26,7 +26,7 @@ type VariableSource interface {
 // NewDefaultVariableSource returns the default VariableSource implementation.
 func NewDefaultVariableSource() VariableSource {
 	return NewMultipleUpstreamVariableSource(
-		WithTopLevelPrefix("from:"),
+		WithTopLevelPrefix(defaultTopLevelPrefix),
 		WithEnvVariableUpstream(),
 		WithFileVariableUpstream(),
 		WithAWSSSMVariableUpstream(),

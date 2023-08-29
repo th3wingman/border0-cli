@@ -18,37 +18,38 @@ type ssmAPI interface {
 	) (*ssm.GetParameterOutput, error)
 }
 
-// returns a newly initialized AWS SSM client
-func getSSMClient(ctx context.Context, optFns ...func(*config.LoadOptions) error) (ssmAPI, error) {
-	cfg, err := config.LoadDefaultConfig(ctx, optFns...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS configuration: %v", err)
-	}
-	return ssm.NewFromConfig(cfg), nil
-}
-
 // variableUpstream implementation for fetching values from aws ssm
-type awsSSMVariableUpstream struct {
-	ssmClient ssmAPI
-}
+type awsSSMVariableUpstream struct{}
 
 // ensure awsSSMVariableUpstream implements variableUpstream at compile-time
 var _ variableUpstream = (*awsSSMVariableUpstream)(nil)
 
 // GetVariable gets a variable from AWS SSM
 func (vg *awsSSMVariableUpstream) GetVariable(ctx context.Context, varDefn string) (string, error) {
-	// initialize client if not yet initialized
-	if vg.ssmClient == nil {
-		ssmClient, err := getSSMClient(ctx)
-		if err != nil {
-			return "", fmt.Errorf("failed to initialize new SSM client: %v", err)
-		}
-		vg.ssmClient = ssmClient
+	variable, overrides, err := parseVariableDefinitionParts(varDefn)
+	if err != nil {
+		return "", err
 	}
+	varDefn = variable
+
+	opts := []func(*config.LoadOptions) error{
+		config.WithEC2IMDSRegion(),
+	}
+	if region, ok := overrides["aws_region"]; ok {
+		opts = append(opts, config.WithRegion(region))
+	}
+	if profile, ok := overrides["aws_profile"]; ok {
+		opts = append(opts, config.WithSharedConfigProfile(profile))
+	}
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	if err != nil {
+		return "", fmt.Errorf("failed to load AWS configuration: %v", err)
+	}
+	ssmClient := ssm.NewFromConfig(cfg)
 
 	// compute parameter name and fetch it via the ssm api
-	parameterName := varDefn // FIXME: allow specifying non-default region
-	getParameterOutput, err := vg.ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
+	parameterName := varDefn
+	getParameterOutput, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
 		Name:           aws.String(parameterName),
 		WithDecryption: aws.Bool(true),
 	})
