@@ -18,37 +18,38 @@ type secretsmanagerAPI interface {
 	) (*secretsmanager.GetSecretValueOutput, error)
 }
 
-// returns a newly initialized AWS Secrets Manager client
-func getSecretsManagerClient(ctx context.Context, optFns ...func(*config.LoadOptions) error) (secretsmanagerAPI, error) {
-	cfg, err := config.LoadDefaultConfig(ctx, optFns...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS configuration: %v", err)
-	}
-	return secretsmanager.NewFromConfig(cfg), nil
-}
-
 // variableUpstream implementation for fetching values from aws secrets manager
-type awsSecretsmanagerVariableUpstream struct {
-	secretsmanagerClient secretsmanagerAPI
-}
+type awsSecretsmanagerVariableUpstream struct{}
 
 // ensure awsSecretsmanagerVariableUpstream implements variableUpstream at compile-time
 var _ variableUpstream = (*awsSecretsmanagerVariableUpstream)(nil)
 
 // GetVariable gets a variable from AWS Secrets Manager
 func (vg *awsSecretsmanagerVariableUpstream) GetVariable(ctx context.Context, varDefn string) (string, error) {
-	// initialize client if not yet initialized
-	if vg.secretsmanagerClient == nil {
-		secretsManagerClient, err := getSecretsManagerClient(ctx)
-		if err != nil {
-			return "", fmt.Errorf("failed to initialize new SSM client: %v", err)
-		}
-		vg.secretsmanagerClient = secretsManagerClient
+	variable, overrides, err := parseVariableDefinitionParts(varDefn)
+	if err != nil {
+		return "", err
 	}
+	varDefn = variable
+
+	opts := []func(*config.LoadOptions) error{
+		config.WithEC2IMDSRegion(),
+	}
+	if region, ok := overrides["aws_region"]; ok {
+		opts = append(opts, config.WithRegion(region))
+	}
+	if profile, ok := overrides["aws_profile"]; ok {
+		opts = append(opts, config.WithSharedConfigProfile(profile))
+	}
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	if err != nil {
+		return "", fmt.Errorf("failed to load AWS configuration: %v", err)
+	}
+	secretsManagerClient := secretsmanager.NewFromConfig(cfg)
 
 	// compute secret id and fetch it via the ssm api
-	secretID := varDefn // FIXME: allow specifying non-default region
-	getSecretValueOutput, err := vg.secretsmanagerClient.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+	secretID := varDefn
+	getSecretValueOutput, err := secretsManagerClient.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretID),
 	})
 	if err != nil {
