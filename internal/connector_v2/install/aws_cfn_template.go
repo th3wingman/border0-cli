@@ -97,6 +97,7 @@ Resources:
               - Effect: Allow
                 Action: 'ssm:StartSession'
                 Resource:
+                  - !Sub 'arn:aws:ecs:*:${AWS::AccountId}:task/*'
                   - !Sub 'arn:aws:ec2:*:${AWS::AccountId}:instance/*'
                   - !Sub 'arn:aws:ssm:*:${AWS::AccountId}:document/AWS-StartSSHSession'
               - Effect: Allow
