@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -95,8 +96,16 @@ func newPostgresHandler(c Config) (*postgresHandler, error) {
 		strSslSettings = "?" + strings.Join(sslSettings, "&")
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d%s", c.Username, c.Password, c.Hostname, c.Port, strSslSettings)
-	config, err := pgconn.ParseConfig(dsn)
+	config, err := pgconn.ParseConfig(
+		fmt.Sprintf(
+			"postgres://%s:%s@%s:%d%s",
+			url.QueryEscape(c.Username),
+			url.QueryEscape(c.Password),
+			c.Hostname,
+			c.Port,
+			strSslSettings,
+		),
+	)
 	if err != nil {
 		return nil, err
 	}
