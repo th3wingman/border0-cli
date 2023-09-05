@@ -17,6 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
+	"github.com/borderzero/border0-go/lib/types/set"
+	"github.com/borderzero/border0-go/lib/types/slice"
 )
 
 const (
@@ -51,7 +53,7 @@ var (
 func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 	fmt.Println(fmt.Sprintf("%s\n", banner))
 
-	runId := fmt.Sprintf("border0-connector-cloud-install-aws-%d", time.Now().Unix())
+	runId := fmt.Sprintf("border0-aws-connector-%d", time.Now().Unix())
 
 	loadDefaultConfigCtx, loadDefaultConfigCtxCancel := context.WithTimeout(ctx, timeoutLoadDefaultConfig)
 	loadDefaultConfigCtxCancel()
@@ -76,12 +78,12 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to prompt for AWS VPC Subnet ID: %v", err)
 	}
 
-	border0ConnectorName, err := getUniqueConnectorName(ctx, cliVersion, "aws-cloud-install-connector")
+	border0ConnectorName, err := getUniqueConnectorName(ctx, cliVersion, "aws-connector")
 	if err != nil {
 		return fmt.Errorf("failed to determine unique name for connector: %v", err)
 	}
 
-	border0TokenSsmParameter, err := promptForBorder0TokenSsmParameterPath(ctx, cfg, border0ConnectorName)
+	border0TokenSsmParameter, err := promptForBorder0TokenSsmParameterPath(ctx, cfg, fmt.Sprintf("border0-%s-token", border0ConnectorName))
 	if err != nil {
 		return fmt.Errorf("failed to prompt for AWS SSM Parameter path for Border0 token: %v", err)
 	}
@@ -256,13 +258,18 @@ func promptForVpcSubnetId(ctx context.Context, cfg aws.Config, vpcId string) (st
 func promptForBorder0TokenSsmParameterPath(
 	ctx context.Context,
 	cfg aws.Config,
-	connectorName string,
+	proposedPath string,
 ) (string, error) {
+	paramName, err := getUniqueSsmParameterName(ctx, cfg, proposedPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get unique ssm parameter name: %v", err)
+	}
+
 	var parameterPathTarget string
-	err := survey.AskOne(
+	err = survey.AskOne(
 		&survey.Input{
 			Message: "What is the SSM parameter store path you'd like your border0 token to be stored at?",
-			Default: fmt.Sprintf("connector-%s-token", connectorName),
+			Default: paramName,
 		},
 		&parameterPathTarget,
 		survey.WithValidator(survey.Required),
@@ -272,6 +279,46 @@ func promptForBorder0TokenSsmParameterPath(
 		return "", fmt.Errorf("failed to ask survey question: %v", err)
 	}
 	return parameterPathTarget, nil
+}
+
+func getUniqueSsmParameterName(ctx context.Context, cfg aws.Config, prefix string) (string, error) {
+	paginator := ssm.NewDescribeParametersPaginator(ssm.NewFromConfig(cfg), &ssm.DescribeParametersInput{})
+	takenNames := set.New[string]()
+
+	processPage := func(pctx context.Context, ssmp *ssm.DescribeParametersPaginator) error {
+		describeSsmParametersCtx, describeSsmParametersCtxCancel := context.WithTimeout(pctx, timeoutDescribeSsmParameters)
+		defer describeSsmParametersCtxCancel()
+
+		describeInstanceInformationOutput, err := ssmp.NextPage(describeSsmParametersCtx)
+		if err != nil {
+			return fmt.Errorf("failed to get next page: %v", err)
+		}
+
+		takenNames.Add(slice.Transform(
+			describeInstanceInformationOutput.Parameters,
+			func(p ssmtypes.ParameterMetadata) string {
+				return *p.Name
+			})...,
+		)
+		return nil
+	}
+
+	for paginator.HasMorePages() {
+		if err := processPage(ctx, paginator); err != nil {
+			return "", fmt.Errorf("failed to process SSM parameters page: %v", err)
+		}
+	}
+
+	proposedPath := prefix
+	for i := 1; true; i++ {
+		if !takenNames.Has(proposedPath) {
+			return proposedPath, nil
+		}
+		proposedPath = fmt.Sprintf("%s-%d", prefix, i)
+	}
+
+	// should never reach this code but compiler needs it
+	return "", fmt.Errorf("failed to get a unique ssm parameter path to use")
 }
 
 // returns a survey.Validator that checks that a given SSM parameter does not already exist.
