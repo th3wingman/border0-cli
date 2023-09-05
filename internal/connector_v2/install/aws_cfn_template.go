@@ -165,6 +165,10 @@ Resources:
       MinSize: '1'
       MaxSize: '1'
       DesiredCapacity: '1'
+      Tags:
+        - Key: Name
+          Value: Border0-Connector
+          PropagateAtLaunch: true
       LaunchTemplate:
         LaunchTemplateId: !Ref ConnectorInstanceLaunchTemplate
         Version: !GetAtt ConnectorInstanceLaunchTemplate.LatestVersionNumber
