@@ -24,7 +24,7 @@ const (
 
 	envNameAndValueDelimeter = "="
 
-	defaultCredentialsFilePath = ".border0/config.yml"
+	defaultCredentialsFilePath = ".border0/config.yaml"
 
 	defaultConnectorServer = "capi.border0.com:443"
 	defaultTunnelServer    = "tunnel.border0.com"
