@@ -92,7 +92,7 @@ func RunInstallWizard(
 	}
 
 	// Now we install the service
-	installResult, err := service.Install("connector", "start", "--v2", "--config", configFile)
+	installResult, err := service.Install("connector", "start", "--config", configFile)
 	if err != nil {
 		return fmt.Errorf("failed to install service: %v", err)
 	}
