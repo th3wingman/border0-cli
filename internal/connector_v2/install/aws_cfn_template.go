@@ -157,7 +157,7 @@ Resources:
               #!/bin/bash -xe
               sudo curl https://download.border0.com/linux_arm64/border0 -o /usr/local/bin/border0
               sudo chmod +x /usr/local/bin/border0
-              sudo border0 connector install --v2 --daemon-only --token from:aws:ssm:${Border0TokenSsmParameter}
+              sudo border0 connector install --daemon-only --token from:aws:ssm:${Border0TokenSsmParameter}
 
   ConnectorInstanceAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
