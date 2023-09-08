@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -8,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,6 +28,7 @@ import (
 	ssmLog "github.com/aws/session-manager-plugin/src/log"
 	"github.com/aws/session-manager-plugin/src/message"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-go/types/common"
 	"github.com/manifoldco/promptui"
@@ -61,6 +64,13 @@ type ProxyConfig struct {
 	AwsCredentials     *common.AwsCredentials
 	Recording          bool
 	EndToEndEncryption bool
+	Hostkey            *ssh.Signer
+	orgSshCA           ssh.PublicKey
+}
+
+type session struct {
+	metadata    border0.E2EEncryptionMetadata
+	proxyConfig ProxyConfig
 }
 
 type ECSSSMProxy struct {
@@ -70,7 +80,7 @@ type ECSSSMProxy struct {
 	Containers []string
 }
 
-func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSProfile string) (*ProxyConfig, error) {
+func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSProfile string, hostkey *ssh.Signer, org *models.Organization) (*ProxyConfig, error) {
 	if socket.ConnectorLocalData == nil {
 		return nil, nil
 	}
@@ -134,6 +144,18 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 			Services:   socket.ConnectorLocalData.AWSECSServices,
 			Tasks:      socket.ConnectorLocalData.AWSECSTasks,
 			Containers: socket.ConnectorLocalData.AWSECSContainers,
+		}
+	}
+
+	if socket.EndToEndEncryptionEnabled {
+		proxyConfig.Hostkey = hostkey
+		if orgSshCA, ok := org.Certificates["ssh_public_key"]; ok {
+			orgCa, _, _, _, err := ssh.ParseAuthorizedKey([]byte(orgSshCA))
+			if err != nil {
+				return nil, err
+			}
+
+			proxyConfig.orgSshCA = orgCa
 		}
 	}
 
@@ -243,9 +265,7 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 
 	if c.EndToEndEncryption {
 		c.sshServerConfig = &ssh.ServerConfig{
-			ServerVersion:     sshProxyVersion,
-			PublicKeyCallback: c.sshPublicKeyCallback,
-			AuthLogCallback:   c.sshAuthLogCallback,
+			ServerVersion: sshProxyVersion,
 		}
 	} else {
 		c.sshServerConfig = &ssh.ServerConfig{
@@ -253,16 +273,20 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 		}
 	}
 
-	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return fmt.Errorf("sshauthproxy: failed to generate private key: %s", err)
-	}
+	if c.Hostkey == nil {
+		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return fmt.Errorf("sshauthproxy: failed to generate private key: %s", err)
+		}
 
-	signer, err := ssh.NewSignerFromKey(privateKey)
-	if err != nil {
-		return fmt.Errorf("sshauthproxy: failed to generate signer: %s", err)
+		signer, err := ssh.NewSignerFromKey(privateKey)
+		if err != nil {
+			return fmt.Errorf("sshauthproxy: failed to generate signer: %s", err)
+		}
+		c.sshServerConfig.AddHostKey(signer)
+	} else {
+		c.sshServerConfig.AddHostKey(*c.Hostkey)
 	}
-	c.sshServerConfig.AddHostKey(signer)
 
 	for {
 		conn, err := l.Accept()
@@ -271,20 +295,69 @@ func Proxy(l net.Listener, c ProxyConfig) error {
 			continue
 		}
 
-		go handler(conn, c)
+		go func() {
+			if c.EndToEndEncryption {
+				e2EEncryptionConn, ok := conn.(border0.E2EEncryptionConn)
+				if !ok {
+					conn.Close()
+					c.Logger.Error("failed to cast connection to e2eencryption")
+					return
+				}
+
+				session := &session{
+					metadata:    *e2EEncryptionConn.Metadata,
+					proxyConfig: c,
+				}
+
+				c.sshServerConfig.PublicKeyCallback = session.sshPublicKeyCallback
+				c.sshServerConfig.AuthLogCallback = session.sshAuthLogCallback
+			}
+
+			handler(conn, c)
+		}()
 	}
 }
 
-func (c *ProxyConfig) sshPublicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	c.Logger.Info("sshauthproxy: sshPublicKeyCallback", zap.String("user", conn.User()), zap.String("client", string(conn.ClientVersion())))
+func (s *session) sshPublicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+	cert, ok := key.(*ssh.Certificate)
+	if !ok {
+		return nil, errors.New("can not cast certificate")
+	}
+
+	// validated := false
+	// policyInput := proxy.authSvc.NewPolicyInput(cert.KeyId, conn.RemoteAddr(), proxy.id, proxy.socket.SocketID)
+	// actions, authInfo := proxy.authSvc.Authorize(proxy.socket.AppProtocol, policyInput)
+
+	if s.proxyConfig.orgSshCA == nil {
+		return nil, errors.New("error: unable to validate certificate, no CA configured")
+	}
+
+	if bytes.Equal(cert.SignatureKey.Marshal(), s.proxyConfig.orgSshCA.Marshal()) {
+	} else {
+		// proxy.sessionLogSvc.LogSession(proxy.id, proxy.socket, conn.RemoteAddr(), "denied", authInfo, conn.User(), cert.KeyId, cert.Permissions.Extensions[userinfo_extension])
+		return nil, errors.New("error: invalid client certificate")
+	}
+
+	if s.metadata.UserEmail != cert.KeyId {
+		return nil, errors.New("error: ssh certificate does not match tls certificate")
+	}
+
+	var certChecker ssh.CertChecker
+	if err := certChecker.CheckCert("mysocket_ssh_signed", cert); err != nil {
+		return nil, fmt.Errorf("error: invalid client certificate: %s", err)
+	}
+
 	return &ssh.Permissions{}, nil
 }
 
-func (c *ProxyConfig) sshAuthLogCallback(conn ssh.ConnMetadata, method string, err error) {
+func (s *session) sshAuthLogCallback(conn ssh.ConnMetadata, method string, err error) {
 	if err != nil {
-		c.Logger.Error("sshauthproxy: authentication failed", zap.String("method", method), zap.String("user", conn.User()), zap.Error(err))
+		if errors.Is(err, ssh.ErrNoAuth) {
+			return
+		}
+		s.proxyConfig.Logger.Debug("sshauthproxy: authentication failed", zap.String("method", method), zap.String("user", conn.User()), zap.Error(err))
 	} else {
-		c.Logger.Info("sshauthproxy: authentication successful", zap.String("method", method), zap.String("user", conn.User()))
+		s.proxyConfig.Logger.Debug("sshauthproxy: authentication successful", zap.String("method", method), zap.String("user", conn.User()), zap.String("remote_addr", s.metadata.ClientIP), zap.String("userEmail", s.metadata.UserEmail))
 	}
 }
 
