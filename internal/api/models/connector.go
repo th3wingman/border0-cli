@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"github.com/borderzero/border0-go/types/connector"
 )
 
 // ConnectorList represents a list of connectors
@@ -35,4 +37,20 @@ type ConnectorToken struct {
 	Name          string `json:"name,omitempty"`
 	ExpiresAt     string `json:"expires_at,omitempty"`
 	Token         string `json:"token,omitempty"`
+}
+
+// ConnectorPluginRequest represents a request to create a plugin for a Border0 Connector.
+type ConnectorPluginRequest struct {
+	ConnectorId   string                         `json:"connector_id"`
+	Enabled       bool                           `json:"enabled"`
+	PluginType    string                         `json:"plugin_type"`
+	Configuration *connector.PluginConfiguration `json:"configuration"`
+}
+
+// ConnectorPlugin represents a plugin for a Border0 Connector.
+type ConnectorPlugin struct {
+	ID            string                        `json:"id"`
+	Enabled       bool                          `json:"enabled"`
+	PluginType    string                        `json:"plugin_type"`
+	Configuration connector.PluginConfiguration `json:"configuration"`
 }

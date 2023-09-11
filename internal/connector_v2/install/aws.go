@@ -17,8 +17,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
+	border0 "github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
+	"github.com/borderzero/border0-go/types/connector"
 )
 
 const (
@@ -93,6 +95,11 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to create new Border0 connector: %v", err)
 	}
 
+	if err = enableAwsDiscoveryPluginsForConnector(ctx, border0Connector.ConnectorID, cliVersion); err != nil {
+		// we don't fail here on purpose
+		fmt.Printf("warning: failed to enable AWS plugins: %v\n", err)
+	}
+
 	border0Token, err := generateNewBorder0ConnectorToken(ctx, border0Connector.ConnectorID, cliVersion, runId)
 	if err != nil {
 		return fmt.Errorf("failed to create new Border0 token: %v", err)
@@ -120,6 +127,30 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to create connector resources in AWS: %v", err)
 	}
 
+	return nil
+}
+
+func enableAwsDiscoveryPluginsForConnector(
+	ctx context.Context,
+	connectorId string,
+	cliVersion string,
+) error {
+	border0Client := border0.NewAPI(border0.WithVersion(cliVersion))
+
+	for _, pluginType := range []string{
+		connector.PluginTypeAwsEc2Discovery,
+		connector.PluginTypeAwsEcsDiscovery,
+		connector.PluginTypeAwsRdsDiscovery,
+	} {
+		pluginConfig, err := border0Client.GetDefaultPluginConfiguration(ctx, pluginType)
+		if err != nil {
+			return fmt.Errorf("failed to get default plugin configuration for plugin type %s: %v", pluginType, err)
+		}
+		if _, err = border0Client.CreatePlugin(ctx, connectorId, true, pluginType, pluginConfig); err != nil {
+			return fmt.Errorf("failed to create a new Border0 connector via the Border0 API: %v", err)
+		}
+		fmt.Printf("🚀 Border0 connector plugin \"%s\" enabled successfully!\n", pluginType)
+	}
 	return nil
 }
 
