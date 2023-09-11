@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -311,10 +312,13 @@ func Login(email, password string) (bool, error) {
 }
 
 func SaveTokenInDisk(accessToken string) error {
+	// directory and file permissions
+	dPerms, fPerms := fs.FileMode(0700), fs.FileMode(0600)
+
 	// create dir if not exists
 	configPath := filepath.Dir(tokenfile())
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		if err := os.Mkdir(configPath, 0700); err != nil {
+		if err := os.Mkdir(configPath, dPerms); err != nil {
 			return fmt.Errorf("failed to create directory %s : %s", configPath, err)
 		}
 	}
@@ -323,8 +327,9 @@ func SaveTokenInDisk(accessToken string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	if err := os.Chmod(tokenfile(), 0600); err != nil {
+	if err := os.Chmod(tokenfile(), fPerms); err != nil {
 		return err
 	}
 
@@ -351,7 +356,6 @@ func SaveTokenInDisk(accessToken string) error {
 		}
 	}
 
-	defer f.Close()
 	_, err2 := f.WriteString(fmt.Sprintf("%s\n", accessToken))
 	if err2 != nil {
 		return err2
