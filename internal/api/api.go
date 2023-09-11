@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-go/types/connector"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/sync/errgroup"
 )
@@ -398,6 +399,38 @@ func (a *Border0API) CreateConnectorToken(ctx context.Context, connectorId strin
 	}
 
 	return &tk, nil
+}
+
+// GetDefaultPluginConfiguration returns the default configuration for a given plugin type.
+func (a *Border0API) GetDefaultPluginConfiguration(ctx context.Context, pluginType string) (*connector.PluginConfiguration, error) {
+	var plugin *models.ConnectorPlugin
+	err := a.Request(http.MethodGet, fmt.Sprintf("connector/plugins/defaults/%s", pluginType), &plugin, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	return &plugin.Configuration, nil
+}
+
+// CreatePlugin creates a new connector plugin.
+func (a *Border0API) CreatePlugin(
+	ctx context.Context,
+	connectorId string,
+	enabled bool,
+	pluginType string,
+	pluginConfiguration *connector.PluginConfiguration,
+) (*models.ConnectorPlugin, error) {
+	payload := &models.ConnectorPluginRequest{
+		ConnectorId:   connectorId,
+		Enabled:       enabled,
+		PluginType:    pluginType,
+		Configuration: pluginConfiguration,
+	}
+	var plugin *models.ConnectorPlugin
+	err := a.Request(http.MethodPost, "connector/plugins", &plugin, payload, true)
+	if err != nil {
+		return nil, err
+	}
+	return plugin, nil
 }
 
 func (a *Border0API) GetPolicyByName(ctx context.Context, name string) (*models.Policy, error) {

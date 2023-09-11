@@ -73,8 +73,10 @@ func displayServiceStatus(serviceName string) {
 	var output []byte
 	var err error
 
-	if system == "linux" || system == "darwin" {
+	if system == "linux" {
 		output, err = exec.Command("systemctl", "show", serviceName, "--no-page").Output()
+	} else if system == "darwin" {
+		output, err = exec.Command("launchctl", "print", fmt.Sprintf("system/%s", serviceName)).Output()
 	} else if system == "windows" {
 		output, err = exec.Command("sc", "queryex", serviceName).Output()
 	} else {
@@ -89,7 +91,7 @@ func displayServiceStatus(serviceName string) {
 
 	status := strings.TrimSpace(string(output))
 
-	if system == "linux" || system == "darwin" {
+	if system == "linux" {
 		lines := strings.Split(status, "\n")
 		for _, line := range lines {
 			if strings.HasPrefix(line, "ActiveState=") {
@@ -103,7 +105,33 @@ func displayServiceStatus(serviceName string) {
 				fmt.Println(line)
 			}
 		}
-	} else if system == "windows" {
+		return
+	}
+
+	if system == "darwin" {
+		lines := strings.Split(status, "\n")
+		for _, line := range lines {
+			// remove all whitespace and tabs from line
+			line = strings.Trim(line, "\t ")
+			// process "state" line
+			if strings.Contains(line, "state =") {
+				state := strings.Trim(strings.TrimPrefix(line, "state ="), "\t ")
+				if state != "running" {
+					fmt.Printf("The %s service is not running.\n", serviceName)
+					return
+				}
+				fmt.Printf("The %s service is currently running. ", serviceName)
+				continue
+			}
+			// process "pid" line
+			if strings.Contains(line, "pid =") {
+				fmt.Printf("(%s)", line)
+			}
+		}
+		fmt.Println() // newline
+	}
+
+	if system == "windows" {
 		lines := strings.Split(status, "\r\n")
 		for _, line := range lines {
 			if strings.Contains(line, "STATE") {
@@ -116,6 +144,7 @@ func displayServiceStatus(serviceName string) {
 				fmt.Println(line)
 			}
 		}
+		return
 	}
 }
 
