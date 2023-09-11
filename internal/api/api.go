@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-go/types/connector"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/sync/errgroup"
@@ -114,7 +116,11 @@ func tokenfile() string {
 	if runtime.GOOS == "windows" {
 		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("APPDATA"))
 	} else {
-		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("HOME"))
+		hd, err := util.GetUserHomeDir()
+		if err != nil {
+			log.Fatalf("failed to determine user's home directory: %v", err)
+		}
+		tokenfile = fmt.Sprintf("%s/.border0/token", hd)
 	}
 	return tokenfile
 }
