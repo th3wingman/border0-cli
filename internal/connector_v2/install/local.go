@@ -2,7 +2,6 @@ package install
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,14 +10,9 @@ import (
 	"runtime"
 
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
-	"github.com/borderzero/border0-cli/internal/service_daemon"
+	"github.com/borderzero/border0-cli/internal/connector_v2/daemon"
 	"github.com/borderzero/border0-cli/internal/util"
 	"gopkg.in/yaml.v3"
-)
-
-const (
-	serviceName        = "border0" // note: *MUST* match binary name
-	serviceDescription = "Border0 Connector Service"
 )
 
 // RunInstallWizard runs the connector install wizard for the local machine.
@@ -28,22 +22,13 @@ func RunInstallWizard(
 	daemonOnly bool,
 	token string,
 ) error {
-	// ensure running as root
-	if !util.RunningAsAdministrator() {
-		return errors.New("command must be ran as system administrator")
-	}
-
 	// ensure not already installed
-	service, err := service_daemon.New(serviceName, serviceDescription)
+	ok, err := daemon.IsInstalled()
 	if err != nil {
-		return fmt.Errorf("failed to initialize new service object: %v", err)
+		return err
 	}
-	installed, err := service_daemon.IsInstalled(service)
-	if err != nil {
-		return fmt.Errorf("failed to check whether service is already installed: %v", err)
-	}
-	if installed {
-		return errors.New("service already installed")
+	if ok {
+		return fmt.Errorf("The Border0 Connector is already installed")
 	}
 
 	connectorToken := ""
@@ -87,23 +72,28 @@ func RunInstallWizard(
 	}
 
 	configFile := makeConfigPath()
-	if err = os.WriteFile(configFile, configFileBytes, 0600); err != nil {
+	if err := os.WriteFile(configFile, configFileBytes, 0600); err != nil {
 		return fmt.Errorf("failed to encode configuration to yaml: %v", err)
 	}
+	fmt.Printf("🚀 Border0 Connector configuration file \"%s\" written successfully!\n", configFile)
 
-	// Now we install the service
-	installResult, err := service.Install("connector", "start", "--config", configFile)
+	connectorSvc, err := daemon.GetConnectorService(
+		daemon.WithConfigurationFilePath(configFile),
+	)
 	if err != nil {
+		return fmt.Errorf("failed to initialize new connector service object: %v", err)
+	}
+
+	if err = connectorSvc.Install(); err != nil {
 		return fmt.Errorf("failed to install service: %v", err)
 	}
-	fmt.Println("\n", installResult)
+	fmt.Println("🚀 Border0 Connector service installed successfully!")
 
-	// Also start the service
-	startResult, err := service.Start()
-	if err != nil {
-		log.Fatalf("error: %v %v", startResult, err)
+	if err = connectorSvc.Start(); err != nil {
+		return fmt.Errorf("failed to start service: %v", err)
 	}
-	fmt.Println(startResult)
+	fmt.Println("🚀 Border0 Connector service started successfully!")
+
 	return nil
 }
 
