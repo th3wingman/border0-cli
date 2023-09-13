@@ -1,13 +1,7 @@
 package service_daemon
 
 import (
-	"strings"
-)
-
-const (
-	notInstalledMessageDarwin  = "is not installed"
-	notInstalledMessageLinux   = "is not installed"
-	notInstalledMessageWindows = "does not exist"
+	"errors"
 )
 
 // Service represents a service daemon.
@@ -21,18 +15,5 @@ type Service interface {
 
 // IsInstalled returns true if a given service is installed.
 func IsInstalled(service Service) (bool, error) {
-	status, err := service.Status()
-	if err != nil {
-		for _, notInstalledMsg := range []string{
-			notInstalledMessageDarwin,
-			notInstalledMessageLinux,
-			notInstalledMessageWindows,
-		} {
-			if strings.Contains(err.Error(), notInstalledMsg) {
-				return false, nil
-			}
-		}
-		return false, err
-	}
-	return strings.Contains(status, "is running") || strings.Contains(status, "stopped"), nil
+	return false, errors.New("this code is going away!")
 }
