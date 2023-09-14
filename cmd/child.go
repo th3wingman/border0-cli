@@ -19,21 +19,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
-	"syscall"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
+	"github.com/borderzero/border0-cli/internal/process"
 	"github.com/pkg/sftp"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
-
-type sftpChildArgs struct {
-	uid    int
-	gid    int
-	user   string
-	groups []int
-}
 
 type stdioWrapper struct {
 	io.Reader
@@ -42,11 +34,12 @@ type stdioWrapper struct {
 
 func (sw *stdioWrapper) Close() error { return nil }
 
-var sftpArgs sftpChildArgs
+var sftpArgs process.Parameters
 
 var childCmd = &cobra.Command{
-	Use:   "child",
-	Short: "Start a child process",
+	Use:    "child",
+	Short:  "Start a child process",
+	Hidden: true,
 }
 
 var childSftpCmd = &cobra.Command{
@@ -54,33 +47,10 @@ var childSftpCmd = &cobra.Command{
 	Short: "Start a sftp child process",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := logger.Logger
-		logger.Info("Starting sftp child process", zap.String("user", sftpArgs.user), zap.Int("uid", sftpArgs.uid), zap.Int("gid", sftpArgs.gid))
+		logger.Info("Starting sftp child process", zap.String("user", sftpArgs.User), zap.Int("uid", sftpArgs.UID), zap.Int("gid", sftpArgs.GID))
 
-		euid := os.Geteuid()
-		egid := os.Getegid()
-
-		if euid != 0 && sftpArgs.uid != euid {
-			return fmt.Errorf("command must be run as root or with sudo")
-		}
-
-		if runtime.GOOS == "darwin" && len(sftpArgs.groups) > 16 {
-			sftpArgs.groups = sftpArgs.groups[:16]
-		}
-
-		if err := syscall.Setgroups(sftpArgs.groups); err != nil {
-			return fmt.Errorf("failed to set groups: %w", err)
-		}
-
-		if egid != sftpArgs.gid {
-			if err := syscall.Setgid(sftpArgs.gid); err != nil {
-				return fmt.Errorf("failed to set gid: %w", err)
-			}
-		}
-
-		if euid != sftpArgs.uid {
-			if err := syscall.Setuid(sftpArgs.uid); err != nil {
-				return fmt.Errorf("failed to set uid: %w", err)
-			}
+		if err := process.SetupUserAndGroups(logger, &sftpArgs); err != nil {
+			return fmt.Errorf("failed to set up process user and groups: %v", err)
 		}
 
 		server, err := sftp.NewServer(
@@ -104,10 +74,10 @@ func init() {
 	rootCmd.AddCommand(childCmd)
 	childCmd.AddCommand(childSftpCmd)
 
-	childSftpCmd.Flags().IntVar(&sftpArgs.uid, "uid", 0, "uid")
-	childSftpCmd.Flags().IntVar(&sftpArgs.gid, "gid", 0, "gid")
-	childSftpCmd.Flags().StringVar(&sftpArgs.user, "user", "", "user")
-	childSftpCmd.Flags().IntSliceVar(&sftpArgs.groups, "group", []int{}, "groups")
+	childSftpCmd.Flags().IntVar(&sftpArgs.UID, "uid", 0, "uid")
+	childSftpCmd.Flags().IntVar(&sftpArgs.GID, "gid", 0, "gid")
+	childSftpCmd.Flags().StringVar(&sftpArgs.User, "user", "", "user")
+	childSftpCmd.Flags().IntSliceVar(&sftpArgs.Groups, "group", []int{}, "groups")
 
 	childSftpCmd.MarkFlagRequired("uid")
 	childSftpCmd.MarkFlagRequired("gid")
