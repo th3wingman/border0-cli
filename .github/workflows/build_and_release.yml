@@ -10,6 +10,10 @@ on:
       - cmd/**
       - internal/**
       - lib/**
+      - vendor/**
+      - mocks/**
+      - go.mod
+      - go.sum
 
 jobs:
   build:
