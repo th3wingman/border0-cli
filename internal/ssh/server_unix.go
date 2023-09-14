@@ -4,16 +4,14 @@
 package ssh
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
-	"strings"
+	"path/filepath"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/creack/pty"
@@ -47,8 +45,8 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64, username string) {
 	} else {
 		if euid == 0 && loginCmd != "" {
 			cmd.Path = loginCmd
-			if isAlpine() {
-				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", username})
+			if hasBusyBoxLogin(loginCmd) {
+				cmd.Args = []string{loginCmd, "-p", "-h", "Border0", "-f", username}
 			} else {
 				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", username}, cmd.Args...)
 			}
@@ -83,33 +81,29 @@ func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64, username string) {
 			return
 		}
 
-		done := make(chan bool, 2)
-		go func() {
-			cmd.Wait()
-			done <- true
-		}()
-
 		go func() {
 			for win := range winCh {
 				setWinsize(f, win.Width, win.Height)
 			}
 		}()
 
+		var wg sync.WaitGroup
+		wg.Add(2)
+
 		go func() {
+			defer wg.Done()
 			io.Copy(f, s)
-			done <- true
+			f.Close()
 		}()
 
 		go func() {
-			time.Sleep(200 * time.Millisecond)
+			defer wg.Done()
 			io.Copy(s, f)
-			done <- true
+			s.CloseWrite()
 		}()
 
-		select {
-		case <-done:
-		case <-s.Context().Done():
-		}
+		wg.Wait()
+		cmd.Wait()
 
 		if cmd.ProcessState == nil {
 			cmd.Process.Signal(syscall.SIGHUP)
@@ -171,36 +165,22 @@ func setWinsize(f *os.File, w, h int) {
 		uintptr(unsafe.Pointer(&struct{ h, w, x, y uint16 }{uint16(h), uint16(w), 0, 0})))
 }
 
-func isAlpine() bool {
-	file, err := os.Open("/etc/os-release")
+func hasBusyBoxLogin(loginCmd string) bool {
+	fileInfo, err := os.Lstat(loginCmd)
 	if err != nil {
 		return false
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	isLinux := false
-	isAlpine := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "ID=") {
-			if strings.Contains(line, "alpine") {
-				isAlpine = true
-			}
-		} else if strings.HasPrefix(line, "NAME=") {
-			if strings.Contains(line, "Linux") {
-				isLinux = true
-			}
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(loginCmd)
+		if err != nil {
+			return false
 		}
-		if isLinux && isAlpine {
-			break
+
+		if filepath.Base(target) == "busybox" {
+			return true
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return false
-	}
-
-	return isLinux && isAlpine
+	return false
 }
