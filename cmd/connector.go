@@ -284,14 +284,6 @@ var connectorStartCmd = &cobra.Command{
 	},
 }
 
-var connectorStopCmd = &cobra.Command{
-	Use:   "stop",
-	Short: "stop ad-hoc connector process",
-	Run: func(cmd *cobra.Command, args []string) {
-		connector.NewConnectorService(*config.NewConfig(), nil, version).Stop()
-	},
-}
-
 func connectorInstallAws(cmd *cobra.Command) {
 	ctx := cmd.Context()
 
@@ -444,7 +436,6 @@ func init() {
 	connectorStartCmd.Flag("service").Hidden = true
 
 	connectorCmd.AddCommand(connectorStartCmd)
-	connectorCmd.AddCommand(connectorStopCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
