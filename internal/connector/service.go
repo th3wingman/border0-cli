@@ -188,11 +188,6 @@ func (c *ConnectorService) StartWithPlugins(ctx context.Context, cfg config.Conf
 	return nil
 }
 
-func (c ConnectorService) Stop() error {
-	log.Println("stopping the connector service")
-	return nil
-}
-
 func (c *ConnectorService) StartSocketWorker(ctx context.Context, connectorCore *core.ConnectorCore, socketUpdateCh chan []models.Socket, group *errgroup.Group) {
 	group.Go(func() error {
 		for {
