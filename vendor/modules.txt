@@ -257,7 +257,7 @@ github.com/borderzero/border0-go/types/service
 # github.com/borderzero/border0-proto v1.0.3
 ## explicit; go 1.20
 github.com/borderzero/border0-proto/connector
-# github.com/borderzero/discovery v0.1.21
+# github.com/borderzero/discovery v0.1.22
 ## explicit; go 1.20
 github.com/borderzero/discovery
 github.com/borderzero/discovery/discoverers
