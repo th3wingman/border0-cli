@@ -62,6 +62,7 @@ var (
 	localssh                bool
 	orgName                 string
 	sso                     string
+	serviceFlag             string
 	connectorConfig         string
 	perPage                 int64
 	page                    int64
