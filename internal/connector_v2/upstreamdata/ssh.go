@@ -109,9 +109,11 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceStandard(s *models.S
 		case service.UsernameProviderDefined, "":
 			// NOTE: for border0 certificate sockets, the role of the connector is to just forward bytes
 			// between the proxy and the origin. The signed certificate comes directly from the proxy, and
-			// username from clients (e.g. the web client). Which is why we do not populate the username here.
+			// username from clients (e.g. the web client). However, there are plans of changing that behaviour
+			// so we set the username here anyways even though it is currently a NO-OP.
 
-			// s.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.Border0CertificateAuthConfiguration.Username)
+			s.IsBorder0Certificate = true
+			s.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.Border0CertificateAuthConfiguration.Username)
 		case service.UsernameProviderPromptClient:
 			// do nothing
 		default:
