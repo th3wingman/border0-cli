@@ -136,6 +136,8 @@ type Socket struct {
 	ConnectorData      *ConnectorData      `json:"-"`
 	ConnectorLocalData *ConnectorLocalData `json:"-"`
 
+	IsBorder0Certificate bool `json:"-"`
+
 	UpstreamCertFile      string `json:"-"`
 	UpstreamKeyFile       string `json:"-"`
 	UpstreamCACertFile    string `json:"-"`

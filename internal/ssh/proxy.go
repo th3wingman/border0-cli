@@ -88,6 +88,11 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 
 	isNormalSSHSocket := socket.UpstreamType != "aws-ssm" && socket.UpstreamType != "aws-ec2connect" && !socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled && !socket.EndToEndEncryptionEnabled
 	if isNormalSSHSocket {
+		// For connector v2 sockets CAN have an upsream username set
+		// so the check below would not pass - so we add this new one.
+		if socket.IsBorder0Certificate {
+			return nil, nil
+		}
 		if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" {
 			if len(socket.ConnectorLocalData.UpstreamIdentityPrivateKey) == 0 && socket.ConnectorLocalData.UpstreamIdentifyFile == "" {
 				return nil, nil
