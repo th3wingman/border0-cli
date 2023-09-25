@@ -88,6 +88,7 @@ var (
 	awsECSTasks             []string
 	awsECSContainers        []string
 	disableBrowser          bool
+	qr                      bool
 	awsEc2InstanceId        string
 	awsEc2InstanceConnect   bool
 	vpnSubnet               string   // used in the socket connect vpn command

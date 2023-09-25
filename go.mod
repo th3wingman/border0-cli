@@ -41,6 +41,7 @@ require (
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/kardianos/service v1.2.2
 	github.com/manifoldco/promptui v0.9.0
+	github.com/mdp/qrterminal v1.0.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/moby/term v0.5.0
 	github.com/opencontainers/selinux v1.11.0
@@ -114,6 +115,7 @@ require (
 	google.golang.org/api v0.124.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230525234020-1aefcd67740a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230710151506-e685fd7b542b // indirect
+	rsc.io/qr v0.2.0 // indirect
 )
 
 require (
