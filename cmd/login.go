@@ -32,6 +32,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/cenkalti/backoff/v4"
 	jwt "github.com/golang-jwt/jwt"
+	"github.com/mdp/qrterminal"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -70,31 +71,46 @@ var loginCmd = &cobra.Command{
 			deviceIdentifier := fmt.Sprint(claims["identifier"])
 
 			url := fmt.Sprintf("%s/login?device_identifier=%v", http.WebUrl(), url.QueryEscape(deviceIdentifier))
-			fmt.Printf("Please navigate to the URL below in order to complete the login process:\n%s\n", url)
 
-			// Try opening the system's browser automatically. The error is ignored because the desired behavior of the
-			// handler is the same regardless of whether opening the browser fails or succeeds -- we still print the URL.
-			// This is desirable because in the event opening the browser succeeds, the customer may still accidentally
-			// close the new tab / browser session, or may want to authenticate in a different browser / session. In the
-			// event that opening the browser fails, the customer may still complete authenticating by navigating to the
-			// URL in a different device.
+			if qr {
+				fmt.Printf("Please scan the following QR code to complete the login process from a mobile device:\n%s\n", url)
+				qrterminal.GenerateWithConfig(
+					url,
+					qrterminal.Config{
+						Level:     qrterminal.L,
+						Writer:    os.Stdout,
+						QuietZone: 1,
+						BlackChar: qrterminal.BLACK,
+						WhiteChar: qrterminal.WHITE,
+					},
+				)
+			} else {
+				fmt.Printf("Please navigate to the URL below in order to complete the login process:\n%s\n", url)
 
-			/// check if the disableBrowser flag is set
-			if !disableBrowser {
+				// Try opening the system's browser automatically. The error is ignored because the desired behavior of the
+				// handler is the same regardless of whether opening the browser fails or succeeds -- we still print the URL.
+				// This is desirable because in the event opening the browser succeeds, the customer may still accidentally
+				// close the new tab / browser session, or may want to authenticate in a different browser / session. In the
+				// event that opening the browser fails, the customer may still complete authenticating by navigating to the
+				// URL in a different device.
 
-				// check if we're on DARWIN and if we're running as sudo, if so, make sure we open the browser as the user
-				// this prevents folsk from not having access to credentials , sessions, etc
-				sudoUsername := os.Getenv("SUDO_USER")
-				sudoAttempt := false
-				if runtime.GOOS == "darwin" && sudoUsername != "" {
-					err = exec.Command("sudo", "-u", sudoUsername, "open", url).Run()
-					if err == nil {
-						// If for some reason this failed, we'll try again to old way
-						sudoAttempt = true
+				/// check if the disableBrowser flag is set
+				if !disableBrowser {
+
+					// check if we're on DARWIN and if we're running as sudo, if so, make sure we open the browser as the user
+					// this prevents folsk from not having access to credentials , sessions, etc
+					sudoUsername := os.Getenv("SUDO_USER")
+					sudoAttempt := false
+					if runtime.GOOS == "darwin" && sudoUsername != "" {
+						err = exec.Command("sudo", "-u", sudoUsername, "open", url).Run()
+						if err == nil {
+							// If for some reason this failed, we'll try again to old way
+							sudoAttempt = true
+						}
 					}
-				}
-				if !sudoAttempt {
-					_ = open.Run(url)
+					if !sudoAttempt {
+						_ = open.Run(url)
+					}
 				}
 			}
 
@@ -194,8 +210,10 @@ func init() {
 	loginCmd.Flags().StringVarP(&mfaCode, "mfa", "m", "", "MFA  Code")
 	// add hidden flag to disable browser opening
 	loginCmd.Flags().BoolVar(&disableBrowser, "disable-browser", false, "Disable browser opening")
-	// now make the disableBrowser flag hidden
+	loginCmd.Flags().BoolVar(&qr, "qr", false, "Print a QR code for authenticating with a mobile device")
+	// now make the disableBrowser and qr flags hidden
 	loginCmd.Flags().MarkHidden("disable-browser")
+	loginCmd.Flags().MarkHidden("qr")
 
 	rootCmd.AddCommand(loginCmd)
 }
