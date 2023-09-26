@@ -42,7 +42,7 @@ func RunInstallWizard(
 		if err != nil {
 			return fmt.Errorf("failed to determine unique name for connector: %v", err)
 		}
-		border0Connector, err := createNewBorder0Connector(ctx, connectorName, "CLI-Installed Border0 Connector", version)
+		border0Connector, err := createNewBorder0Connector(ctx, connectorName, "CLI-Installed Border0 Connector", version, true)
 		if err != nil {
 			return fmt.Errorf("failed to create new connector: %v", err)
 		}

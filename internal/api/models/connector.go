@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/borderzero/border0-go/types/connector"
+	"github.com/borderzero/border0-go/types/service"
 )
 
 // ConnectorList represents a list of connectors
@@ -13,15 +14,16 @@ type ConnectorList struct {
 
 // Connector represents a cloud-managed Border0 Connector.
 type Connector struct {
-	Name                     string                 `json:"name"`
-	ConnectorID              string                 `json:"connector_id"`
-	BuiltInSshServiceEnabled bool                   `json:"built_in_ssh_service_enabled"`
-	Description              string                 `json:"description"`
-	ActiveTokens             int                    `json:"active_tokens"`
-	Metadata                 map[string]interface{} `json:"metadata"`
-	CreatedAt                *time.Time             `json:"created_at"`
-	UpdatedAt                *time.Time             `json:"updated_at"`
-	LastSeenAt               *time.Time             `json:"last_seen_at"`
+	Name                           string                                  `json:"name"`
+	ConnectorID                    string                                  `json:"connector_id"`
+	BuiltInSshServiceEnabled       bool                                    `json:"built_in_ssh_service_enabled"`
+	BuiltInSshServiceConfiguration *service.BuiltInSshServiceConfiguration `json:"built_in_ssh_service_configuration,omitempty"`
+	Description                    string                                  `json:"description"`
+	ActiveTokens                   int                                     `json:"active_tokens"`
+	Metadata                       map[string]interface{}                  `json:"metadata"`
+	CreatedAt                      *time.Time                              `json:"created_at"`
+	UpdatedAt                      *time.Time                              `json:"updated_at"`
+	LastSeenAt                     *time.Time                              `json:"last_seen_at"`
 }
 
 // ConnectorTokenRequest represents a request to create a token for a Border0 Connector.

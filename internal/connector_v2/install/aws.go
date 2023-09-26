@@ -90,7 +90,7 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to prompt for AWS SSM Parameter path for Border0 token: %v", err)
 	}
 
-	border0Connector, err := createNewBorder0Connector(ctx, border0ConnectorName, "AWS Cloud-Install Border0 Connector", cliVersion)
+	border0Connector, err := createNewBorder0Connector(ctx, border0ConnectorName, "AWS Cloud-Install Border0 Connector", cliVersion, false)
 	if err != nil {
 		return fmt.Errorf("failed to create new Border0 connector: %v", err)
 	}
