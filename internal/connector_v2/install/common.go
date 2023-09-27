@@ -3,11 +3,13 @@ package install
 import (
 	"context"
 	"fmt"
+	"os"
 
 	border0 "github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
+	"github.com/borderzero/border0-go/types/service"
 )
 
 func getUniqueConnectorName(ctx context.Context, version, prefix string) (string, error) {
@@ -38,10 +40,21 @@ func createNewBorder0Connector(
 	connectorName string,
 	connectorDescription string,
 	cliVersion string,
+	useSudoUser bool,
 ) (*models.Connector, error) {
 	border0Client := border0.NewAPI(border0.WithVersion(cliVersion))
 
-	connector, err := border0Client.CreateConnector(ctx, connectorName, connectorDescription, true)
+	var builtInSshServiceConfig *service.BuiltInSshServiceConfiguration
+	if useSudoUser {
+		sudoUser := os.Getenv("SUDO_USER")
+		if sudoUser != "" {
+			builtInSshServiceConfig = &service.BuiltInSshServiceConfiguration{
+				UsernameProvider: service.UsernameProviderDefined,
+				Username:         sudoUser,
+			}
+		}
+	}
+	connector, err := border0Client.CreateConnector(ctx, connectorName, connectorDescription, true, builtInSshServiceConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new Border0 connector via the Border0 API: %v", err)
 	}

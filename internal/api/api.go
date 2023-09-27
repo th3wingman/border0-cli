@@ -19,6 +19,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-go/types/connector"
+	"github.com/borderzero/border0-go/types/service"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/sync/errgroup"
 )
@@ -353,8 +354,17 @@ func (a *Border0API) DetachPolicies(ctx context.Context, socketID string, policy
 }
 
 // CreateConnector creates a new border0 connector (v2)
-func (a *Border0API) CreateConnector(ctx context.Context, name string, description string, enableBuiltInSshService bool) (*models.Connector, error) {
+func (a *Border0API) CreateConnector(
+	ctx context.Context,
+	name string,
+	description string,
+	enableBuiltInSshService bool,
+	builtInSshServiceConfig *service.BuiltInSshServiceConfiguration,
+) (*models.Connector, error) {
 	payload := &models.Connector{Name: name, Description: description, BuiltInSshServiceEnabled: enableBuiltInSshService}
+	if builtInSshServiceConfig != nil {
+		payload.BuiltInSshServiceConfiguration = builtInSshServiceConfig
+	}
 
 	var connector models.Connector
 	err := a.Request(http.MethodPost, "connector", &connector, payload, true)
