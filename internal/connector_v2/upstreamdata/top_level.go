@@ -51,7 +51,7 @@ func (u *UpstreamDataBuilder) Build(s *models.Socket, config service.Configurati
 func (u *UpstreamDataBuilder) fetchVariableFromSource(field string) string {
 	val, err := u.vs.GetVariable(context.Background(), field)
 	if err != nil {
-		fmt.Printf("error evaluating variable %s: %v\n", field, err)
+		u.logger.Info("error fetching variable from upstream source", zap.String("variable_definition", field), zap.Error(err))
 		return field
 	}
 	return val
