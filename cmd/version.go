@@ -18,8 +18,10 @@ package cmd
 import (
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"os/exec"
 	"runtime"
 
 	"github.com/borderzero/border0-cli/internal/http"
@@ -118,13 +120,84 @@ var upgradeVersionCmd = &cobra.Command{
 			}
 
 		} else {
-			e := os.Rename(tmpfile.Name(), binary_path)
-			if e != nil {
-				log.Fatal(e)
+
+			// Get the current permissions of the binary
+			info, err := os.Stat(binary_path)
+			if err != nil {
+				log.Fatal(err)
+			}
+			originalPermissions := info.Mode()
+
+			// Define a backup file path
+			backupPath := binary_path + ".bak"
+
+			// 1. Move the running binary to the backup file
+			err = os.Rename(binary_path, backupPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			// Copy the content from the temporary file to the binary path
+			// Can't just do a straight up rename because it could be on a different filesystem partition
+			err = copyFile(tmpfile.Name(), binary_path)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			// Remove the temporary file
+			err = os.Remove(tmpfile.Name())
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			// After copying the new binary, set its permissions to the original permissions
+			err = os.Chmod(binary_path, originalPermissions)
+			if err != nil {
+				log.Fatalf("Error restoring permissions on the new binary: %v\n", err)
+			}
+
+			// Execute the new binary just to make sure it's working
+			cmd := exec.Command(binary_path)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Printf("Error executing the new version border0: %v\nOutput: %s\n", err, output)
+				// Optionally, revert to the backup file
+				revertErr := os.Rename(backupPath, binary_path)
+				if revertErr != nil {
+					log.Printf("Error reverting to the backup binary: %v\n", revertErr)
+				}
+				log.Fatal("Reverted to the old version of the border0 cli due to an error while executing the new binary")
+			}
+
+			// remove backup file
+			err = os.Remove(backupPath)
+			if err != nil {
+				log.Printf("Warning: Error removing backup file: %v\n", err)
 			}
 		}
 		fmt.Printf("Upgrade completed\n")
 	},
+}
+
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	return dstFile.Sync()
 }
 
 func init() {
