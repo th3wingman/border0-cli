@@ -303,6 +303,7 @@ func connectorInstallAws(cmd *cobra.Command) {
 		}
 	}()
 
+	loginCmd.Run(cmd, []string{})
 	if err := install.RunCloudInstallWizardForAWS(ctx, version); err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
