@@ -153,7 +153,13 @@ var upgradeVersionCmd = &cobra.Command{
 			// After copying the new binary, set its permissions to the original permissions
 			err = os.Chmod(binary_path, originalPermissions)
 			if err != nil {
-				log.Fatalf("Error restoring permissions on the new binary: %v\n", err)
+				log.Printf("error restoring permissions on the new binary: %v\n", err)
+				// Optionally, revert to the backup file
+				revertErr := os.Rename(backupPath, binary_path)
+				if revertErr != nil {
+					log.Printf("Error reverting to the backup binary: %v\n", revertErr)
+				}
+				log.Fatal("Reverted to the old version of the border0 cli due to an error while restoring permissions on the new binary")
 			}
 
 			// Execute the new binary just to make sure it's working
