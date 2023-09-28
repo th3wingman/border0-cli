@@ -28,6 +28,13 @@ Parameters:
     Description: The name/path of the SSM parameter for the Border0 token (which the connector instance uses to authenticate against your Border0 organization)
 
 ####################################
+##           CONDITIONS           ##
+####################################
+Conditions:
+
+  Border0TokenSsmParameterStartsWithSlash: !Equals [ !Select [ 0, !Split [ "/", !Ref Border0TokenSsmParameter ] ], "" ]
+
+####################################
 ##           RESOURCES            ##
 ####################################
 Resources:
@@ -80,7 +87,13 @@ Resources:
                 Action:
                   - 'ssm:GetParameter'
                   - 'ssm:GetParameters'
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Border0TokenSsmParameter}'
+                Resource:
+                  # SSM parameters can begin with a slash character '/'. When they begin
+                  # with a slash character, it must be ommitted from the resource ARN here.
+                  Fn::Sub:
+                    - arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}
+                    - SsmParameterPath:
+                        !If [Border0TokenSsmParameterStartsWithSlash, !Sub "${Border0TokenSsmParameter}", !Sub "/${Border0TokenSsmParameter}"]
         # Allow generating temporary user credentials for database IAM access.
         - PolicyName: GenerateTemporaryDatabaseCredsForRds
           PolicyDocument:
