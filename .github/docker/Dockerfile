@@ -15,6 +15,4 @@ COPY ./generate-rpm-repo.sh /
 RUN chmod +x /build-rpm.sh /generate-rpm-repo.sh
 
 # Run multiple scripts or commands
-CMD sh -c "/build-rpm.sh && /generate-rpm-repo.sh"
-
-
+CMD sh -c "/build-rpm.sh NA amd64 && /build-rpm.sh NA 386 && /build-rpm.sh NA arm64 && /build-rpm.sh NA armv6 && /generate-rpm-repo.sh"
