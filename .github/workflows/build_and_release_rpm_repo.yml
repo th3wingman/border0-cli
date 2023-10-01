@@ -62,19 +62,21 @@ jobs:
         run: |
             make all
 
-      - name: Run Make build-linux-amd64
+      - name: Run Make build-linux-multiarch
         run: |
-            make build-linux-amd64
+            make build-linux-multiarch
 
-      - name: Build and run Docker container for RPM creation
+      - name: Build Docker container for RPM creation
         run: |
           mkdir -p $PWD/rpm
           docker build -t rpm-builder -f .github/docker/Dockerfile .
+
+      - name: Run Docker rpm-builder container
+        run: |
           docker run --rm \
             -v $PWD/bin:/root/bin \
             -v $PWD/rpm:/root/rpm \
             -v $PWD/CENTOS:/root/CENTOS \
-            --env FILE_ARCH="amd64" \
             --env PGP_PRIVATE_KEY="$PGP_PRIVATE_KEY" \
             --env BORDER0_VERSION="$BORDER0_VERSION" \
             rpm-builder

@@ -46,13 +46,28 @@ if [[ -z "${FILE_ARCH}" ]]; then
     FILE_ARCH=$2
 fi
 
-# we mar ARCH values between debian and redhat
+# Configure RPM for Signing
+echo "Configuring RPM for signing..."
+echo "%_signature gpg" >~/.rpmmacros
+echo "%_gpg_name $YOUR_EMAIL_ADDRESS" >>~/.rpmmacros
+
+# we map ARCH values between Go and RPM architectures
 if [[ "$FILE_ARCH" == "amd64" ]]; then
     ARCH="x86_64"
 fi
 if [[ "$FILE_ARCH" == "arm64" ]]; then
     ARCH="aarch64"
 fi
+if [[ "$FILE_ARCH" == "arm" || "$FILE_ARCH" == "armv6" ]]; then
+    ARCH="armhfp"
+    # we need to set this to 1 to avoid build errors
+    echo '%_smp_build_ncpus 1' >> ~/.rpmmacros
+fi
+if [[ "$FILE_ARCH" == "386" ]]; then
+    ARCH="i386"
+fi
+
+echo "My ARCH: $ARCH and FILE_ARCH: $FILE_ARCH"
 
 RPM_PATH="$HOME/rpmbuild/RPMS/$ARCH/border0-$VERSION-$RELEASE.el9.$ARCH.rpm"
 REPO_DIR="$HOME/rpm"
@@ -72,6 +87,8 @@ echo "setting up directories..."
 
 cp $HOME/bin/border0_linux_${FILE_ARCH} $HOME/rpmbuild/SOURCES/border0
 cp $HOME/CENTOS/post-install.sh  $HOME/rpmbuild/SOURCES/post-install.sh
+
+DATE_STAMP=$(date '+%a %b %d %Y')
 
 # Write the SPEC file
 cat <<EOL >$HOME/rpmbuild/SPECS/border0.spec
@@ -105,17 +122,12 @@ chmod +x %{buildroot}/usr/bin/border0
 /usr/bin/border0
 
 %changelog
-* Date $YOUR_NAME - $VERSION
+* $DATE_STAMP $YOUR_NAME - $VERSION
 - RPM package for version $VERSION
 EOL
 
 # Build the RPM package
-rpmbuild -ba $HOME/rpmbuild/SPECS/border0.spec
-
-# Configure RPM for Signing
-echo "Configuring RPM for signing..."
-echo "%_signature gpg" >~/.rpmmacros
-echo "%_gpg_name $YOUR_EMAIL_ADDRESS" >>~/.rpmmacros
+rpmbuild --target=$ARCH -ba $HOME/rpmbuild/SPECS/border0.spec
 
 # Sign the RPM
 echo "Signing the RPM..."
