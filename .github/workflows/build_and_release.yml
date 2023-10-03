@@ -62,7 +62,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENV: "prod"
-      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
     permissions:
       id-token: write
       contents: read
@@ -104,9 +103,6 @@ jobs:
       - name: Run make release
         run: |
           make release
-      - name: Invalidate CloudFront cache for download.border0.com
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
       - name: Send slack notification
         uses: 8398a7/action-slack@v3
         with:
@@ -196,6 +192,138 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # required
           MATRIX_CONTEXT: ${{ toJson(matrix) }} # required
         if: always() # pick up events even if the job failed or canceled.
+
+  deb-package:
+    needs: build
+    name: Build DEB os Package and Repository
+    runs-on: ubuntu-latest
+    env:
+      ENV: "prod"
+      PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: List artifacts
+        run: |
+          tree ./artifacts
+      - name: Move to files around
+        run: |
+          mkdir -p ./bin
+          for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
+          tree ./bin
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-east-2
+          role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
+          role-session-name: DEBBuildAndDeploy4border0cli
+          role-duration-seconds: 900 # 30 minutes
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+      - name: Install required packages
+        run: |
+            sudo apt-get update && sudo apt-get install -y gnupg
+      - name: Import PGP Key
+        run: |
+            echo "${PGP_PRIVATE_KEY}" | gpg --import
+      - name: Run Make deb-package-multiarch
+        run: |
+            make deb-package-multiarch
+      - name: Run Make deb-repository
+        run: |
+            make deb-repository
+      - name: Publish repo ${BORDER0_VERSION} to S3 bucket
+        run: |
+          aws s3 sync ./deb/ s3://pub-mysocketctl-bin/deb/
+
+  rpm-package:
+    runs-on: ubuntu-latest # Since GitHub Actions doesn't offer CentOS runners, you need to use dockeer inside the runner to build the RPMs
+    name: Build RPM os Package and Repository
+    env:
+      ENV: "prod"
+      PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: List artifacts
+        run: |
+          tree ./artifacts
+      - name: Move to files around
+        run: |
+          mkdir -p ./bin
+          for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
+          tree ./bin
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-east-2
+          role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
+          role-session-name: RPMBuildAndDeploy4border0cli
+          role-duration-seconds: 900 # 30 minutes
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+      - name: Build Docker container for RPM creation
+        run: |
+          mkdir -p $PWD/rpm
+          docker build -t rpm-builder -f .github/docker/Dockerfile .
+      - name: Run Docker rpm-builder container
+        run: |
+          docker run --rm \
+            -v $PWD/bin:/root/bin \
+            -v $PWD/rpm:/root/rpm \
+            -v $PWD/CENTOS:/root/CENTOS \
+            --env PGP_PRIVATE_KEY="$PGP_PRIVATE_KEY" \
+            --env BORDER0_VERSION="$BORDER0_VERSION" \
+            rpm-builder
+      - name: Publish repo ${BORDER0_VERSION} to S3 bucket
+        run: |
+          aws s3 sync $PWD/rpm/ s3://pub-mysocketctl-bin/rpm/
+
+  cloudfront-cache:
+    needs: [release, docker, deb-package, rpm-package]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+      packages: write
+    env:
+      ENV: "prod"
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-region: us-east-2
+        role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
+        role-session-name: InvalidateCloudFrontCache
+        role-duration-seconds: 900 # 15 minutes
+        mask-aws-account-id: true
+
+    - name: Invalidate CloudFront cache for download.border0.com
+      run: |
+        aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
 
   trigger-app-build:
     needs: [release, docker]
