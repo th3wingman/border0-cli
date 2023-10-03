@@ -3,18 +3,6 @@ run-name: Build and release RPM repository (${{ github.ref_type }}=${{ github.re
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - client/**
-      - cmd/**
-      - internal/**
-      - lib/** 
-      - vendor/**
-      - mocks/**
-      - Makefile
-      - go.mod
-      - go.sum
 
 permissions:
   id-token: write

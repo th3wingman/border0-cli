@@ -3,20 +3,6 @@ run-name: Build and release DEB repository (${{ github.ref_type }}=${{ github.re
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - client/**
-      - cmd/**
-      - internal/**
-      - lib/**
-      - vendor/**
-      - mocks/**
-      - DEBIAN/**
-      - Makefile
-      - go.mod
-      - go.sum
-      - release.conf
 
 permissions:
   id-token: write
