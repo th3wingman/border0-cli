@@ -222,7 +222,7 @@ jobs:
           for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
           tree ./bin
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
@@ -250,11 +250,17 @@ jobs:
           aws s3 sync ./deb/ s3://pub-mysocketctl-bin/deb/
 
   rpm-package:
+    needs: build
     runs-on: ubuntu-latest # Since GitHub Actions doesn't offer CentOS runners, you need to use dockeer inside the runner to build the RPMs
     name: Build RPM os Package and Repository
     env:
       ENV: "prod"
       PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+      packages: write
     steps:
       - uses: actions/checkout@v3
         with:
@@ -272,7 +278,7 @@ jobs:
           for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
           tree ./bin
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
@@ -301,7 +307,7 @@ jobs:
           aws s3 sync $PWD/rpm/ s3://pub-mysocketctl-bin/rpm/
 
   cloudfront-cache:
-    needs: [release, docker, deb-package, rpm-package]
+    needs: [release, deb-package, rpm-package]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
