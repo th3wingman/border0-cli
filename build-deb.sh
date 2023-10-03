@@ -22,7 +22,7 @@ Version: ${VERSION}
 Section: base
 Priority: optional
 Architecture: ${ARCH}
-Maintainer: Greg Duraj <greg@border0.com>
+Maintainer: Support <support@border0.com>
 Description: Border0 Connector and CLI tooling
 """ > border0_${VERSION}_${ARCH}/DEBIAN/control
 
