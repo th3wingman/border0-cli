@@ -47,6 +47,9 @@ type API interface {
 	GetAccessToken() string
 	SignSSHKey(ctx context.Context, socketID string, key []byte) (string, string, error)
 	GetUserID() (string, error)
+	Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) (allowedActions []string, info map[string][]string, err error)
+	UpdateSession(update models.SessionUpdate) error
+	SignSshOrgCertificate(ctx context.Context, socketID, sessionID, userEmail string, ticket, publicKey []byte) ([]byte, error)
 }
 
 var once sync.Once
@@ -618,4 +621,16 @@ func (a *Border0API) GetUserID() (string, error) {
 	}
 
 	return strings.ReplaceAll(tokenUserIdStr, "-", ""), nil
+}
+
+func (a *Border0API) Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) ([]string, map[string][]string, error) {
+	return nil, nil, fmt.Errorf("not implemented")
+}
+
+func (a *Border0API) UpdateSession(update models.SessionUpdate) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (a *Border0API) SignSshOrgCertificate(ctx context.Context, socketID, sessionID, userEmail string, ticket, publicKey []byte) ([]byte, error) {
+	return nil, fmt.Errorf("not implemented")
 }
