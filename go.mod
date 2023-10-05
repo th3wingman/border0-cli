@@ -23,7 +23,7 @@ require (
 	github.com/bluele/factory-go v0.0.1
 	github.com/borderzero/border0-go v1.3.14
 	github.com/borderzero/border0-proto v1.0.17
-	github.com/borderzero/discovery v0.1.23
+	github.com/borderzero/discovery v0.1.24
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/creack/pty v1.1.18
