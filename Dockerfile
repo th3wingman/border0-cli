@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM alpine
+FROM --platform=$TARGETPLATFORM alpine
 ARG TARGETOS TARGETARCH
 COPY ./bin/border0_${TARGETOS}_${TARGETARCH} /border0
 RUN chmod ogu+x /border0
