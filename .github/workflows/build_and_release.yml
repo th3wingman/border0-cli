@@ -177,8 +177,7 @@ jobs:
             -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-amd64 \
             -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-amd64 \
             -t ghcr.io/${{ github.repository_owner }}/border0:amd64 \
-            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
-            --push .
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} .
           echo Build for Linux ARM64
           docker buildx build \
             --platform linux/arm64 \
@@ -188,17 +187,16 @@ jobs:
             -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-arm64 \
             -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-arm64 \
             -t ghcr.io/${{ github.repository_owner }}/border0:arm64 \
-            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
-            --push .
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} .
           echo Build for Linux ARMv7
           docker buildx build \
-            --platform linux/arm/v7 \
+            --platform linux/arm \
             --file Dockerfile.linux \
-            --build-arg TARGETPLATFORM=linux/arm/v7 \
-            -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION}-armv7 \
-            -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-armv7 \
-            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-armv7 \
-            -t ghcr.io/${{ github.repository_owner }}/border0:armv7 \
+            --build-arg TARGETPLATFORM=linux/arm \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION}-arm \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-arm \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-arm \
+            -t ghcr.io/${{ github.repository_owner }}/border0:arm \
             -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
             --push .
           docker buildx ls
