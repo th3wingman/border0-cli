@@ -168,13 +168,39 @@ jobs:
       - name: Build and push
         run: |
           docker buildx create --use
+          echo Build for Linux AMD64
           docker buildx build \
-          --platform linux/amd64,linux/arm64,linux/arm \
-          --file Dockerfile.linux \
-          -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION} \
-          -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH} \
-          -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
-          --push .
+            --platform linux/amd64 \
+            --file Dockerfile.linux \
+            --build-arg TARGETPLATFORM=linux/amd64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION}-amd64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-amd64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-amd64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:amd64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
+            --push .
+          echo Build for Linux ARM64
+          docker buildx build \
+            --platform linux/arm64 \
+            --file Dockerfile.linux \
+            --build-arg TARGETPLATFORM=linux/arm64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION}-arm64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-arm64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-arm64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:arm64 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
+            --push .
+          echo Build for Linux ARMv7
+          docker buildx build \
+            --platform linux/arm/v7 \
+            --file Dockerfile.linux \
+            --build-arg TARGETPLATFORM=linux/arm/v7 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION}-armv7 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH}-armv7 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE}-armv7 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:armv7 \
+            -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
+            --push .
           docker buildx ls
       - name: Send slack notification
         uses: 8398a7/action-slack@v3
