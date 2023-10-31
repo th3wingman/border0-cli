@@ -2,6 +2,7 @@ package tls
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log"
@@ -59,9 +60,15 @@ var clientTlsCmd = &cobra.Command{
 			PrivateKey:  info.PrivateKey,
 		}
 
+		systemCertPool, err := x509.SystemCertPool()
+		if err != nil {
+			log.Fatalf("failed to get system cert pool: %v", err.Error())
+		}
+
 		tlsConfig := tls.Config{
-			Certificates:       []tls.Certificate{certificate},
-			InsecureSkipVerify: true,
+			Certificates: []tls.Certificate{certificate},
+			RootCAs:      systemCertPool,
+			ServerName:   hostname,
 		}
 
 		if listener > 0 {
@@ -79,14 +86,13 @@ var clientTlsCmd = &cobra.Command{
 				}
 
 				go func() {
-					var conn net.Conn
-					conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
+					conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
 					if err != nil {
 						fmt.Printf("failed to connect to %s:%d: %s\n", hostname, info.Port, err)
 					}
 
 					if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
-						conn, err = client.ConnectorAuthConnectWithConnV2(conn, &tlsConfig, info.ConnectorAuthenticationEnabled)
+						conn, err = client.ConnectWithConn(conn, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled)
 						if err != nil {
 							fmt.Printf("failed to connect: %s\n", err)
 						}
@@ -97,14 +103,13 @@ var clientTlsCmd = &cobra.Command{
 				}()
 			}
 		} else {
-			var conn net.Conn
 			conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
 			if err != nil {
 				return fmt.Errorf("failed to connect to %s:%d: %w", hostname, info.Port, err)
 			}
 
 			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
-				conn, err = client.ConnectorAuthConnectWithConnV2(conn, &tlsConfig, info.ConnectorAuthenticationEnabled)
+				conn, err = client.ConnectWithConn(conn, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled)
 				if err != nil {
 					return fmt.Errorf("failed to connect: %w", err)
 				}
@@ -115,16 +120,6 @@ var clientTlsCmd = &cobra.Command{
 
 		return err
 	},
-}
-
-func EstablishConnection(connectorAuthenticationEnabled bool, addr string, tlsConfig *tls.Config) (conn net.Conn, err error) {
-	if connectorAuthenticationEnabled {
-		conn, err = client.ConnectorAuthConnect(addr, tlsConfig)
-	} else {
-		conn, err = tls.Dial("tcp", addr, tlsConfig)
-	}
-
-	return
 }
 
 func copy(con net.Conn, in io.Reader, out io.Writer) {
