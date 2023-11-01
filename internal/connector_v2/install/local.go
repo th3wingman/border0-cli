@@ -38,7 +38,7 @@ func RunInstallWizard(
 		if err != nil {
 			return fmt.Errorf("failed to get system hostname: %v", err)
 		}
-		connectorName, err := getUniqueConnectorName(ctx, version, hostname)
+		connectorName, err := getUniqueConnectorName(ctx, version, maxString(hostname, 40))
 		if err != nil {
 			return fmt.Errorf("failed to determine unique name for connector: %v", err)
 		}
@@ -50,7 +50,7 @@ func RunInstallWizard(
 			ctx,
 			border0Connector.ConnectorID,
 			version,
-			fmt.Sprintf("%s-token", connectorName),
+			fmt.Sprintf("%s-token", maxString(connectorName, 50)),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create new connector token: %v", err)

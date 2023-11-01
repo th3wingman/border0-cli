@@ -100,7 +100,7 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		fmt.Printf("warning: failed to enable AWS plugins: %v\n", err)
 	}
 
-	border0Token, err := generateNewBorder0ConnectorToken(ctx, border0Connector.ConnectorID, cliVersion, runId)
+	border0Token, err := generateNewBorder0ConnectorToken(ctx, border0Connector.ConnectorID, cliVersion, fmt.Sprintf("%s-token", maxString(runId, 50)))
 	if err != nil {
 		return fmt.Errorf("failed to create new Border0 token: %v", err)
 	}
