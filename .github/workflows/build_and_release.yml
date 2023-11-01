@@ -218,6 +218,13 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # required
           MATRIX_CONTEXT: ${{ toJson(matrix) }} # required
         if: always() # pick up events even if the job failed or canceled.
+      - name: Setup Border0 action
+        if: ${{ failure() }}
+        uses: borderzero/gh-action@v2
+        with:
+          token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          wait-for: 30
 
   deb-package:
     needs: build
