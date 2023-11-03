@@ -214,6 +214,8 @@ func init() {
 	// now make the disableBrowser and qr flags hidden
 	loginCmd.Flags().MarkHidden("disable-browser")
 	loginCmd.Flags().MarkHidden("qr")
+	loginCmd.Flags().MarkHidden("email")
+	loginCmd.Flags().MarkHidden("password")
 
 	rootCmd.AddCommand(loginCmd)
 }
