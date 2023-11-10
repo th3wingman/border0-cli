@@ -17,6 +17,7 @@ const (
 	sshHostKeyFile    = "ssh_host_ecdsa_key"
 )
 
+// Hostkey returns the ssh signer for the connector host.
 func Hostkey() (*ssh.Signer, error) {
 	var keyFilePath string
 	if _, err := os.Stat(serviceConfigPath + sshHostKeyFile); err == nil {
@@ -81,15 +82,15 @@ func Hostkey() (*ssh.Signer, error) {
 }
 
 func storeHostkey(key []byte, path, filename string) error {
-	if _, err := os.Stat(path); err == nil {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if err := os.MkdirAll(path, 0700); err != nil {
-			return fmt.Errorf("failed to create directory %s %w", path, err)
+			return fmt.Errorf("failed to create directory %s: %w", path, err)
 		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check directory %s: %w", path, err)
 	}
-
 	if err := os.WriteFile(path+filename, key, 0600); err != nil {
-		return fmt.Errorf("failed to write host key: %w", err)
+		return fmt.Errorf("failed to write host key to %s%s: %w", path, filename, err)
 	}
-
 	return nil
 }
