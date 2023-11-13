@@ -3,7 +3,13 @@ package vpnlib
 import (
 	"errors"
 	"fmt"
+	"net"
 	"sync"
+)
+
+const (
+	subnetMaxSize = 30
+	subnetMinSize = 16
 )
 
 // This is a pool of IPs that can be allocated to clients.
@@ -18,6 +24,20 @@ type IPPool struct {
 // NewIPPool creates a new IP pool based on the provided CIDR.
 // This pool will be used to allocate IPs to clients. (think DHCP)
 func NewIPPool(cidr string) (*IPPool, error) {
+	// First check the size of the subnet provided
+	_, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cidr range: %v", err)
+	}
+
+	netsize, _ := ipnet.Mask.Size()
+	if netsize > subnetMaxSize {
+		return nil, fmt.Errorf("invalid cidr range, must have at least 2 usable addresses (i.e. /30 or less), got %d", netsize)
+	}
+	if netsize < subnetMinSize {
+		return nil, fmt.Errorf("invalid cidr range, --vpn-subnet size to large. Cannot be more than a /%d, got %s", subnetMinSize, cidr)
+	}
+
 	usableIps, subnetSize, err := cidrToUsableIPs(cidr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cidr: %v", err)

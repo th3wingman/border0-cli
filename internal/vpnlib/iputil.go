@@ -7,7 +7,6 @@ import (
 
 const (
 	ipv4HeaderLengthBytes = 20
-	subnetMaxSize         = 30
 )
 
 func cidrToUsableIPs(cidr string) ([]string, uint8, error) {
@@ -17,9 +16,6 @@ func cidrToUsableIPs(cidr string) ([]string, uint8, error) {
 	}
 
 	subnetSize, _ := ipnet.Mask.Size()
-	if subnetSize > subnetMaxSize {
-		return nil, 0, fmt.Errorf("invalid cidr range, must have at least 2 usable addresses (i.e. /30 or less), got %d", subnetSize)
-	}
 
 	var ips []string
 	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); incIp(ip) {
