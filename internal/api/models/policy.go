@@ -33,17 +33,8 @@ type PolicyTest struct {
 }
 
 type PolicyTestRespone struct {
-	/*
-		Actions struct {
-			HTTP     []string `json:"http,omitempty"`
-			SSH      []string `json:"ssh,omitempty"`
-			TLS      []string `json:"tls,omitempty"`
-			DATABASE []string `json:"database,omitempty"`
-		} `json:"Actions,omitempty"`
-	*/
 	Actions map[string][]string `json:"Actions,omitempty"`
-
-	Info struct {
+	Info    struct {
 		Allowed []string `json:"allowed,omitempty"`
 		Failed  []string `json:"failed,omitempty"`
 	} `json:"Info,omitempty"`
