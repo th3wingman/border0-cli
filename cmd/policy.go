@@ -314,13 +314,21 @@ var policyTestCmd = &cobra.Command{
 			}
 			fmt.Println("\nThe following actions would be allowed:")
 			// pretty print the actions
-			jsonData, _ := json.MarshalIndent(body.Actions, "", "  ")
+			jsonData, err := json.MarshalIndent(body.Actions, "", "  ")
+			if err != nil {
+				fmt.Printf("could not marshal json: %s\n", err)
+				return
+			}
 			// This is for the colored JSON output
 			var colorData map[string]interface{}
 			json.Unmarshal([]byte(jsonData), &colorData)
 			f := colorjson.NewFormatter()
 			f.Indent = 2
-			colorString, _ := f.Marshal(colorData)
+			colorString, err := f.Marshal(colorData)
+			if err != nil {
+				fmt.Printf("could not marshal data: %s\n", err)
+				return
+			}
 			fmt.Println(string(colorString))
 		}
 
@@ -617,7 +625,9 @@ func init() {
 	policyTestCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
 	policyTestCmd.MarkFlagRequired("name")
 	policyTestCmd.Flags().StringVarP(&policyTestEmail, "email", "e", "", "email address to test")
+	policyTestCmd.MarkFlagRequired("email")
 	policyTestCmd.Flags().StringVarP(&policyTestIpAddress, "ip", "i", "", "IP address to test")
+	policyTestCmd.MarkFlagRequired("ip")
 
 }
 
