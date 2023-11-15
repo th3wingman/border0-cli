@@ -259,6 +259,74 @@ func policyShow(cmd *cobra.Command, args []string) {
 
 }
 
+// policyTestCmd represents the policy test command
+var policyTestCmd = &cobra.Command{
+	Use:   "test",
+	Short: "test a policy",
+	Run: func(cmd *cobra.Command, args []string) {
+		if policyName == "" {
+			log.Fatalf("error: invalid policy name")
+		}
+
+		var err error
+
+		policy, err := findPolicyByName(policyName)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("Error: %v", err))
+		}
+
+		currentTime := time.Now().UTC()
+		formattedTime := currentTime.Format(time.RFC3339)
+
+		policyTestData := models.PolicyTest{
+			Email:     policyTestEmail,
+			IPAddress: policyTestIpAddress,
+			Time:      formattedTime,
+		}
+
+		body := models.PolicyTestRespone{}
+
+		client, err := http.NewClient()
+		if err != nil {
+			log.Fatalf("⛔ error: %v", err)
+		}
+		fmt.Println("Testing Policy:", policy.Name, policy.ID)
+
+		err = client.Request("POST", "policy/"+policy.ID+"/test", &body, policyTestData)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("⛔ Error: %v", err))
+		}
+
+		if len(body.Info.Failed) > 0 {
+			fmt.Println("⛔ Policy Failed")
+			// now print the reasons
+			fmt.Printf("\n")
+			for _, reason := range body.Info.Failed {
+				fmt.Println(reason)
+			}
+		} else {
+			fmt.Println("✅ Policy Passed!")
+			fmt.Printf("\n")
+
+			// now print the reasons
+			for _, reason := range body.Info.Allowed {
+				fmt.Println(reason)
+			}
+			fmt.Println("\nThe following actions would be allowed:")
+			// pretty print the actions
+			jsonData, _ := json.MarshalIndent(body.Actions, "", "  ")
+			// This is for the colored JSON output
+			var colorData map[string]interface{}
+			json.Unmarshal([]byte(jsonData), &colorData)
+			f := colorjson.NewFormatter()
+			f.Indent = 2
+			colorString, _ := f.Marshal(colorData)
+			fmt.Println(string(colorString))
+		}
+
+	},
+}
+
 // policyEditCmd represents the policy edit command
 var policyEditCmd = &cobra.Command{
 	Use:   "edit",
@@ -514,6 +582,7 @@ func init() {
 	policyCmd.AddCommand(policyDettachCmd)
 	policyCmd.AddCommand(policyAddCmd)
 	policyCmd.AddCommand(policyEditCmd)
+	policyCmd.AddCommand(policyTestCmd)
 
 	policysListCmd.Flags().Int64Var(&perPage, "per_page", 100, "The number of results to return per page.")
 	policysListCmd.Flags().Int64Var(&page, "page", 0, "The page of results to return.")
@@ -544,6 +613,11 @@ func init() {
 	policyEditCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
 	policyEditCmd.MarkFlagRequired("name")
 	policyEditCmd.Flags().StringVarP(&policyFile, "policy-file", "f", "", "Policy Definition File")
+
+	policyTestCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
+	policyTestCmd.MarkFlagRequired("name")
+	policyTestCmd.Flags().StringVarP(&policyTestEmail, "email", "e", "", "email address to test")
+	policyTestCmd.Flags().StringVarP(&policyTestIpAddress, "ip", "i", "", "IP address to test")
 
 }
 

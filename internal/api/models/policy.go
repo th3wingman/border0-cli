@@ -26,6 +26,29 @@ type Policy struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+type PolicyTest struct {
+	Email     string `json:"email" binding:"required"`
+	IPAddress string `json:"ip_address" binding:"required"`
+	Time      string `json:"time" binding:"required"`
+}
+
+type PolicyTestRespone struct {
+	/*
+		Actions struct {
+			HTTP     []string `json:"http,omitempty"`
+			SSH      []string `json:"ssh,omitempty"`
+			TLS      []string `json:"tls,omitempty"`
+			DATABASE []string `json:"database,omitempty"`
+		} `json:"Actions,omitempty"`
+	*/
+	Actions map[string][]string `json:"Actions,omitempty"`
+
+	Info struct {
+		Allowed []string `json:"allowed,omitempty"`
+		Failed  []string `json:"failed,omitempty"`
+	} `json:"Info,omitempty"`
+}
+
 type PolicyData struct {
 	Version   string    `json:"version"`
 	Action    []string  `json:"action" mapstructure:"action"`

@@ -47,6 +47,8 @@ var (
 	socketID                string
 	tunnelID                string
 	policyName              string
+	policyTestEmail         string
+	policyTestIpAddress     string
 	policyDescription       string
 	policyFile              string
 	identityFile            string //deprecated
