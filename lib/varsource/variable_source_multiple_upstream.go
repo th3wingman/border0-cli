@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	cache "github.com/Code-Hex/go-generics-cache"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
 const (
@@ -70,7 +74,10 @@ func WithAWSSSMVariableUpstream() Option {
 // secrets manager upstream source in a new MultipleUpstreamVariableSource
 func WithAWSSecretsManagerVariableUpstream() Option {
 	return func(m *MultipleUpstreamVariableSource) {
-		m.upstreams[prefixAWSSecretsManager] = &awsSecretsmanagerVariableUpstream{}
+		m.upstreams[prefixAWSSecretsManager] = &awsSecretsmanagerVariableUpstream{
+			cache:        cache.New[string, *secretsmanager.GetSecretValueOutput](),
+			cacheItemTTL: time.Second * 10,
+		}
 	}
 }
 
