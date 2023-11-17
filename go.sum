@@ -68,7 +68,6 @@ github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3d
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/aws/aws-sdk-go v1.44.271 h1:aa+Nu2JcnFmW1TLIz/67SS7KPq1I1Adl4RmExSMjGVo=
 github.com/aws/aws-sdk-go v1.44.271/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
-github.com/aws/aws-sdk-go-v2 v1.18.1/go.mod h1:uzbQtefpm44goOPmdKyAlXSNcwlRgF3ePWVW6EtJvvw=
 github.com/aws/aws-sdk-go-v2 v1.19.0/go.mod h1:uzbQtefpm44goOPmdKyAlXSNcwlRgF3ePWVW6EtJvvw=
 github.com/aws/aws-sdk-go-v2 v1.23.0 h1:PiHAzmiQQr6JULBUdvR8fKlA+UPKLT/8KbiqpFBWiAo=
 github.com/aws/aws-sdk-go-v2 v1.23.0/go.mod h1:i1XDttT4rnf6vxc9AuskLc6s7XBee8rlLilKlc03uAA=
@@ -80,11 +79,9 @@ github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.4 h1:9wKDWEjwSnXZre0/O3+ZwbB
 github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.4/go.mod h1:t4i+yGHMCcUNIX1x7YVYa6bH/Do7civ5I6cG/6PMfyA=
 github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.3.3 h1:rxywVeTUJ88Y3hckg9/tDgZRrZqpYzwL7JLMgH7Onq8=
 github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.3.3/go.mod h1:jqlB9lb7yT0mvRp6vbACc62XFAi47UcwfYvXfpae1i4=
-github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.34/go.mod h1:wZpTEecJe0Btj3IYnDx/VlUzor9wm3fJHyvLpQF0VwY=
 github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.35/go.mod h1:ipR5PvpSPqIqL5Mi82BxLnfMkHVbmco8kUwO2xrCi0M=
 github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.3 h1:DUwbD79T8gyQ23qVXFUthjzVMTviSHi3y4z58KvghhM=
 github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.3/go.mod h1:7sGSz1JCKHWWBHq98m6sMtWQikmYPpxjqOydDemiVoM=
-github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.28/go.mod h1:7VRpKQQedkfIEXb4k52I7swUnZP0wohVajJMRn3vsUw=
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.29/go.mod h1:M/eUABlDbw2uVrdAn+UsI6M727qp2fxkp8K0ejcBDUY=
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.3 h1:AplLJCtIaUZDCbr6+gLYdsYNxne4iuaboJhVt9d+WXI=
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.3/go.mod h1:ify42Rb7nKeDDPkFjKn7q1bPscVPu/+gmHH8d2c+anU=
@@ -94,8 +91,8 @@ github.com/aws/aws-sdk-go-v2/service/cloudformation v1.39.1 h1:xV9/GIV2eE1BblYbl
 github.com/aws/aws-sdk-go-v2/service/cloudformation v1.39.1/go.mod h1:NtPc2z+l8sxXmxz0eJebaBY1k1wwZCkXX/UurRbHqV8=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.135.0 h1:gX7PiK9aGDmDE/LcF+RCJYN1jlPkL21ZuBJFlVAkNtM=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.135.0/go.mod h1:xYJZQIo/YZxEbeBxUYRQJTCJ924EuKtDfrhVx76yzOE=
-github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.15.12 h1:fsgEwBrhvBhBHhrS5wDlwggin8wY8hwE1bALw/F5x6M=
-github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.15.12/go.mod h1:MTTYMbo3RMdjb3++QU74CgT6eNP3KMqqfQPtPIwFX5M=
+github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.19.2 h1:zd7L4wFNjqXosfR7mTMcQX+TtkhwIiqHynuA4KgGka0=
+github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.19.2/go.mod h1:oNlwJrTzjR4E67lsDHTefZ+nM0soZniCaT+nvRNQovQ=
 github.com/aws/aws-sdk-go-v2/service/ecs v1.33.1 h1:TozC9N4YIy3daojW5RoutyW0dIBCQvTtMXKDM7cSvW8=
 github.com/aws/aws-sdk-go-v2/service/ecs v1.33.1/go.mod h1:twzaZjxQJVIuJBlk/PCQ/El6rwvxcCQ2uiO/5BguYHg=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.1 h1:rpkF4n0CyFcrJUG/rNNohoTmhtWlFTRI4BsZOh9PvLs=
