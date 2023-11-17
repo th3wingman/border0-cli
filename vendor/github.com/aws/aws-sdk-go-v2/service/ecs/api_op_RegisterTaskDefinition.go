@@ -4,6 +4,7 @@ package ecs
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
@@ -187,17 +188,20 @@ type RegisterTaskDefinitionInput struct {
 	NetworkMode types.NetworkMode
 
 	// The process namespace to use for the containers in the task. The valid values
-	// are host or task . If host is specified, then all containers within the tasks
-	// that specified the host PID mode on the same container instance share the same
-	// process namespace with the host Amazon EC2 instance. If task is specified, all
-	// containers within the specified task share the same process namespace. If no
-	// value is specified, the default is a private namespace. For more information,
-	// see PID settings (https://docs.docker.com/engine/reference/run/#pid-settings---pid)
-	// in the Docker run reference. If the host PID mode is used, be aware that there
-	// is a heightened risk of undesired process namespace expose. For more
-	// information, see Docker security (https://docs.docker.com/engine/security/security/)
-	// . This parameter is not supported for Windows containers or tasks run on
-	// Fargate.
+	// are host or task . On Fargate for Linux containers, the only valid value is task
+	// . For example, monitoring sidecars might need pidMode to access information
+	// about other containers running in the same task. If host is specified, all
+	// containers within the tasks that specified the host PID mode on the same
+	// container instance share the same process namespace with the host Amazon EC2
+	// instance. If task is specified, all containers within the specified task share
+	// the same process namespace. If no value is specified, the default is a private
+	// namespace for each container. For more information, see PID settings (https://docs.docker.com/engine/reference/run/#pid-settings---pid)
+	// in the Docker run reference. If the host PID mode is used, there's a heightened
+	// risk of undesired process namespace exposure. For more information, see Docker
+	// security (https://docs.docker.com/engine/security/security/) . This parameter is
+	// not supported for Windows containers. This parameter is only supported for tasks
+	// that are hosted on Fargate if the tasks are using platform version 1.4.0 or
+	// later (Linux). This isn't supported for Windows containers on Fargate.
 	PidMode types.PidMode
 
 	// An array of placement constraint objects to use for the task. You can specify a
@@ -275,12 +279,22 @@ type RegisterTaskDefinitionOutput struct {
 }
 
 func (c *Client) addOperationRegisterTaskDefinitionMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpRegisterTaskDefinition{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpRegisterTaskDefinition{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "RegisterTaskDefinition"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -301,9 +315,6 @@ func (c *Client) addOperationRegisterTaskDefinitionMiddlewares(stack *middleware
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -317,6 +328,9 @@ func (c *Client) addOperationRegisterTaskDefinitionMiddlewares(stack *middleware
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpRegisterTaskDefinitionValidationMiddleware(stack); err != nil {
@@ -337,6 +351,9 @@ func (c *Client) addOperationRegisterTaskDefinitionMiddlewares(stack *middleware
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -344,7 +361,6 @@ func newServiceMetadataMiddleware_opRegisterTaskDefinition(region string) *awsmi
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ecs",
 		OperationName: "RegisterTaskDefinition",
 	}
 }

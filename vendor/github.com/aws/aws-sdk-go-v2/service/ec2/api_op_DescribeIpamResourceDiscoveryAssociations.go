@@ -71,12 +71,22 @@ type DescribeIpamResourceDiscoveryAssociationsOutput struct {
 }
 
 func (c *Client) addOperationDescribeIpamResourceDiscoveryAssociationsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeIpamResourceDiscoveryAssociations{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeIpamResourceDiscoveryAssociations{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeIpamResourceDiscoveryAssociations"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -97,9 +107,6 @@ func (c *Client) addOperationDescribeIpamResourceDiscoveryAssociationsMiddleware
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -115,6 +122,9 @@ func (c *Client) addOperationDescribeIpamResourceDiscoveryAssociationsMiddleware
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeIpamResourceDiscoveryAssociations(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -128,6 +138,9 @@ func (c *Client) addOperationDescribeIpamResourceDiscoveryAssociationsMiddleware
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -231,7 +244,6 @@ func newServiceMetadataMiddleware_opDescribeIpamResourceDiscoveryAssociations(re
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeIpamResourceDiscoveryAssociations",
 	}
 }

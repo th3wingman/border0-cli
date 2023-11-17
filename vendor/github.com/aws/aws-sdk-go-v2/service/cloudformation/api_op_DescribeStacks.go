@@ -20,7 +20,7 @@ import (
 
 // Returns the description for the specified stack; if no stack name was
 // specified, then it returns the description for all the stacks created. If the
-// stack doesn't exist, an ValidationError is returned.
+// stack doesn't exist, a ValidationError is returned.
 func (c *Client) DescribeStacks(ctx context.Context, params *DescribeStacksInput, optFns ...func(*Options)) (*DescribeStacksOutput, error) {
 	if params == nil {
 		params = &DescribeStacksInput{}
@@ -43,14 +43,15 @@ type DescribeStacksInput struct {
 	NextToken *string
 
 	// If you don't pass a parameter to StackName , the API returns a response that
-	// describes all resources in the account. This requires ListStacks and
-	// DescribeStacks permissions. The IAM policy below can be added to IAM policies
-	// when you want to limit resource-level permissions and avoid returning a response
-	// when no parameter is sent in the request: { "Version": "2012-10-17",
-	// "Statement": [{ "Effect": "Deny", "Action": "cloudformation:DescribeStacks",
-	// "NotResource": "arn:aws:cloudformation:*:*:stack/*/*" }] } The name or the
-	// unique stack ID that's associated with the stack, which aren't always
-	// interchangeable:
+	// describes all resources in the account, which can impact performance. This
+	// requires ListStacks and DescribeStacks permissions. Consider using the
+	// ListStacks API if you're not passing a parameter to StackName . The IAM policy
+	// below can be added to IAM policies when you want to limit resource-level
+	// permissions and avoid returning a response when no parameter is sent in the
+	// request: { "Version": "2012-10-17", "Statement": [{ "Effect": "Deny", "Action":
+	// "cloudformation:DescribeStacks", "NotResource":
+	// "arn:aws:cloudformation:*:*:stack/*/*" }] } The name or the unique stack ID
+	// that's associated with the stack, which aren't always interchangeable:
 	//   - Running stacks: You can specify either the stack's name or its unique stack
 	//   ID.
 	//   - Deleted stacks: You must specify the unique stack ID.
@@ -77,12 +78,22 @@ type DescribeStacksOutput struct {
 }
 
 func (c *Client) addOperationDescribeStacksMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeStacks{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeStacks{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeStacks"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -103,22 +114,22 @@ func (c *Client) addOperationDescribeStacksMiddlewares(stack *middleware.Stack, 
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
 	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeStacks(options.Region), middleware.Before); err != nil {
@@ -134,6 +145,9 @@ func (c *Client) addOperationDescribeStacksMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -1876,7 +1890,6 @@ func newServiceMetadataMiddleware_opDescribeStacks(region string) *awsmiddleware
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "cloudformation",
 		OperationName: "DescribeStacks",
 	}
 }

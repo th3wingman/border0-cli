@@ -54,7 +54,7 @@ type DescribeVerifiedAccessInstanceLoggingConfigurationsInput struct {
 
 type DescribeVerifiedAccessInstanceLoggingConfigurationsOutput struct {
 
-	// The current logging configuration for the Verified Access instances.
+	// The logging configuration for the Verified Access instances.
 	LoggingConfigurations []types.VerifiedAccessInstanceLoggingConfiguration
 
 	// The token to use to retrieve the next page of results. This value is null when
@@ -68,12 +68,22 @@ type DescribeVerifiedAccessInstanceLoggingConfigurationsOutput struct {
 }
 
 func (c *Client) addOperationDescribeVerifiedAccessInstanceLoggingConfigurationsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeVerifiedAccessInstanceLoggingConfigurations{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeVerifiedAccessInstanceLoggingConfigurations{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeVerifiedAccessInstanceLoggingConfigurations"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -94,9 +104,6 @@ func (c *Client) addOperationDescribeVerifiedAccessInstanceLoggingConfigurations
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -112,6 +119,9 @@ func (c *Client) addOperationDescribeVerifiedAccessInstanceLoggingConfigurations
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeVerifiedAccessInstanceLoggingConfigurations(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -125,6 +135,9 @@ func (c *Client) addOperationDescribeVerifiedAccessInstanceLoggingConfigurations
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -229,7 +242,6 @@ func newServiceMetadataMiddleware_opDescribeVerifiedAccessInstanceLoggingConfigu
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeVerifiedAccessInstanceLoggingConfigurations",
 	}
 }

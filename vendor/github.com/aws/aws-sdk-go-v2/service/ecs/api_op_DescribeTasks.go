@@ -17,7 +17,10 @@ import (
 )
 
 // Describes a specified task or tasks. Currently, stopped tasks appear in the
-// returned results for at least one hour.
+// returned results for at least one hour. If you have tasks with tags, and then
+// delete the cluster, the tagged tasks are returned in the response. If you create
+// a new cluster with the same name as the deleted cluster, the tagged tasks are
+// not included in the response.
 func (c *Client) DescribeTasks(ctx context.Context, params *DescribeTasksInput, optFns ...func(*Options)) (*DescribeTasksOutput, error) {
 	if params == nil {
 		params = &DescribeTasksInput{}
@@ -69,12 +72,22 @@ type DescribeTasksOutput struct {
 }
 
 func (c *Client) addOperationDescribeTasksMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeTasks{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpDescribeTasks{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeTasks"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -95,9 +108,6 @@ func (c *Client) addOperationDescribeTasksMiddlewares(stack *middleware.Stack, o
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -111,6 +121,9 @@ func (c *Client) addOperationDescribeTasksMiddlewares(stack *middleware.Stack, o
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeTasksValidationMiddleware(stack); err != nil {
@@ -129,6 +142,9 @@ func (c *Client) addOperationDescribeTasksMiddlewares(stack *middleware.Stack, o
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -541,7 +557,6 @@ func newServiceMetadataMiddleware_opDescribeTasks(region string) *awsmiddleware.
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ecs",
 		OperationName: "DescribeTasks",
 	}
 }

@@ -703,7 +703,7 @@ type ResourceToImport struct {
 // state of your application during stack creation and updating, and to roll back
 // that operation if the application breaches the threshold of any of the alarms
 // you've specified. For more information, see Monitor and Roll Back Stack
-// Operations (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-rollback-triggers.html)
+// Operations (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-rollback-triggers.html)
 // .
 type RollbackConfiguration struct {
 
@@ -803,14 +803,14 @@ type Stack struct {
 	// Information about whether a stack's actual configuration differs, or has
 	// drifted, from its expected configuration, as defined in the stack template and
 	// any values specified as template parameters. For more information, see
-	// Detecting Unregulated Configuration Changes to Stacks and Resources (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
+	// Detecting Unregulated Configuration Changes to Stacks and Resources (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
 	// .
 	DriftInformation *StackDriftInformation
 
-	// Whether termination protection is enabled for the stack. For nested stacks (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
+	// Whether termination protection is enabled for the stack. For nested stacks (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
 	// , termination protection is set on the root stack and can't be changed directly
 	// on the nested stack. For more information, see Protecting a Stack From Being
-	// Deleted (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html)
+	// Deleted (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html)
 	// in the CloudFormation User Guide.
 	EnableTerminationProtection *bool
 
@@ -831,9 +831,14 @@ type Stack struct {
 	// For nested stacks--stacks created as resources for another stack--the stack ID
 	// of the direct parent of this stack. For the first level of nested stacks, the
 	// root stack is also the parent stack. For more information, see Working with
-	// Nested Stacks (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
+	// Nested Stacks (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
 	// in the CloudFormation User Guide.
 	ParentId *string
+
+	// When set to true , newly created resources are deleted when the operation rolls
+	// back. This includes newly created resources marked with a deletion policy of
+	// Retain . Default: false
+	RetainExceptOnCreate *bool
 
 	// The Amazon Resource Name (ARN) of an Identity and Access Management (IAM) role
 	// that's associated with the stack. During a stack operation, CloudFormation uses
@@ -846,7 +851,7 @@ type Stack struct {
 
 	// For nested stacks--stacks created as resources for another stack--the stack ID
 	// of the top-level stack to which the nested stack ultimately belongs. For more
-	// information, see Working with Nested Stacks (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
+	// information, see Working with Nested Stacks (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
 	// in the CloudFormation User Guide.
 	RootId *string
 
@@ -1116,6 +1121,63 @@ type StackInstanceFilter struct {
 	noSmithyDocumentSerde
 }
 
+// The structure containing summary information about resource drifts for a stack
+// instance.
+type StackInstanceResourceDriftsSummary struct {
+
+	// The logical name of the resource specified in the template.
+	//
+	// This member is required.
+	LogicalResourceId *string
+
+	// Type of resource. For more information, go to Amazon Web Services Resource
+	// Types Reference (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html)
+	// in the CloudFormation User Guide.
+	//
+	// This member is required.
+	ResourceType *string
+
+	// The ID of the stack instance.
+	//
+	// This member is required.
+	StackId *string
+
+	// The drift status of the resource in a stack instance.
+	//   - DELETED : The resource differs from its expected template configuration in
+	//   that the resource has been deleted.
+	//   - MODIFIED : One or more resource properties differ from their expected
+	//   template values.
+	//   - IN_SYNC : The resource's actual configuration matches its expected template
+	//   configuration.
+	//   - NOT_CHECKED : CloudFormation doesn't currently return this value.
+	//
+	// This member is required.
+	StackResourceDriftStatus StackResourceDriftStatus
+
+	// Time at which the stack instance drift detection operation was initiated.
+	//
+	// This member is required.
+	Timestamp *time.Time
+
+	// The name or unique identifier that corresponds to a physical instance ID of a
+	// resource supported by CloudFormation.
+	PhysicalResourceId *string
+
+	// Context information that enables CloudFormation to uniquely identify a
+	// resource. CloudFormation uses context key-value pairs in cases where a
+	// resource's logical and physical IDs aren't enough to uniquely identify that
+	// resource. Each context key-value pair specifies a unique resource that contains
+	// the targeted resource.
+	PhysicalResourceIdContext []PhysicalResourceIdContextKeyValuePair
+
+	// Status of the actual configuration of the resource compared to its expected
+	// configuration. These will be present only for resources whose
+	// StackInstanceResourceDriftStatus is MODIFIED .
+	PropertyDifferences []PropertyDifference
+
+	noSmithyDocumentSerde
+}
+
 // The structure that contains summary information about a stack instance.
 type StackInstanceSummary struct {
 
@@ -1215,7 +1277,7 @@ type StackResource struct {
 	// Information about whether the resource's actual configuration differs, or has
 	// drifted, from its expected configuration, as defined in the stack template and
 	// any values specified as template parameters. For more information, see
-	// Detecting Unregulated Configuration Changes to Stacks and Resources (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
+	// Detecting Unregulated Configuration Changes to Stacks and Resources (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
 	// .
 	DriftInformation *StackResourceDriftInformation
 
@@ -1270,7 +1332,7 @@ type StackResourceDetail struct {
 	// Information about whether the resource's actual configuration differs, or has
 	// drifted, from its expected configuration, as defined in the stack template and
 	// any values specified as template parameters. For more information, see
-	// Detecting Unregulated Configuration Changes to Stacks and Resources (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
+	// Detecting Unregulated Configuration Changes to Stacks and Resources (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
 	// .
 	DriftInformation *StackResourceDriftInformation
 
@@ -1306,7 +1368,7 @@ type StackResourceDetail struct {
 // Detecting Unregulated Configuration Changes to Stacks and Resources (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
 // . Resources that don't currently support drift detection can't be checked. For a
 // list of resources that support drift detection, see Resources that Support
-// Drift Detection (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift-resource-list.html)
+// Drift Detection (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift-resource-list.html)
 // . Use DetectStackResourceDrift to detect drift on individual resources, or
 // DetectStackDrift to detect drift on all resources in a given stack that support
 // drift detection.
@@ -1466,7 +1528,7 @@ type StackResourceSummary struct {
 	// Information about whether the resource's actual configuration differs, or has
 	// drifted, from its expected configuration, as defined in the stack template and
 	// any values specified as template parameters. For more information, see
-	// Detecting Unregulated Configuration Changes to Stacks and Resources (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
+	// Detecting Unregulated Configuration Changes to Stacks and Resources (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
 	// .
 	DriftInformation *StackResourceDriftInformationSummary
 
@@ -1494,7 +1556,7 @@ type StackSet struct {
 	// The Amazon Resource Name (ARN) of the IAM role used to create or update the
 	// stack set. Use customized administrator roles to control which users or groups
 	// can manage specific stack sets within the same administrator account. For more
-	// information, see Prerequisites: Granting Permissions for Stack Set Operations (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-prereqs.html)
+	// information, see Prerequisites: Granting Permissions for Stack Set Operations (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-prereqs.html)
 	// in the CloudFormation User Guide.
 	AdministrationRoleARN *string
 
@@ -1613,17 +1675,17 @@ type StackSetDriftDetectionDetails struct {
 	// parameter configuration of the stack set. A stack instance is considered to have
 	// drifted if one or more of the resources in the associated stack don't match
 	// their expected configuration.
-	DriftedStackInstancesCount int32
+	DriftedStackInstancesCount *int32
 
 	// The number of stack instances for which the drift detection operation failed.
-	FailedStackInstancesCount int32
+	FailedStackInstancesCount *int32
 
 	// The number of stack instances that are currently being checked for drift.
-	InProgressStackInstancesCount int32
+	InProgressStackInstancesCount *int32
 
 	// The number of stack instances which match the expected template and parameter
 	// configuration of the stack set.
-	InSyncStackInstancesCount int32
+	InSyncStackInstancesCount *int32
 
 	// Most recent time when CloudFormation performed a drift detection operation on
 	// the stack set. This value will be NULL for any stack set on which drift
@@ -1636,7 +1698,7 @@ type StackSetDriftDetectionDetails struct {
 	//   - Stack instances that have drifted from the stack set configuration.
 	//   - Stack instances where the drift detection operation has failed.
 	//   - Stack instances currently being checked for drift.
-	TotalStackInstancesCount int32
+	TotalStackInstancesCount *int32
 
 	noSmithyDocumentSerde
 }
@@ -1653,7 +1715,7 @@ type StackSetOperation struct {
 	// The Amazon Resource Name (ARN) of the IAM role used to perform this stack set
 	// operation. Use customized administrator roles to control which users or groups
 	// can manage specific stack sets within the same administrator account. For more
-	// information, see Define Permissions for Multiple Administrators (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-prereqs.html)
+	// information, see Define Permissions for Multiple Administrators (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-prereqs.html)
 	// in the CloudFormation User Guide.
 	AdministrationRoleARN *string
 
@@ -1735,6 +1797,18 @@ type StackSetOperation struct {
 // .
 type StackSetOperationPreferences struct {
 
+	// Specifies how the concurrency level behaves during the operation execution.
+	//   - STRICT_FAILURE_TOLERANCE : Dynamically lowers the concurrency level to
+	//   ensure the number of failed accounts never exceeds the FailureToleranceCount
+	//   +1. StackSets will set the actual concurrency of your deployment as the minimum
+	//   value between the MaxConcurrentCount and the FailureToleranceCount +1. This is
+	//   the default behavior. If failure tolerance or Maximum concurrent accounts are
+	//   set to percentages, the behavior is similar.
+	//   - SOFT_FAILURE_TOLERANCE : Always run at the concurrency level set by the user
+	//   in the MaxConcurrentCount or MaxConcurrentPercentage , regardless of the
+	//   number of failures.
+	ConcurrencyMode ConcurrencyMode
+
 	// The number of accounts, per Region, for which this operation can fail before
 	// CloudFormation stops the operation in that Region. If the operation is stopped
 	// in a Region, CloudFormation doesn't attempt the operation in any subsequent
@@ -1752,13 +1826,14 @@ type StackSetOperationPreferences struct {
 	FailureTolerancePercentage *int32
 
 	// The maximum number of accounts in which to perform this operation at one time.
-	// This is dependent on the value of FailureToleranceCount . MaxConcurrentCount is
-	// at most one more than the FailureToleranceCount . Note that this setting lets
-	// you specify the maximum for operations. For large deployments, under certain
-	// circumstances the actual number of accounts acted upon concurrently may be lower
-	// due to service throttling. Conditional: You must specify either
-	// MaxConcurrentCount or MaxConcurrentPercentage , but not both. By default, 1 is
-	// specified.
+	// This can depend on the value of FailureToleranceCount depending on your
+	// ConcurrencyMode . MaxConcurrentCount is at most one more than the
+	// FailureToleranceCount if you're using STRICT_FAILURE_TOLERANCE . Note that this
+	// setting lets you specify the maximum for operations. For large deployments,
+	// under certain circumstances the actual number of accounts acted upon
+	// concurrently may be lower due to service throttling. Conditional: You must
+	// specify either MaxConcurrentCount or MaxConcurrentPercentage , but not both. By
+	// default, 1 is specified.
 	MaxConcurrentCount *int32
 
 	// The maximum percentage of accounts in which to perform this operation at one
@@ -1828,7 +1903,7 @@ type StackSetOperationResultSummary struct {
 type StackSetOperationStatusDetails struct {
 
 	// The number of stack instances for which the StackSet operation failed.
-	FailedStackInstancesCount int32
+	FailedStackInstancesCount *int32
 
 	noSmithyDocumentSerde
 }
@@ -1972,7 +2047,7 @@ type StackSummary struct {
 	// Summarizes information about whether a stack's actual configuration differs, or
 	// has drifted, from its expected configuration, as defined in the stack template
 	// and any values specified as template parameters. For more information, see
-	// Detecting Unregulated Configuration Changes to Stacks and Resources (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
+	// Detecting Unregulated Configuration Changes to Stacks and Resources (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html)
 	// .
 	DriftInformation *StackDriftInformationSummary
 
@@ -1983,13 +2058,13 @@ type StackSummary struct {
 	// For nested stacks--stacks created as resources for another stack--the stack ID
 	// of the direct parent of this stack. For the first level of nested stacks, the
 	// root stack is also the parent stack. For more information, see Working with
-	// Nested Stacks (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
+	// Nested Stacks (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
 	// in the CloudFormation User Guide.
 	ParentId *string
 
 	// For nested stacks--stacks created as resources for another stack--the stack ID
 	// of the top-level stack to which the nested stack ultimately belongs. For more
-	// information, see Working with Nested Stacks (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
+	// information, see Working with Nested Stacks (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
 	// in the CloudFormation User Guide.
 	RootId *string
 
@@ -2040,6 +2115,17 @@ type TemplateParameter struct {
 
 	// The name associated with the parameter.
 	ParameterKey *string
+
+	noSmithyDocumentSerde
+}
+
+// Options for the GetTemplateSummary API action.
+type TemplateSummaryConfig struct {
+
+	// If set to True , any unrecognized resource types generate warnings and not an
+	// error. Any unrecognized resource types are returned in the Warnings output
+	// parameter.
+	TreatUnrecognizedResourceTypesAsWarnings *bool
 
 	noSmithyDocumentSerde
 }
@@ -2263,6 +2349,17 @@ type TypeVersionSummary struct {
 	// the end of the Amazon Resource Name (ARN) assigned to the extension version when
 	// it's registered.
 	VersionId *string
+
+	noSmithyDocumentSerde
+}
+
+// Contains any warnings returned by the GetTemplateSummary API action.
+type Warnings struct {
+
+	// A list of all of the unrecognized resource types. This is only returned if the
+	// TemplateSummaryConfig parameter has the TreatUnrecognizedResourceTypesAsWarning
+	// configuration set to True .
+	UnrecognizedResourceTypes []string
 
 	noSmithyDocumentSerde
 }

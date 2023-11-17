@@ -2824,6 +2824,70 @@ func (m *awsAwsquery_serializeOpListImports) HandleSerialize(ctx context.Context
 	return next.HandleSerialize(ctx, in)
 }
 
+type awsAwsquery_serializeOpListStackInstanceResourceDrifts struct {
+}
+
+func (*awsAwsquery_serializeOpListStackInstanceResourceDrifts) ID() string {
+	return "OperationSerializer"
+}
+
+func (m *awsAwsquery_serializeOpListStackInstanceResourceDrifts) HandleSerialize(ctx context.Context, in middleware.SerializeInput, next middleware.SerializeHandler) (
+	out middleware.SerializeOutput, metadata middleware.Metadata, err error,
+) {
+	request, ok := in.Request.(*smithyhttp.Request)
+	if !ok {
+		return out, metadata, &smithy.SerializationError{Err: fmt.Errorf("unknown transport type %T", in.Request)}
+	}
+
+	input, ok := in.Parameters.(*ListStackInstanceResourceDriftsInput)
+	_ = input
+	if !ok {
+		return out, metadata, &smithy.SerializationError{Err: fmt.Errorf("unknown input parameters type %T", in.Parameters)}
+	}
+
+	operationPath := "/"
+	if len(request.Request.URL.Path) == 0 {
+		request.Request.URL.Path = operationPath
+	} else {
+		request.Request.URL.Path = path.Join(request.Request.URL.Path, operationPath)
+		if request.Request.URL.Path != "/" && operationPath[len(operationPath)-1] == '/' {
+			request.Request.URL.Path += "/"
+		}
+	}
+	request.Request.Method = "POST"
+	httpBindingEncoder, err := httpbinding.NewEncoder(request.URL.Path, request.URL.RawQuery, request.Header)
+	if err != nil {
+		return out, metadata, &smithy.SerializationError{Err: err}
+	}
+	httpBindingEncoder.SetHeader("Content-Type").String("application/x-www-form-urlencoded")
+
+	bodyWriter := bytes.NewBuffer(nil)
+	bodyEncoder := query.NewEncoder(bodyWriter)
+	body := bodyEncoder.Object()
+	body.Key("Action").String("ListStackInstanceResourceDrifts")
+	body.Key("Version").String("2010-05-15")
+
+	if err := awsAwsquery_serializeOpDocumentListStackInstanceResourceDriftsInput(input, bodyEncoder.Value); err != nil {
+		return out, metadata, &smithy.SerializationError{Err: err}
+	}
+
+	err = bodyEncoder.Encode()
+	if err != nil {
+		return out, metadata, &smithy.SerializationError{Err: err}
+	}
+
+	if request, err = request.SetStream(bytes.NewReader(bodyWriter.Bytes())); err != nil {
+		return out, metadata, &smithy.SerializationError{Err: err}
+	}
+
+	if request.Request, err = httpBindingEncoder.Encode(request.Request); err != nil {
+		return out, metadata, &smithy.SerializationError{Err: err}
+	}
+	in.Request = request
+
+	return next.HandleSerialize(ctx, in)
+}
+
 type awsAwsquery_serializeOpListStackInstances struct {
 }
 
@@ -4814,6 +4878,11 @@ func awsAwsquery_serializeDocumentStackSetOperationPreferences(v *types.StackSet
 	object := value.Object()
 	_ = object
 
+	if len(v.ConcurrencyMode) > 0 {
+		objectKey := object.Key("ConcurrencyMode")
+		objectKey.String(string(v.ConcurrencyMode))
+	}
+
 	if v.FailureToleranceCount != nil {
 		objectKey := object.Key("FailureToleranceCount")
 		objectKey.Integer(*v.FailureToleranceCount)
@@ -4885,6 +4954,18 @@ func awsAwsquery_serializeDocumentTags(v []types.Tag, value query.Value) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func awsAwsquery_serializeDocumentTemplateSummaryConfig(v *types.TemplateSummaryConfig, value query.Value) error {
+	object := value.Object()
+	_ = object
+
+	if v.TreatUnrecognizedResourceTypesAsWarnings != nil {
+		objectKey := object.Key("TreatUnrecognizedResourceTypesAsWarnings")
+		objectKey.Boolean(*v.TreatUnrecognizedResourceTypesAsWarnings)
+	}
+
 	return nil
 }
 
@@ -5243,6 +5324,11 @@ func awsAwsquery_serializeOpDocumentCreateStackInput(v *CreateStackInput, value 
 		}
 	}
 
+	if v.RetainExceptOnCreate != nil {
+		objectKey := object.Key("RetainExceptOnCreate")
+		objectKey.Boolean(*v.RetainExceptOnCreate)
+	}
+
 	if v.RoleARN != nil {
 		objectKey := object.Key("RoleARN")
 		objectKey.String(*v.RoleARN)
@@ -5561,9 +5647,9 @@ func awsAwsquery_serializeOpDocumentDeleteStackInstancesInput(v *DeleteStackInst
 		}
 	}
 
-	{
+	if v.RetainStacks != nil {
 		objectKey := object.Key("RetainStacks")
-		objectKey.Boolean(v.RetainStacks)
+		objectKey.Boolean(*v.RetainStacks)
 	}
 
 	if v.StackSetName != nil {
@@ -6040,6 +6126,11 @@ func awsAwsquery_serializeOpDocumentExecuteChangeSetInput(v *ExecuteChangeSetInp
 		objectKey.Boolean(*v.DisableRollback)
 	}
 
+	if v.RetainExceptOnCreate != nil {
+		objectKey := object.Key("RetainExceptOnCreate")
+		objectKey.Boolean(*v.RetainExceptOnCreate)
+	}
+
 	if v.StackName != nil {
 		objectKey := object.Key("StackName")
 		objectKey.String(*v.StackName)
@@ -6104,6 +6195,13 @@ func awsAwsquery_serializeOpDocumentGetTemplateSummaryInput(v *GetTemplateSummar
 	if v.TemplateBody != nil {
 		objectKey := object.Key("TemplateBody")
 		objectKey.String(*v.TemplateBody)
+	}
+
+	if v.TemplateSummaryConfig != nil {
+		objectKey := object.Key("TemplateSummaryConfig")
+		if err := awsAwsquery_serializeDocumentTemplateSummaryConfig(v.TemplateSummaryConfig, objectKey); err != nil {
+			return err
+		}
 	}
 
 	if v.TemplateURL != nil {
@@ -6203,6 +6301,55 @@ func awsAwsquery_serializeOpDocumentListImportsInput(v *ListImportsInput, value 
 	if v.NextToken != nil {
 		objectKey := object.Key("NextToken")
 		objectKey.String(*v.NextToken)
+	}
+
+	return nil
+}
+
+func awsAwsquery_serializeOpDocumentListStackInstanceResourceDriftsInput(v *ListStackInstanceResourceDriftsInput, value query.Value) error {
+	object := value.Object()
+	_ = object
+
+	if len(v.CallAs) > 0 {
+		objectKey := object.Key("CallAs")
+		objectKey.String(string(v.CallAs))
+	}
+
+	if v.MaxResults != nil {
+		objectKey := object.Key("MaxResults")
+		objectKey.Integer(*v.MaxResults)
+	}
+
+	if v.NextToken != nil {
+		objectKey := object.Key("NextToken")
+		objectKey.String(*v.NextToken)
+	}
+
+	if v.OperationId != nil {
+		objectKey := object.Key("OperationId")
+		objectKey.String(*v.OperationId)
+	}
+
+	if v.StackInstanceAccount != nil {
+		objectKey := object.Key("StackInstanceAccount")
+		objectKey.String(*v.StackInstanceAccount)
+	}
+
+	if v.StackInstanceRegion != nil {
+		objectKey := object.Key("StackInstanceRegion")
+		objectKey.String(*v.StackInstanceRegion)
+	}
+
+	if v.StackInstanceResourceDriftStatuses != nil {
+		objectKey := object.Key("StackInstanceResourceDriftStatuses")
+		if err := awsAwsquery_serializeDocumentStackResourceDriftStatusFilters(v.StackInstanceResourceDriftStatuses, objectKey); err != nil {
+			return err
+		}
+	}
+
+	if v.StackSetName != nil {
+		objectKey := object.Key("StackSetName")
+		objectKey.String(*v.StackSetName)
 	}
 
 	return nil
@@ -6638,6 +6785,11 @@ func awsAwsquery_serializeOpDocumentRollbackStackInput(v *RollbackStackInput, va
 		objectKey.String(*v.ClientRequestToken)
 	}
 
+	if v.RetainExceptOnCreate != nil {
+		objectKey := object.Key("RetainExceptOnCreate")
+		objectKey.Boolean(*v.RetainExceptOnCreate)
+	}
+
 	if v.RoleARN != nil {
 		objectKey := object.Key("RoleARN")
 		objectKey.String(*v.RoleARN)
@@ -6853,6 +7005,11 @@ func awsAwsquery_serializeOpDocumentUpdateStackInput(v *UpdateStackInput, value 
 		if err := awsAwsquery_serializeDocumentResourceTypes(v.ResourceTypes, objectKey); err != nil {
 			return err
 		}
+	}
+
+	if v.RetainExceptOnCreate != nil {
+		objectKey := object.Key("RetainExceptOnCreate")
+		objectKey.Boolean(*v.RetainExceptOnCreate)
 	}
 
 	if v.RoleARN != nil {

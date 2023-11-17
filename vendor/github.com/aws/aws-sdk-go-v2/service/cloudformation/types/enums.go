@@ -238,6 +238,24 @@ func (ChangeType) Values() []ChangeType {
 	}
 }
 
+type ConcurrencyMode string
+
+// Enum values for ConcurrencyMode
+const (
+	ConcurrencyModeStrictFailureTolerance ConcurrencyMode = "STRICT_FAILURE_TOLERANCE"
+	ConcurrencyModeSoftFailureTolerance   ConcurrencyMode = "SOFT_FAILURE_TOLERANCE"
+)
+
+// Values returns all known values for ConcurrencyMode. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (ConcurrencyMode) Values() []ConcurrencyMode {
+	return []ConcurrencyMode{
+		"STRICT_FAILURE_TOLERANCE",
+		"SOFT_FAILURE_TOLERANCE",
+	}
+}
+
 type DeprecatedStatus string
 
 // Enum values for DeprecatedStatus
@@ -720,12 +738,13 @@ type ResourceAttribute string
 
 // Enum values for ResourceAttribute
 const (
-	ResourceAttributeProperties     ResourceAttribute = "Properties"
-	ResourceAttributeMetadata       ResourceAttribute = "Metadata"
-	ResourceAttributeCreationPolicy ResourceAttribute = "CreationPolicy"
-	ResourceAttributeUpdatePolicy   ResourceAttribute = "UpdatePolicy"
-	ResourceAttributeDeletionPolicy ResourceAttribute = "DeletionPolicy"
-	ResourceAttributeTags           ResourceAttribute = "Tags"
+	ResourceAttributeProperties          ResourceAttribute = "Properties"
+	ResourceAttributeMetadata            ResourceAttribute = "Metadata"
+	ResourceAttributeCreationPolicy      ResourceAttribute = "CreationPolicy"
+	ResourceAttributeUpdatePolicy        ResourceAttribute = "UpdatePolicy"
+	ResourceAttributeDeletionPolicy      ResourceAttribute = "DeletionPolicy"
+	ResourceAttributeUpdateReplacePolicy ResourceAttribute = "UpdateReplacePolicy"
+	ResourceAttributeTags                ResourceAttribute = "Tags"
 )
 
 // Values returns all known values for ResourceAttribute. Note that this can be
@@ -738,6 +757,7 @@ func (ResourceAttribute) Values() []ResourceAttribute {
 		"CreationPolicy",
 		"UpdatePolicy",
 		"DeletionPolicy",
+		"UpdateReplacePolicy",
 		"Tags",
 	}
 }
@@ -894,6 +914,7 @@ type StackInstanceFilterName string
 const (
 	StackInstanceFilterNameDetailedStatus  StackInstanceFilterName = "DETAILED_STATUS"
 	StackInstanceFilterNameLastOperationId StackInstanceFilterName = "LAST_OPERATION_ID"
+	StackInstanceFilterNameDriftStatus     StackInstanceFilterName = "DRIFT_STATUS"
 )
 
 // Values returns all known values for StackInstanceFilterName. Note that this can
@@ -903,6 +924,7 @@ func (StackInstanceFilterName) Values() []StackInstanceFilterName {
 	return []StackInstanceFilterName{
 		"DETAILED_STATUS",
 		"LAST_OPERATION_ID",
+		"DRIFT_STATUS",
 	}
 }
 

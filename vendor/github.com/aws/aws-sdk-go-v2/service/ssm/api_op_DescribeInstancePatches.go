@@ -41,7 +41,9 @@ type DescribeInstancePatchesInput struct {
 	//   - Classification Sample values: Security | SecurityUpdates
 	//   - KBId Sample values: KB4480056 | java-1.7.0-openjdk.x86_64
 	//   - Severity Sample values: Important | Medium | Low
-	//   - State Sample values: Installed | InstalledOther | InstalledPendingReboot
+	//   - State Sample values: Installed | InstalledOther | InstalledPendingReboot For
+	//   lists of all State values, see Understanding patch compliance state values (https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-compliance-states.html)
+	//   in the Amazon Web Services Systems Manager User Guide.
 	Filters []types.PatchOrchestratorFilter
 
 	// The maximum number of patches to return (per page).
@@ -77,12 +79,22 @@ type DescribeInstancePatchesOutput struct {
 }
 
 func (c *Client) addOperationDescribeInstancePatchesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeInstancePatches{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpDescribeInstancePatches{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeInstancePatches"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -103,9 +115,6 @@ func (c *Client) addOperationDescribeInstancePatchesMiddlewares(stack *middlewar
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -119,6 +128,9 @@ func (c *Client) addOperationDescribeInstancePatchesMiddlewares(stack *middlewar
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeInstancePatchesValidationMiddleware(stack); err != nil {
@@ -137,6 +149,9 @@ func (c *Client) addOperationDescribeInstancePatchesMiddlewares(stack *middlewar
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -238,7 +253,6 @@ func newServiceMetadataMiddleware_opDescribeInstancePatches(region string) *awsm
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ssm",
 		OperationName: "DescribeInstancePatches",
 	}
 }

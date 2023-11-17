@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -48,9 +49,17 @@ type CreateImageInput struct {
 	// This member is required.
 	Name *string
 
-	// The block device mappings. This parameter cannot be used to modify the
-	// encryption status of existing volumes or snapshots. To create an AMI with
-	// encrypted snapshots, use the CopyImage action.
+	// The block device mappings. When using the CreateImage action:
+	//   - You can't change the volume size using the VolumeSize parameter. If you
+	//   want a different volume size, you must first change the volume size of the
+	//   source instance.
+	//   - You can't modify the encryption status of existing volumes or snapshots. To
+	//   create an AMI with volumes or snapshots that have a different encryption status
+	//   (for example, where the source volume and snapshots are unencrypted, and you
+	//   want to create an AMI with encrypted volumes or snapshots), use the CopyImage
+	//   action.
+	//   - The only option that can be changed for existing mappings or snapshots is
+	//   DeleteOnTermination .
 	BlockDeviceMappings []types.BlockDeviceMapping
 
 	// A description for the new image.
@@ -102,12 +111,22 @@ type CreateImageOutput struct {
 }
 
 func (c *Client) addOperationCreateImageMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateImage{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpCreateImage{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateImage"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -128,9 +147,6 @@ func (c *Client) addOperationCreateImageMiddlewares(stack *middleware.Stack, opt
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -144,6 +160,9 @@ func (c *Client) addOperationCreateImageMiddlewares(stack *middleware.Stack, opt
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateImageValidationMiddleware(stack); err != nil {
@@ -164,6 +183,9 @@ func (c *Client) addOperationCreateImageMiddlewares(stack *middleware.Stack, opt
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -171,7 +193,6 @@ func newServiceMetadataMiddleware_opCreateImage(region string) *awsmiddleware.Re
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "CreateImage",
 	}
 }

@@ -1,3 +1,78 @@
+# v1.33.1 (2023-11-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.33.0 (2023-11-13)
+
+* **Feature**: Adds a Client Token parameter to the ECS RunTask API. The Client Token parameter allows for idempotent RunTask requests.
+
+# v1.32.1 (2023-11-09)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.32.0 (2023-11-01)
+
+* **Feature**: Adds support for configured endpoints via environment variables and the AWS shared configuration file.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.31.0 (2023-10-31)
+
+* **Feature**: **BREAKING CHANGE**: Bump minimum go version to 1.19 per the revised [go version support policy](https://aws.amazon.com/blogs/developer/aws-sdk-for-go-aligns-with-go-release-policy-on-supported-runtimes/).
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.4 (2023-10-17)
+
+* **Documentation**: Documentation only updates to address Amazon ECS tickets.
+
+# v1.30.3 (2023-10-12)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.2 (2023-10-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.1 (2023-09-05)
+
+* **Documentation**: Documentation only update for Amazon ECS.
+
+# v1.30.0 (2023-08-31)
+
+* **Feature**: This release adds support for an account-level setting that you can use to configure the number of days for AWS Fargate task retirement.
+
+# v1.29.6 (2023-08-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.5 (2023-08-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.4 (2023-08-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.3 (2023-08-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.2 (2023-08-04)
+
+* **Documentation**: This is a documentation update to address various tickets.
+
+# v1.29.1 (2023-08-01)
+
+* No change notes available for this release.
+
+# v1.29.0 (2023-07-31)
+
+* **Feature**: Adds support for smithy-modeled endpoint resolution. A new rules-based endpoint resolution will be added to the SDK which will supercede and deprecate existing endpoint resolution. Specifically, EndpointResolver will be deprecated while BaseEndpoint and EndpointResolverV2 will take its place. For more information, please see the Endpoints section in our Developer Guide.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.28.2 (2023-07-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.28.1 (2023-07-13)
 
 * **Dependency Update**: Updated to the latest SDK module versions
