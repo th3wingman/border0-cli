@@ -16,37 +16,16 @@ on:
       - go.sum
 
 jobs:
-  checkout_code:
-    name: Checkout Code
-    runs-on: ubuntu-latest
-    outputs:
-      cache-key: ${{ steps.cache-key.outputs['cache-key'] }}
-    steps:
-      - name: Generate cache key
-        id: cache-key
-        run: echo "cache-key=$(date +%s)" >> $GITHUB_OUTPUT
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Cache code
-        uses: actions/cache@v3
-        with:
-          path: .
-          key: ${{ needs.checkout_code.outputs.cache-key }}
-
   build:
     name: Build CLI
-    needs: checkout_code
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [windows-amd64, windows-arm64, linux-amd64, linux-arm64, linux-arm, linux-armv6, linux-386, darwin-amd64, darwin-arm64, openbsd-amd64]
+        target: ["windows-amd64", "windows-arm64", "linux-amd64", "linux-arm64", "linux-arm", "linux-armv6", "linux-386", "darwin-amd64", "darwin-arm64", "openbsd-amd64"]
     steps:
-      - name: Download cached code
-        uses: actions/cache@v3
+      - uses: actions/checkout@v3
         with:
-          path: .
-          key: ${{ needs.checkout_code.outputs.cache-key }}
+          fetch-depth: 0
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
