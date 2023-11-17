@@ -57,6 +57,9 @@ type CreateVerifiedAccessGroupInput struct {
 	// The Verified Access policy document.
 	PolicyDocument *string
 
+	// The options for server side encryption.
+	SseSpecification *types.VerifiedAccessSseSpecificationRequest
+
 	// The tags to assign to the Verified Access group.
 	TagSpecifications []types.TagSpecification
 
@@ -65,7 +68,7 @@ type CreateVerifiedAccessGroupInput struct {
 
 type CreateVerifiedAccessGroupOutput struct {
 
-	// The ID of the Verified Access group.
+	// Details about the Verified Access group.
 	VerifiedAccessGroup *types.VerifiedAccessGroup
 
 	// Metadata pertaining to the operation's result.
@@ -75,12 +78,22 @@ type CreateVerifiedAccessGroupOutput struct {
 }
 
 func (c *Client) addOperationCreateVerifiedAccessGroupMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateVerifiedAccessGroup{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpCreateVerifiedAccessGroup{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateVerifiedAccessGroup"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -101,9 +114,6 @@ func (c *Client) addOperationCreateVerifiedAccessGroupMiddlewares(stack *middlew
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -117,6 +127,9 @@ func (c *Client) addOperationCreateVerifiedAccessGroupMiddlewares(stack *middlew
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opCreateVerifiedAccessGroupMiddleware(stack, options); err != nil {
@@ -138,6 +151,9 @@ func (c *Client) addOperationCreateVerifiedAccessGroupMiddlewares(stack *middlew
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -180,7 +196,6 @@ func newServiceMetadataMiddleware_opCreateVerifiedAccessGroup(region string) *aw
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "CreateVerifiedAccessGroup",
 	}
 }

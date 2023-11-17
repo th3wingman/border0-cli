@@ -69,6 +69,9 @@ type CreateVerifiedAccessTrustProviderInput struct {
 	// parameter is required when the provider type is user .
 	OidcOptions *types.CreateVerifiedAccessTrustProviderOidcOptions
 
+	// The options for server side encryption.
+	SseSpecification *types.VerifiedAccessSseSpecificationRequest
+
 	// The tags to assign to the Verified Access trust provider.
 	TagSpecifications []types.TagSpecification
 
@@ -81,7 +84,7 @@ type CreateVerifiedAccessTrustProviderInput struct {
 
 type CreateVerifiedAccessTrustProviderOutput struct {
 
-	// The ID of the Verified Access trust provider.
+	// Details about the Verified Access trust provider.
 	VerifiedAccessTrustProvider *types.VerifiedAccessTrustProvider
 
 	// Metadata pertaining to the operation's result.
@@ -91,12 +94,22 @@ type CreateVerifiedAccessTrustProviderOutput struct {
 }
 
 func (c *Client) addOperationCreateVerifiedAccessTrustProviderMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateVerifiedAccessTrustProvider{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpCreateVerifiedAccessTrustProvider{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateVerifiedAccessTrustProvider"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -117,9 +130,6 @@ func (c *Client) addOperationCreateVerifiedAccessTrustProviderMiddlewares(stack 
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -133,6 +143,9 @@ func (c *Client) addOperationCreateVerifiedAccessTrustProviderMiddlewares(stack 
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opCreateVerifiedAccessTrustProviderMiddleware(stack, options); err != nil {
@@ -154,6 +167,9 @@ func (c *Client) addOperationCreateVerifiedAccessTrustProviderMiddlewares(stack 
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -196,7 +212,6 @@ func newServiceMetadataMiddleware_opCreateVerifiedAccessTrustProvider(region str
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "CreateVerifiedAccessTrustProvider",
 	}
 }

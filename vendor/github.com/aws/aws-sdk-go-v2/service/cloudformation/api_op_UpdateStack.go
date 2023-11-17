@@ -4,6 +4,7 @@ package cloudformation
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
@@ -64,7 +65,7 @@ type UpdateStackInput struct {
 	//   - AWS::IAM::User (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-user.html)
 	//   - AWS::IAM::UserToGroupAddition (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-addusertogroup.html)
 	//   For more information, see Acknowledging IAM Resources in CloudFormation
-	//   Templates (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-template.html#capabilities)
+	//   Templates (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-template.html#capabilities)
 	//   .
 	//   - CAPABILITY_AUTO_EXPAND Some template contain macros. Macros perform custom
 	//   processing on templates; this can include simple actions like find-and-replace
@@ -74,8 +75,8 @@ type UpdateStackInput struct {
 	//   actually updating the stack. If your stack template contains one or more macros,
 	//   and you choose to update a stack directly from the processed template, without
 	//   first reviewing the resulting changes in a change set, you must acknowledge this
-	//   capability. This includes the AWS::Include (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/create-reusable-transform-function-snippets-and-add-to-your-template-with-aws-include-transform.html)
-	//   and AWS::Serverless (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-aws-serverless.html)
+	//   capability. This includes the AWS::Include (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/create-reusable-transform-function-snippets-and-add-to-your-template-with-aws-include-transform.html)
+	//   and AWS::Serverless (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-aws-serverless.html)
 	//   transforms, which are macros hosted by CloudFormation. If you want to update a
 	//   stack from a stack template that contains macros and nested stacks, you must
 	//   update the stack directly from the template using this capability. You should
@@ -84,8 +85,9 @@ type UpdateStackInput struct {
 	//   Lambda service function for processing stack templates. Be aware that the Lambda
 	//   function owner can update the function operation without CloudFormation being
 	//   notified. For more information, see Using CloudFormation Macros to Perform
-	//   Custom Processing on Templates (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-macros.html)
+	//   Custom Processing on Templates (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-macros.html)
 	//   .
+	// Only one of the Capabilities and ResourceType parameters can be specified.
 	Capabilities []types.Capability
 
 	// A unique identifier for this UpdateStack request. Specify this token if you
@@ -125,8 +127,13 @@ type UpdateStackInput struct {
 	// Management (IAM) uses this parameter for CloudFormation-specific condition keys
 	// in IAM policies. For more information, see Controlling Access with Identity and
 	// Access Management (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-template.html)
-	// .
+	// . Only one of the Capabilities and ResourceType parameters can be specified.
 	ResourceTypes []string
+
+	// When set to true , newly created resources are deleted when the operation rolls
+	// back. This includes newly created resources marked with a deletion policy of
+	// Retain . Default: false
+	RetainExceptOnCreate *bool
 
 	// The Amazon Resource Name (ARN) of an Identity and Access Management (IAM) role
 	// that CloudFormation assumes to update the stack. CloudFormation uses the role's
@@ -217,12 +224,22 @@ type UpdateStackOutput struct {
 }
 
 func (c *Client) addOperationUpdateStackMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpUpdateStack{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpUpdateStack{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "UpdateStack"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -243,22 +260,22 @@ func (c *Client) addOperationUpdateStackMiddlewares(stack *middleware.Stack, opt
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
 	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpUpdateStackValidationMiddleware(stack); err != nil {
@@ -279,6 +296,9 @@ func (c *Client) addOperationUpdateStackMiddlewares(stack *middleware.Stack, opt
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -286,7 +306,6 @@ func newServiceMetadataMiddleware_opUpdateStack(region string) *awsmiddleware.Re
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "cloudformation",
 		OperationName: "UpdateStack",
 	}
 }

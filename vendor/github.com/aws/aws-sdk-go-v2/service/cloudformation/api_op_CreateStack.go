@@ -4,6 +4,7 @@ package cloudformation
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
@@ -63,7 +64,7 @@ type CreateStackInput struct {
 	//   - AWS::IAM::User (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-user.html)
 	//   - AWS::IAM::UserToGroupAddition (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-addusertogroup.html)
 	//   For more information, see Acknowledging IAM Resources in CloudFormation
-	//   Templates (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-template.html#capabilities)
+	//   Templates (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-template.html#capabilities)
 	//   .
 	//   - CAPABILITY_AUTO_EXPAND Some template contain macros. Macros perform custom
 	//   processing on templates; this can include simple actions like find-and-replace
@@ -73,8 +74,8 @@ type CreateStackInput struct {
 	//   actually creating the stack. If your stack template contains one or more macros,
 	//   and you choose to create a stack directly from the processed template, without
 	//   first reviewing the resulting changes in a change set, you must acknowledge this
-	//   capability. This includes the AWS::Include (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/create-reusable-transform-function-snippets-and-add-to-your-template-with-aws-include-transform.html)
-	//   and AWS::Serverless (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-aws-serverless.html)
+	//   capability. This includes the AWS::Include (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/create-reusable-transform-function-snippets-and-add-to-your-template-with-aws-include-transform.html)
+	//   and AWS::Serverless (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-aws-serverless.html)
 	//   transforms, which are macros hosted by CloudFormation. If you want to create a
 	//   stack from a stack template that contains macros and nested stacks, you must
 	//   create the stack directly from the template using this capability. You should
@@ -83,8 +84,9 @@ type CreateStackInput struct {
 	//   Lambda service function for processing stack templates. Be aware that the Lambda
 	//   function owner can update the function operation without CloudFormation being
 	//   notified. For more information, see Using CloudFormation macros to perform
-	//   custom processing on templates (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-macros.html)
+	//   custom processing on templates (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-macros.html)
 	//   .
+	// Only one of the Capabilities and ResourceType parameters can be specified.
 	Capabilities []types.Capability
 
 	// A unique identifier for this CreateStack request. Specify this token if you
@@ -109,9 +111,9 @@ type CreateStackInput struct {
 	// Whether to enable termination protection on the specified stack. If a user
 	// attempts to delete a stack with termination protection enabled, the operation
 	// fails and the stack remains unchanged. For more information, see Protecting a
-	// Stack From Being Deleted (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html)
+	// Stack From Being Deleted (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html)
 	// in the CloudFormation User Guide. Termination protection is deactivated on
-	// stacks by default. For nested stacks (http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
+	// stacks by default. For nested stacks (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)
 	// , termination protection is set on the root stack and can't be changed directly
 	// on the nested stack.
 	EnableTerminationProtection *bool
@@ -143,8 +145,13 @@ type CreateStackInput struct {
 	// grants permissions to all resource types. Identity and Access Management (IAM)
 	// uses this parameter for CloudFormation-specific condition keys in IAM policies.
 	// For more information, see Controlling Access with Identity and Access Management (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-template.html)
-	// .
+	// . Only one of the Capabilities and ResourceType parameters can be specified.
 	ResourceTypes []string
+
+	// When set to true , newly created resources are deleted when the operation rolls
+	// back. This includes newly created resources marked with a deletion policy of
+	// Retain . Default: false
+	RetainExceptOnCreate *bool
 
 	// The Amazon Resource Name (ARN) of an Identity and Access Management (IAM) role
 	// that CloudFormation assumes to create the stack. CloudFormation uses the role's
@@ -211,12 +218,22 @@ type CreateStackOutput struct {
 }
 
 func (c *Client) addOperationCreateStackMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateStack{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCreateStack{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateStack"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -237,22 +254,22 @@ func (c *Client) addOperationCreateStackMiddlewares(stack *middleware.Stack, opt
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
 	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateStackValidationMiddleware(stack); err != nil {
@@ -273,6 +290,9 @@ func (c *Client) addOperationCreateStackMiddlewares(stack *middleware.Stack, opt
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -280,7 +300,6 @@ func newServiceMetadataMiddleware_opCreateStack(region string) *awsmiddleware.Re
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "cloudformation",
 		OperationName: "CreateStack",
 	}
 }

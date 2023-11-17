@@ -106,6 +106,10 @@ type DescribeImagesInput struct {
 	//   /dev/sda1 ).
 	//   - root-device-type - The type of the root device volume ( ebs | instance-store
 	//   ).
+	//   - source-instance-id - The ID of the instance that the AMI was created from if
+	//   the AMI was created using CreateImage. This filter is applicable only if the AMI
+	//   was created using CreateImage (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateImage.html)
+	//   .
 	//   - state - The state of the image ( available | pending | failed ).
 	//   - state-reason-code - The reason code for the state change.
 	//   - state-reason-message - The message for the state change.
@@ -127,6 +131,10 @@ type DescribeImagesInput struct {
 	// included in the response. If you are the AMI owner, all deprecated AMIs appear
 	// in the response regardless of what you specify for this parameter.
 	IncludeDeprecated *bool
+
+	// Specifies whether to include disabled AMIs. Default: No disabled AMIs are
+	// included in the response.
+	IncludeDisabled *bool
 
 	// The maximum number of items to return for this request. To get the next page of
 	// items, make another request with the token returned in the output. For more
@@ -163,12 +171,22 @@ type DescribeImagesOutput struct {
 }
 
 func (c *Client) addOperationDescribeImagesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeImages{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeImages{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeImages"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -189,9 +207,6 @@ func (c *Client) addOperationDescribeImagesMiddlewares(stack *middleware.Stack, 
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -207,6 +222,9 @@ func (c *Client) addOperationDescribeImagesMiddlewares(stack *middleware.Stack, 
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeImages(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -220,6 +238,9 @@ func (c *Client) addOperationDescribeImagesMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -696,7 +717,6 @@ func newServiceMetadataMiddleware_opDescribeImages(region string) *awsmiddleware
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeImages",
 	}
 }

@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -16,6 +17,14 @@ import (
 // in the Amazon VPC User Guide. By default, you can associate up to 2 Elastic IP
 // addresses per public NAT gateway. You can increase the limit by requesting a
 // quota adjustment. For more information, see Elastic IP address quotas (https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html#vpc-limits-eips)
+// in the Amazon VPC User Guide. When you associate an EIP or secondary EIPs with a
+// public NAT gateway, the network border group of the EIPs must match the network
+// border group of the Availability Zone (AZ) that the public NAT gateway is in. If
+// it's not the same, the EIP will fail to associate. You can see the network
+// border group for the subnet's AZ by viewing the details of the subnet.
+// Similarly, you can view the network border group of an EIP by viewing the
+// details of the EIP address. For more information about network border groups and
+// EIPs, see Allocate an Elastic IP address (https://docs.aws.amazon.com/vpc/latest/userguide/vpc-eips.html#allocate-eip)
 // in the Amazon VPC User Guide.
 func (c *Client) AssociateNatGatewayAddress(ctx context.Context, params *AssociateNatGatewayAddressInput, optFns ...func(*Options)) (*AssociateNatGatewayAddressOutput, error) {
 	if params == nil {
@@ -71,12 +80,22 @@ type AssociateNatGatewayAddressOutput struct {
 }
 
 func (c *Client) addOperationAssociateNatGatewayAddressMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpAssociateNatGatewayAddress{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpAssociateNatGatewayAddress{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "AssociateNatGatewayAddress"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -97,9 +116,6 @@ func (c *Client) addOperationAssociateNatGatewayAddressMiddlewares(stack *middle
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -113,6 +129,9 @@ func (c *Client) addOperationAssociateNatGatewayAddressMiddlewares(stack *middle
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpAssociateNatGatewayAddressValidationMiddleware(stack); err != nil {
@@ -133,6 +152,9 @@ func (c *Client) addOperationAssociateNatGatewayAddressMiddlewares(stack *middle
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -140,7 +162,6 @@ func newServiceMetadataMiddleware_opAssociateNatGatewayAddress(region string) *a
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "AssociateNatGatewayAddress",
 	}
 }

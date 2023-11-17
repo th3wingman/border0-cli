@@ -4,6 +4,7 @@ package ssm
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
@@ -38,7 +39,9 @@ func (c *Client) CreateOpsItem(ctx context.Context, params *CreateOpsItemInput, 
 
 type CreateOpsItemInput struct {
 
-	// Information about the OpsItem.
+	// User-defined text that contains information about the OpsItem, in Markdown
+	// format. Provide enough information so that users viewing this OpsItem for the
+	// first time understand the issue.
 	//
 	// This member is required.
 	Description *string
@@ -101,7 +104,7 @@ type CreateOpsItemInput struct {
 	//   OpsCenter.
 	//   - /aws/changerequest This type of OpsItem is used by Change Manager for
 	//   reviewing and approving or rejecting change requests.
-	//   - /aws/insights This type of OpsItem is used by OpsCenter for aggregating and
+	//   - /aws/insight This type of OpsItem is used by OpsCenter for aggregating and
 	//   reporting on duplicate OpsItems.
 	OpsItemType *string
 
@@ -149,12 +152,22 @@ type CreateOpsItemOutput struct {
 }
 
 func (c *Client) addOperationCreateOpsItemMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateOpsItem{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpCreateOpsItem{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateOpsItem"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -175,9 +188,6 @@ func (c *Client) addOperationCreateOpsItemMiddlewares(stack *middleware.Stack, o
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -191,6 +201,9 @@ func (c *Client) addOperationCreateOpsItemMiddlewares(stack *middleware.Stack, o
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateOpsItemValidationMiddleware(stack); err != nil {
@@ -211,6 +224,9 @@ func (c *Client) addOperationCreateOpsItemMiddlewares(stack *middleware.Stack, o
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -218,7 +234,6 @@ func newServiceMetadataMiddleware_opCreateOpsItem(region string) *awsmiddleware.
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ssm",
 		OperationName: "CreateOpsItem",
 	}
 }

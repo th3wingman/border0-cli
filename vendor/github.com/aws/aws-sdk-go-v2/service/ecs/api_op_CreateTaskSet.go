@@ -4,6 +4,7 @@ package ecs
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
@@ -44,7 +45,8 @@ type CreateTaskSetInput struct {
 	// This member is required.
 	Service *string
 
-	// The task definition for the tasks in the task set to use.
+	// The task definition for the tasks in the task set to use. If a revision isn't
+	// specified, the latest ACTIVE revision is used.
 	//
 	// This member is required.
 	TaskDefinition *string
@@ -68,9 +70,9 @@ type CreateTaskSetInput struct {
 	// cluster is created.
 	CapacityProviderStrategy []types.CapacityProviderStrategyItem
 
-	// The identifier that you provide to ensure the idempotency of the request. It's
-	// case sensitive and must be unique. It can be up to 32 ASCII characters are
-	// allowed.
+	// An identifier that you provide to ensure the idempotency of the request. It
+	// must be unique and is case sensitive. Up to 36 ASCII characters in the range of
+	// 33-126 (inclusive) are allowed.
 	ClientToken *string
 
 	// An optional non-unique tag that identifies this task set in external systems.
@@ -145,12 +147,22 @@ type CreateTaskSetOutput struct {
 }
 
 func (c *Client) addOperationCreateTaskSetMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateTaskSet{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpCreateTaskSet{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateTaskSet"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -171,9 +183,6 @@ func (c *Client) addOperationCreateTaskSetMiddlewares(stack *middleware.Stack, o
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -187,6 +196,9 @@ func (c *Client) addOperationCreateTaskSetMiddlewares(stack *middleware.Stack, o
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateTaskSetValidationMiddleware(stack); err != nil {
@@ -207,6 +219,9 @@ func (c *Client) addOperationCreateTaskSetMiddlewares(stack *middleware.Stack, o
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -214,7 +229,6 @@ func newServiceMetadataMiddleware_opCreateTaskSet(region string) *awsmiddleware.
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ecs",
 		OperationName: "CreateTaskSet",
 	}
 }

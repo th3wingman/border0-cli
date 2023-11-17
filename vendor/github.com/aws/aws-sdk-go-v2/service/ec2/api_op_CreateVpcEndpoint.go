@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -83,13 +84,16 @@ type CreateVpcEndpointInput struct {
 	RouteTableIds []string
 
 	// (Interface endpoint) The IDs of the security groups to associate with the
-	// endpoint network interface. If this parameter is not specified, we use the
+	// endpoint network interfaces. If this parameter is not specified, we use the
 	// default security group for the VPC.
 	SecurityGroupIds []string
 
+	// The subnet configurations for the endpoint.
+	SubnetConfigurations []types.SubnetConfiguration
+
 	// (Interface and Gateway Load Balancer endpoints) The IDs of the subnets in which
-	// to create an endpoint network interface. For a Gateway Load Balancer endpoint,
-	// you can specify only one subnet.
+	// to create endpoint network interfaces. For a Gateway Load Balancer endpoint, you
+	// can specify only one subnet.
 	SubnetIds []string
 
 	// The tags to associate with the endpoint.
@@ -117,12 +121,22 @@ type CreateVpcEndpointOutput struct {
 }
 
 func (c *Client) addOperationCreateVpcEndpointMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateVpcEndpoint{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpCreateVpcEndpoint{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateVpcEndpoint"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -143,9 +157,6 @@ func (c *Client) addOperationCreateVpcEndpointMiddlewares(stack *middleware.Stac
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -159,6 +170,9 @@ func (c *Client) addOperationCreateVpcEndpointMiddlewares(stack *middleware.Stac
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateVpcEndpointValidationMiddleware(stack); err != nil {
@@ -179,6 +193,9 @@ func (c *Client) addOperationCreateVpcEndpointMiddlewares(stack *middleware.Stac
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -186,7 +203,6 @@ func newServiceMetadataMiddleware_opCreateVpcEndpoint(region string) *awsmiddlew
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "CreateVpcEndpoint",
 	}
 }

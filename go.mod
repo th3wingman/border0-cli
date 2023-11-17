@@ -10,16 +10,16 @@ require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/aws/aws-sdk-go v1.44.271
 	github.com/aws/aws-sdk-go-v2 v1.23.0
-	github.com/aws/aws-sdk-go-v2/config v1.18.25
-	github.com/aws/aws-sdk-go-v2/credentials v1.13.24
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.5
-	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.2.11
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.30.0
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.107.0
-	github.com/aws/aws-sdk-go-v2/service/ecs v1.28.1
+	github.com/aws/aws-sdk-go-v2/config v1.25.2
+	github.com/aws/aws-sdk-go-v2/credentials v1.16.1
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.4
+	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.3.3
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.39.1
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.135.0
+	github.com/aws/aws-sdk-go-v2/service/ecs v1.33.1
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.23.2
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.36.8
-	github.com/aws/session-manager-plugin v0.0.0-20230315220744-7b544e9f381d
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.43.0
+	github.com/aws/session-manager-plugin v0.0.0-20230808183647-dbfa0bfdb04b
 	github.com/bluele/factory-go v0.0.1
 	github.com/borderzero/border0-go v1.3.14
 	github.com/borderzero/border0-proto v1.0.19
@@ -74,12 +74,13 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.34 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.31 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.7.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/rds v1.48.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.12.10 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.10 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.21.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.17.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.19.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.25.2 // indirect
 	github.com/aws/smithy-go v1.17.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
