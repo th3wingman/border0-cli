@@ -55,6 +55,9 @@ type DescribeDBClusterSnapshotsInput struct {
 	//   must also be specified.
 	DBClusterSnapshotIdentifier *string
 
+	// A specific DB cluster resource ID to describe.
+	DbClusterResourceId *string
+
 	// A filter that specifies one or more DB cluster snapshots to describe. Supported
 	// filters:
 	//   - db-cluster-id - Accepts DB cluster identifiers and DB cluster Amazon
@@ -64,20 +67,19 @@ type DescribeDBClusterSnapshotsInput struct {
 	//   - engine - Accepts names of database engines.
 	Filters []types.Filter
 
-	// A value that indicates whether to include manual DB cluster snapshots that are
-	// public and can be copied or restored by any Amazon Web Services account. By
-	// default, the public snapshots are not included. You can share a manual DB
-	// cluster snapshot as public by using the ModifyDBClusterSnapshotAttribute API
-	// action.
-	IncludePublic bool
+	// Specifies whether to include manual DB cluster snapshots that are public and
+	// can be copied or restored by any Amazon Web Services account. By default, the
+	// public snapshots are not included. You can share a manual DB cluster snapshot as
+	// public by using the ModifyDBClusterSnapshotAttribute API action.
+	IncludePublic *bool
 
-	// A value that indicates whether to include shared manual DB cluster snapshots
-	// from other Amazon Web Services accounts that this Amazon Web Services account
-	// has been given permission to copy or restore. By default, these snapshots are
-	// not included. You can give an Amazon Web Services account permission to restore
-	// a manual DB cluster snapshot from another Amazon Web Services account by the
+	// Specifies whether to include shared manual DB cluster snapshots from other
+	// Amazon Web Services accounts that this Amazon Web Services account has been
+	// given permission to copy or restore. By default, these snapshots are not
+	// included. You can give an Amazon Web Services account permission to restore a
+	// manual DB cluster snapshot from another Amazon Web Services account by the
 	// ModifyDBClusterSnapshotAttribute API action.
-	IncludeShared bool
+	IncludeShared *bool
 
 	// An optional pagination token provided by a previous DescribeDBClusterSnapshots
 	// request. If this parameter is specified, the response includes only records
@@ -131,12 +133,22 @@ type DescribeDBClusterSnapshotsOutput struct {
 }
 
 func (c *Client) addOperationDescribeDBClusterSnapshotsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeDBClusterSnapshots{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeDBClusterSnapshots{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeDBClusterSnapshots"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -157,9 +169,6 @@ func (c *Client) addOperationDescribeDBClusterSnapshotsMiddlewares(stack *middle
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -173,6 +182,9 @@ func (c *Client) addOperationDescribeDBClusterSnapshotsMiddlewares(stack *middle
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeDBClusterSnapshotsValidationMiddleware(stack); err != nil {
@@ -191,6 +203,9 @@ func (c *Client) addOperationDescribeDBClusterSnapshotsMiddlewares(stack *middle
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -864,7 +879,6 @@ func newServiceMetadataMiddleware_opDescribeDBClusterSnapshots(region string) *a
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeDBClusterSnapshots",
 	}
 }

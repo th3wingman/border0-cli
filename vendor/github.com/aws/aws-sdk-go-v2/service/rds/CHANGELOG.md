@@ -1,3 +1,115 @@
+# v1.63.1 (2023-11-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.63.0 (2023-11-17)
+
+* **Feature**: This release adds support for option groups and replica enhancements to Amazon RDS Custom.
+
+# v1.62.4 (2023-11-15)
+
+* **Documentation**: Updates Amazon RDS documentation for support for upgrading RDS for MySQL snapshots from version 5.7 to version 8.0.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.62.3 (2023-11-10)
+
+* **Documentation**: Updates Amazon RDS documentation for zero-ETL integrations.
+
+# v1.62.2 (2023-11-09)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.62.1 (2023-11-08)
+
+* **Documentation**: This Amazon RDS release adds support for patching the OS of an RDS Custom for Oracle DB instance. You can now upgrade the database or operating system using the modify-db-instance command.
+
+# v1.62.0 (2023-11-07)
+
+* **Feature**: This Amazon RDS release adds support for the multi-tenant configuration. In this configuration, an RDS DB instance can contain multiple tenant databases. In RDS for Oracle, a tenant database is a pluggable database (PDB).
+
+# v1.61.0 (2023-11-01)
+
+* **Feature**: Adds support for configured endpoints via environment variables and the AWS shared configuration file.
+* **Feature**: This release adds support for customized networking resources to Amazon RDS Custom.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.60.0 (2023-10-31)
+
+* **Feature**: **BREAKING CHANGE**: Bump minimum go version to 1.19 per the revised [go version support policy](https://aws.amazon.com/blogs/developer/aws-sdk-for-go-aligns-with-go-release-policy-on-supported-runtimes/).
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.59.0 (2023-10-30)
+
+* **Feature**: This release launches the CreateIntegration, DeleteIntegration, and DescribeIntegrations APIs to manage zero-ETL Integrations.
+
+# v1.58.0 (2023-10-24)
+
+* **Feature**: **BREAKFIX**: Correct nullability and default value representation of various input fields across a large number of services. Calling code that references one or more of the affected fields will need to update usage accordingly. See [2162](https://github.com/aws/aws-sdk-go-v2/issues/2162).
+
+# v1.57.0 (2023-10-18)
+
+* **Feature**: This release adds support for upgrading the storage file system configuration on the DB instance using a blue/green deployment or a read replica.
+
+# v1.56.0 (2023-10-12)
+
+* **Feature**: This release adds support for adding a dedicated log volume to open-source RDS instances.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.2 (2023-10-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.1 (2023-10-05)
+
+* **Documentation**: Updates Amazon RDS documentation for corrections and minor improvements.
+
+# v1.55.0 (2023-10-02)
+
+* **Feature**: Adds DefaultCertificateForNewLaunches field in the DescribeCertificates API response.
+
+# v1.54.0 (2023-09-05)
+
+* **Feature**: Add support for feature integration with AWS Backup.
+
+# v1.53.0 (2023-08-24)
+
+* **Feature**: This release updates the supported versions for Percona XtraBackup in Aurora MySQL.
+
+# v1.52.0 (2023-08-22)
+
+* **Feature**: Adding parameters to CreateCustomDbEngineVersion reserved for future use.
+
+# v1.51.0 (2023-08-21)
+
+* **Feature**: Adding support for RDS Aurora Global Database Unplanned Failover
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.50.3 (2023-08-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.50.2 (2023-08-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.50.1 (2023-08-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.50.0 (2023-08-01)
+
+* **Feature**: Added support for deleted clusters PiTR.
+
+# v1.49.0 (2023-07-31)
+
+* **Feature**: Adds support for smithy-modeled endpoint resolution. A new rules-based endpoint resolution will be added to the SDK which will supercede and deprecate existing endpoint resolution. Specifically, EndpointResolver will be deprecated while BaseEndpoint and EndpointResolverV2 will take its place. For more information, please see the Endpoints section in our Developer Guide.
+* **Feature**: This release adds support for Aurora MySQL local write forwarding, which allows for forwarding of write operations from reader DB instances to the writer DB instance.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.48.1 (2023-07-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.48.0 (2023-07-25)
 
 * **Feature**: This release adds support for monitoring storage optimization progress on the DescribeDBInstances API.

@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/smithy-go/middleware"
@@ -54,14 +55,14 @@ type BacktrackDBClusterInput struct {
 	// This member is required.
 	DBClusterIdentifier *string
 
-	// A value that indicates whether to force the DB cluster to backtrack when binary
-	// logging is enabled. Otherwise, an error occurs when binary logging is enabled.
+	// Specifies whether to force the DB cluster to backtrack when binary logging is
+	// enabled. Otherwise, an error occurs when binary logging is enabled.
 	Force *bool
 
-	// A value that indicates whether to backtrack the DB cluster to the earliest
-	// possible backtrack time when BacktrackTo is set to a timestamp earlier than the
-	// earliest backtrack time. When this parameter is disabled and BacktrackTo is set
-	// to a timestamp earlier than the earliest backtrack time, an error occurs.
+	// Specifies whether to backtrack the DB cluster to the earliest possible
+	// backtrack time when BacktrackTo is set to a timestamp earlier than the earliest
+	// backtrack time. When this parameter is disabled and BacktrackTo is set to a
+	// timestamp earlier than the earliest backtrack time, an error occurs.
 	UseEarliestTimeOnPointInTimeUnavailable *bool
 
 	noSmithyDocumentSerde
@@ -105,12 +106,22 @@ type BacktrackDBClusterOutput struct {
 }
 
 func (c *Client) addOperationBacktrackDBClusterMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpBacktrackDBCluster{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpBacktrackDBCluster{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "BacktrackDBCluster"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -131,9 +142,6 @@ func (c *Client) addOperationBacktrackDBClusterMiddlewares(stack *middleware.Sta
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -147,6 +155,9 @@ func (c *Client) addOperationBacktrackDBClusterMiddlewares(stack *middleware.Sta
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpBacktrackDBClusterValidationMiddleware(stack); err != nil {
@@ -167,6 +178,9 @@ func (c *Client) addOperationBacktrackDBClusterMiddlewares(stack *middleware.Sta
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -174,7 +188,6 @@ func newServiceMetadataMiddleware_opBacktrackDBCluster(region string) *awsmiddle
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "BacktrackDBCluster",
 	}
 }

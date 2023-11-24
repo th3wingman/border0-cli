@@ -64,14 +64,14 @@ type CopyDBSnapshotInput struct {
 	// This member is required.
 	TargetDBSnapshotIdentifier *string
 
-	// A value that indicates whether to copy the DB option group associated with the
-	// source DB snapshot to the target Amazon Web Services account and associate with
-	// the target DB snapshot. The associated option group can be copied only with
-	// cross-account snapshot copy calls.
+	// Specifies whether to copy the DB option group associated with the source DB
+	// snapshot to the target Amazon Web Services account and associate with the target
+	// DB snapshot. The associated option group can be copied only with cross-account
+	// snapshot copy calls.
 	CopyOptionGroup *bool
 
-	// A value that indicates whether to copy all tags from the source DB snapshot to
-	// the target DB snapshot. By default, tags aren't copied.
+	// Specifies whether to copy all tags from the source DB snapshot to the target DB
+	// snapshot. By default, tags aren't copied.
 	CopyTags *bool
 
 	// The Amazon Web Services KMS key identifier for an encrypted DB snapshot. The
@@ -176,12 +176,22 @@ type CopyDBSnapshotOutput struct {
 }
 
 func (c *Client) addOperationCopyDBSnapshotMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCopyDBSnapshot{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCopyDBSnapshot{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CopyDBSnapshot"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -202,9 +212,6 @@ func (c *Client) addOperationCopyDBSnapshotMiddlewares(stack *middleware.Stack, 
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -223,6 +230,9 @@ func (c *Client) addOperationCopyDBSnapshotMiddlewares(stack *middleware.Stack, 
 	if err = addCopyDBSnapshotPresignURLMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = addOpCopyDBSnapshotValidationMiddleware(stack); err != nil {
 		return err
 	}
@@ -239,6 +249,9 @@ func (c *Client) addOperationCopyDBSnapshotMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -327,7 +340,6 @@ func newServiceMetadataMiddleware_opCopyDBSnapshot(region string) *awsmiddleware
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CopyDBSnapshot",
 	}
 }

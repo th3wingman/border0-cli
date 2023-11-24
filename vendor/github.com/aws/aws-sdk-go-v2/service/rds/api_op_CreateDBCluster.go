@@ -188,6 +188,11 @@ type CreateDBClusterInput struct {
 	// in the Amazon Aurora User Guide. Valid for Cluster Type: Aurora DB clusters only
 	EnableIAMDatabaseAuthentication *bool
 
+	// Specifies whether read replicas can forward write operations to the writer DB
+	// instance in the DB cluster. By default, write operations aren't allowed on
+	// reader DB instances. Valid for: Aurora DB clusters only
+	EnableLocalWriteForwarding *bool
+
 	// Specifies whether to turn on Performance Insights for the DB cluster. For more
 	// information, see Using Amazon Performance Insights (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PerfInsights.html)
 	// in the Amazon RDS User Guide. Valid for Cluster Type: Multi-AZ DB clusters only
@@ -436,6 +441,9 @@ type CreateDBClusterInput struct {
 	//   it, the DB cluster is public.
 	PubliclyAccessible *bool
 
+	// Reserved for future use.
+	RdsCustomClusterConfiguration *types.RdsCustomClusterConfiguration
+
 	// The Amazon Resource Name (ARN) of the source DB instance or DB cluster if this
 	// DB cluster is created as a read replica. Valid for Cluster Type: Aurora DB
 	// clusters and Multi-AZ DB clusters
@@ -471,6 +479,9 @@ type CreateDBClusterInput struct {
 	// Default:
 	//   - Aurora DB clusters - aurora
 	//   - Multi-AZ DB clusters - io1
+	// When you create an Aurora DB cluster with the storage type set to aurora-iopt1 ,
+	// the storage type is returned in the response. The storage type isn't returned
+	// when you set it to aurora .
 	StorageType *string
 
 	// Tags to assign to the DB cluster. Valid for Cluster Type: Aurora DB clusters
@@ -513,12 +524,22 @@ type CreateDBClusterOutput struct {
 }
 
 func (c *Client) addOperationCreateDBClusterMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateDBCluster{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCreateDBCluster{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateDBCluster"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -539,9 +560,6 @@ func (c *Client) addOperationCreateDBClusterMiddlewares(stack *middleware.Stack,
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -560,6 +578,9 @@ func (c *Client) addOperationCreateDBClusterMiddlewares(stack *middleware.Stack,
 	if err = addCreateDBClusterPresignURLMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = addOpCreateDBClusterValidationMiddleware(stack); err != nil {
 		return err
 	}
@@ -576,6 +597,9 @@ func (c *Client) addOperationCreateDBClusterMiddlewares(stack *middleware.Stack,
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -664,7 +688,6 @@ func newServiceMetadataMiddleware_opCreateDBCluster(region string) *awsmiddlewar
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CreateDBCluster",
 	}
 }

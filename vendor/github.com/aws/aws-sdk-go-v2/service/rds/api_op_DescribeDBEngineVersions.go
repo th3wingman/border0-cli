@@ -12,7 +12,7 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Returns a list of the available DB engines.
+// Describes the properties of specific versions of DB engines.
 func (c *Client) DescribeDBEngineVersions(ctx context.Context, params *DescribeDBEngineVersionsInput, optFns ...func(*Options)) (*DescribeDBEngineVersionsOutput, error) {
 	if params == nil {
 		params = &DescribeDBEngineVersionsInput{}
@@ -32,14 +32,14 @@ type DescribeDBEngineVersionsInput struct {
 
 	// The name of a specific DB parameter group family to return details for.
 	// Constraints:
-	//   - If supplied, must match an existing DBParameterGroupFamily.
+	//   - If supplied, must match an existing DB parameter group family.
 	DBParameterGroupFamily *string
 
-	// A value that indicates whether only the default version of the specified engine
-	// or engine and major version combination is returned.
-	DefaultOnly bool
+	// Specifies whether to return only the default version of the specified engine or
+	// the engine and major version combination.
+	DefaultOnly *bool
 
-	// The database engine to return. Valid Values:
+	// The database engine to return version details for. Valid Values:
 	//   - aurora-mysql
 	//   - aurora-postgresql
 	//   - custom-oracle-ee
@@ -56,7 +56,7 @@ type DescribeDBEngineVersionsInput struct {
 	//   - sqlserver-web
 	Engine *string
 
-	// The database engine version to return. Example: 5.1.49
+	// A specific database engine version to return details for. Example: 5.1.49
 	EngineVersion *string
 
 	// A filter that specifies one or more DB engine versions to describe. Supported
@@ -83,24 +83,24 @@ type DescribeDBEngineVersionsInput struct {
 	//   - deprecated
 	Filters []types.Filter
 
-	// A value that indicates whether to include engine versions that aren't available
-	// in the list. The default is to list only available engine versions.
+	// Specifies whether to also list the engine versions that aren't available. The
+	// default is to list only available engine versions.
 	IncludeAll *bool
 
-	// A value that indicates whether to list the supported character sets for each
-	// engine version. If this parameter is enabled and the requested engine supports
-	// the CharacterSetName parameter for CreateDBInstance , the response includes a
-	// list of supported character sets for each engine version. For RDS Custom, the
-	// default is not to list supported character sets. If you set
-	// ListSupportedCharacterSets to true , RDS Custom returns no results.
+	// Specifies whether to list the supported character sets for each engine version.
+	// If this parameter is enabled and the requested engine supports the
+	// CharacterSetName parameter for CreateDBInstance , the response includes a list
+	// of supported character sets for each engine version. For RDS Custom, the default
+	// is not to list supported character sets. If you enable this parameter, RDS
+	// Custom returns no results.
 	ListSupportedCharacterSets *bool
 
-	// A value that indicates whether to list the supported time zones for each engine
-	// version. If this parameter is enabled and the requested engine supports the
-	// TimeZone parameter for CreateDBInstance , the response includes a list of
-	// supported time zones for each engine version. For RDS Custom, the default is not
-	// to list supported time zones. If you set ListSupportedTimezones to true , RDS
-	// Custom returns no results.
+	// Specifies whether to list the supported time zones for each engine version. If
+	// this parameter is enabled and the requested engine supports the TimeZone
+	// parameter for CreateDBInstance , the response includes a list of supported time
+	// zones for each engine version. For RDS Custom, the default is not to list
+	// supported time zones. If you enable this parameter, RDS Custom returns no
+	// results.
 	ListSupportedTimezones *bool
 
 	// An optional pagination token provided by a previous request. If this parameter
@@ -136,12 +136,22 @@ type DescribeDBEngineVersionsOutput struct {
 }
 
 func (c *Client) addOperationDescribeDBEngineVersionsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeDBEngineVersions{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeDBEngineVersions{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeDBEngineVersions"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -162,9 +172,6 @@ func (c *Client) addOperationDescribeDBEngineVersionsMiddlewares(stack *middlewa
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -178,6 +185,9 @@ func (c *Client) addOperationDescribeDBEngineVersionsMiddlewares(stack *middlewa
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeDBEngineVersionsValidationMiddleware(stack); err != nil {
@@ -196,6 +206,9 @@ func (c *Client) addOperationDescribeDBEngineVersionsMiddlewares(stack *middlewa
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -300,7 +313,6 @@ func newServiceMetadataMiddleware_opDescribeDBEngineVersions(region string) *aws
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeDBEngineVersions",
 	}
 }

@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -39,17 +40,17 @@ type ModifyDBSnapshotInput struct {
 
 	// The engine version to upgrade the DB snapshot to. The following are the
 	// database engines and engine versions that are available when you upgrade a DB
-	// snapshot. MySQL
-	//   - 5.5.46 (supported for 5.1 DB snapshots)
-	// Oracle
+	// snapshot. MySQL For the list of engine versions that are available for upgrading
+	// a DB snapshot, see Upgrading a MySQL DB snapshot engine version (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/mysql-upgrade-snapshot.html)
+	// in the Amazon RDS User Guide. Oracle
 	//   - 19.0.0.0.ru-2022-01.rur-2022-01.r1 (supported for 12.2.0.1 DB snapshots)
 	//   - 19.0.0.0.ru-2022-07.rur-2022-07.r1 (supported for 12.1.0.2 DB snapshots)
 	//   - 12.1.0.2.v8 (supported for 12.1.0.1 DB snapshots)
 	//   - 11.2.0.4.v12 (supported for 11.2.0.2 DB snapshots)
 	//   - 11.2.0.4.v11 (supported for 11.2.0.3 DB snapshots)
 	// PostgreSQL For the list of engine versions that are available for upgrading a
-	// DB snapshot, see Upgrading the PostgreSQL DB Engine for Amazon RDS (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_UpgradeDBInstance.PostgreSQL.html#USER_UpgradeDBInstance.PostgreSQL.MajorVersion)
-	// .
+	// DB snapshot, see Upgrading a PostgreSQL DB snapshot engine version (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_UpgradeDBSnapshot.PostgreSQL.html)
+	// in the Amazon RDS User Guide.
 	EngineVersion *string
 
 	// The option group to identify with the upgraded DB snapshot. You can specify
@@ -75,12 +76,22 @@ type ModifyDBSnapshotOutput struct {
 }
 
 func (c *Client) addOperationModifyDBSnapshotMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpModifyDBSnapshot{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpModifyDBSnapshot{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyDBSnapshot"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -101,9 +112,6 @@ func (c *Client) addOperationModifyDBSnapshotMiddlewares(stack *middleware.Stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -117,6 +125,9 @@ func (c *Client) addOperationModifyDBSnapshotMiddlewares(stack *middleware.Stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpModifyDBSnapshotValidationMiddleware(stack); err != nil {
@@ -137,6 +148,9 @@ func (c *Client) addOperationModifyDBSnapshotMiddlewares(stack *middleware.Stack
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -144,7 +158,6 @@ func newServiceMetadataMiddleware_opModifyDBSnapshot(region string) *awsmiddlewa
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ModifyDBSnapshot",
 	}
 }

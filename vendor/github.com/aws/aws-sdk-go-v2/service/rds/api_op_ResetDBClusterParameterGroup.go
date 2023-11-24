@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -51,10 +52,10 @@ type ResetDBClusterParameterGroupInput struct {
 	// parameter is enabled.
 	Parameters []types.Parameter
 
-	// A value that indicates whether to reset all parameters in the DB cluster
-	// parameter group to their default values. You can't use this parameter if there
-	// is a list of parameter names specified for the Parameters parameter.
-	ResetAllParameters bool
+	// Specifies whether to reset all parameters in the DB cluster parameter group to
+	// their default values. You can't use this parameter if there is a list of
+	// parameter names specified for the Parameters parameter.
+	ResetAllParameters *bool
 
 	noSmithyDocumentSerde
 }
@@ -75,12 +76,22 @@ type ResetDBClusterParameterGroupOutput struct {
 }
 
 func (c *Client) addOperationResetDBClusterParameterGroupMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpResetDBClusterParameterGroup{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpResetDBClusterParameterGroup{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ResetDBClusterParameterGroup"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -101,9 +112,6 @@ func (c *Client) addOperationResetDBClusterParameterGroupMiddlewares(stack *midd
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -117,6 +125,9 @@ func (c *Client) addOperationResetDBClusterParameterGroupMiddlewares(stack *midd
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpResetDBClusterParameterGroupValidationMiddleware(stack); err != nil {
@@ -137,6 +148,9 @@ func (c *Client) addOperationResetDBClusterParameterGroupMiddlewares(stack *midd
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -144,7 +158,6 @@ func newServiceMetadataMiddleware_opResetDBClusterParameterGroup(region string) 
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ResetDBClusterParameterGroup",
 	}
 }

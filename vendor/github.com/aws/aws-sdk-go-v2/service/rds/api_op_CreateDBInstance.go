@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -281,6 +282,9 @@ type CreateDBInstanceInput struct {
 	// The Oracle SID is also the name of your CDB.
 	DBSystemId *string
 
+	// Indicates whether the DB instance has a dedicated log volume (DLV) enabled.
+	DedicatedLogVolume *bool
+
 	// Specifies whether the DB instance has deletion protection enabled. The database
 	// can't be deleted when deletion protection is enabled. By default, deletion
 	// protection isn't enabled. For more information, see Deleting a DB Instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_DeleteInstance.html)
@@ -448,7 +452,9 @@ type CreateDBInstanceInput struct {
 	// DB instances. The password for the master user is managed by the DB cluster.
 	// Constraints:
 	//   - Can't be specified if ManageMasterUserPassword is turned on.
-	//   - Can include any printable ASCII character except "/", """, or "@".
+	//   - Can include any printable ASCII character except "/", """, or "@". For RDS
+	//   for Oracle, can't include the "&" (ampersand) or the "'" (single quotes)
+	//   character.
 	// Length Constraints:
 	//   - RDS for MariaDB - Must contain from 8 to 41 characters.
 	//   - RDS for Microsoft SQL Server - Must contain from 8 to 128 characters.
@@ -513,6 +519,17 @@ type CreateDBInstanceInput struct {
 	//   cluster.)
 	//   - RDS Custom
 	MultiAZ *bool
+
+	// Specifies whether to use the multi-tenant configuration or the single-tenant
+	// configuration (default). This parameter only applies to RDS for Oracle container
+	// database (CDB) engines. Note the following restrictions:
+	//   - The DB engine that you specify in the request must support the multi-tenant
+	//   configuration. If you attempt to enable the multi-tenant configuration on a DB
+	//   engine that doesn't support it, the request fails.
+	//   - If you specify the multi-tenant configuration when you create your DB
+	//   instance, you can't later modify this DB instance to use the single-tenant
+	//   configuration.
+	MultiTenant *bool
 
 	// The name of the NCHAR character set for the Oracle DB instance. This setting
 	// doesn't apply to RDS Custom DB instances.
@@ -686,12 +703,22 @@ type CreateDBInstanceOutput struct {
 }
 
 func (c *Client) addOperationCreateDBInstanceMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateDBInstance{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCreateDBInstance{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateDBInstance"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -712,9 +739,6 @@ func (c *Client) addOperationCreateDBInstanceMiddlewares(stack *middleware.Stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -728,6 +752,9 @@ func (c *Client) addOperationCreateDBInstanceMiddlewares(stack *middleware.Stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateDBInstanceValidationMiddleware(stack); err != nil {
@@ -748,6 +775,9 @@ func (c *Client) addOperationCreateDBInstanceMiddlewares(stack *middleware.Stack
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -755,7 +785,6 @@ func newServiceMetadataMiddleware_opCreateDBInstance(region string) *awsmiddlewa
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CreateDBInstance",
 	}
 }

@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -89,9 +90,20 @@ type CreateCustomDBEngineVersionInput struct {
 	// in the Amazon RDS User Guide.
 	Manifest *string
 
+	// The ARN of a CEV to use as a source for creating a new CEV. You can specify a
+	// different Amazon Machine Imagine (AMI) by using either Source or
+	// UseAwsProvidedLatestImage . You can't specify a different JSON manifest when you
+	// specify SourceCustomDbEngineVersionIdentifier .
+	SourceCustomDbEngineVersionIdentifier *string
+
 	// A list of tags. For more information, see Tagging Amazon RDS Resources (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Tagging.html)
 	// in the Amazon RDS User Guide.
 	Tags []types.Tag
+
+	// Specifies whether to use the latest service-provided Amazon Machine Image (AMI)
+	// for the CEV. If you specify UseAwsProvidedLatestImage , you can't also specify
+	// ImageId .
+	UseAwsProvidedLatestImage *bool
 
 	noSmithyDocumentSerde
 }
@@ -193,28 +205,37 @@ type CreateCustomDBEngineVersionOutput struct {
 	// the CreateDBInstance action.
 	SupportedTimezones []types.Timezone
 
-	// A value that indicates whether the engine version supports Babelfish for Aurora
-	// PostgreSQL.
-	SupportsBabelfish bool
+	// Indicates whether the engine version supports Babelfish for Aurora PostgreSQL.
+	SupportsBabelfish *bool
 
-	// A value that indicates whether the engine version supports rotating the server
-	// certificate without rebooting the DB instance.
+	// Indicates whether the engine version supports rotating the server certificate
+	// without rebooting the DB instance.
 	SupportsCertificateRotationWithoutRestart *bool
 
-	// A value that indicates whether you can use Aurora global databases with a
-	// specific DB engine version.
-	SupportsGlobalDatabases bool
+	// Indicates whether you can use Aurora global databases with a specific DB engine
+	// version.
+	SupportsGlobalDatabases *bool
 
-	// A value that indicates whether the engine version supports exporting the log
-	// types specified by ExportableLogTypes to CloudWatch Logs.
-	SupportsLogExportsToCloudwatchLogs bool
+	// Indicates whether the DB engine version supports zero-ETL integrations with
+	// Amazon Redshift.
+	SupportsIntegrations *bool
 
-	// A value that indicates whether you can use Aurora parallel query with a
-	// specific DB engine version.
-	SupportsParallelQuery bool
+	// Indicates whether the DB engine version supports forwarding write operations
+	// from reader DB instances to the writer DB instance in the DB cluster. By
+	// default, write operations aren't allowed on reader DB instances. Valid for:
+	// Aurora DB clusters only
+	SupportsLocalWriteForwarding *bool
+
+	// Indicates whether the engine version supports exporting the log types specified
+	// by ExportableLogTypes to CloudWatch Logs.
+	SupportsLogExportsToCloudwatchLogs *bool
+
+	// Indicates whether you can use Aurora parallel query with a specific DB engine
+	// version.
+	SupportsParallelQuery *bool
 
 	// Indicates whether the database engine version supports read replicas.
-	SupportsReadReplica bool
+	SupportsReadReplica *bool
 
 	// A list of tags. For more information, see Tagging Amazon RDS Resources (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Tagging.html)
 	// in the Amazon RDS User Guide.
@@ -230,12 +251,22 @@ type CreateCustomDBEngineVersionOutput struct {
 }
 
 func (c *Client) addOperationCreateCustomDBEngineVersionMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateCustomDBEngineVersion{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCreateCustomDBEngineVersion{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateCustomDBEngineVersion"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -256,9 +287,6 @@ func (c *Client) addOperationCreateCustomDBEngineVersionMiddlewares(stack *middl
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -272,6 +300,9 @@ func (c *Client) addOperationCreateCustomDBEngineVersionMiddlewares(stack *middl
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateCustomDBEngineVersionValidationMiddleware(stack); err != nil {
@@ -292,6 +323,9 @@ func (c *Client) addOperationCreateCustomDBEngineVersionMiddlewares(stack *middl
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -299,7 +333,6 @@ func newServiceMetadataMiddleware_opCreateCustomDBEngineVersion(region string) *
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CreateCustomDBEngineVersion",
 	}
 }

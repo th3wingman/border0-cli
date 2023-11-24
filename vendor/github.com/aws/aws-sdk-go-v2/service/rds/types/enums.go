@@ -310,6 +310,25 @@ func (FailoverStatus) Values() []FailoverStatus {
 	}
 }
 
+type GlobalClusterMemberSynchronizationStatus string
+
+// Enum values for GlobalClusterMemberSynchronizationStatus
+const (
+	GlobalClusterMemberSynchronizationStatusConnected     GlobalClusterMemberSynchronizationStatus = "connected"
+	GlobalClusterMemberSynchronizationStatusPendingResync GlobalClusterMemberSynchronizationStatus = "pending-resync"
+)
+
+// Values returns all known values for GlobalClusterMemberSynchronizationStatus.
+// Note that this can be expanded in the future, and so it is only as up to date as
+// the client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (GlobalClusterMemberSynchronizationStatus) Values() []GlobalClusterMemberSynchronizationStatus {
+	return []GlobalClusterMemberSynchronizationStatus{
+		"connected",
+		"pending-resync",
+	}
+}
+
 type IAMAuthMode string
 
 // Enum values for IAMAuthMode
@@ -327,6 +346,58 @@ func (IAMAuthMode) Values() []IAMAuthMode {
 		"DISABLED",
 		"REQUIRED",
 		"ENABLED",
+	}
+}
+
+type IntegrationStatus string
+
+// Enum values for IntegrationStatus
+const (
+	IntegrationStatusCreating       IntegrationStatus = "creating"
+	IntegrationStatusActive         IntegrationStatus = "active"
+	IntegrationStatusModifying      IntegrationStatus = "modifying"
+	IntegrationStatusFailed         IntegrationStatus = "failed"
+	IntegrationStatusDeleting       IntegrationStatus = "deleting"
+	IntegrationStatusSyncing        IntegrationStatus = "syncing"
+	IntegrationStatusNeedsAttention IntegrationStatus = "needs_attention"
+)
+
+// Values returns all known values for IntegrationStatus. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IntegrationStatus) Values() []IntegrationStatus {
+	return []IntegrationStatus{
+		"creating",
+		"active",
+		"modifying",
+		"failed",
+		"deleting",
+		"syncing",
+		"needs_attention",
+	}
+}
+
+type LocalWriteForwardingStatus string
+
+// Enum values for LocalWriteForwardingStatus
+const (
+	LocalWriteForwardingStatusEnabled   LocalWriteForwardingStatus = "enabled"
+	LocalWriteForwardingStatusDisabled  LocalWriteForwardingStatus = "disabled"
+	LocalWriteForwardingStatusEnabling  LocalWriteForwardingStatus = "enabling"
+	LocalWriteForwardingStatusDisabling LocalWriteForwardingStatus = "disabling"
+	LocalWriteForwardingStatusRequested LocalWriteForwardingStatus = "requested"
+)
+
+// Values returns all known values for LocalWriteForwardingStatus. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (LocalWriteForwardingStatus) Values() []LocalWriteForwardingStatus {
+	return []LocalWriteForwardingStatus{
+		"enabled",
+		"disabled",
+		"enabling",
+		"disabling",
+		"requested",
 	}
 }
 

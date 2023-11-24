@@ -12,9 +12,9 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Lists the set of CA certificates provided by Amazon RDS for this Amazon Web
-// Services account. For more information, see Using SSL/TLS to encrypt a
-// connection to a DB instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)
+// Lists the set of certificate authority (CA) certificates provided by Amazon RDS
+// for this Amazon Web Services account. For more information, see Using SSL/TLS
+// to encrypt a connection to a DB instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)
 // in the Amazon RDS User Guide and Using SSL/TLS to encrypt a connection to a DB
 // cluster (https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.SSL.html)
 // in the Amazon Aurora User Guide.
@@ -64,6 +64,12 @@ type DescribeCertificatesOutput struct {
 	// The list of Certificate objects for the Amazon Web Services account.
 	Certificates []types.Certificate
 
+	// The default root CA for new databases created by your Amazon Web Services
+	// account. This is either the root CA override set on your Amazon Web Services
+	// account or the system default CA for the Region if no override exists. To
+	// override the default CA, use the ModifyCertificates operation.
+	DefaultCertificateForNewLaunches *string
+
 	// An optional pagination token provided by a previous DescribeCertificates
 	// request. If this parameter is specified, the response includes only records
 	// beyond the marker, up to the value specified by MaxRecords .
@@ -76,12 +82,22 @@ type DescribeCertificatesOutput struct {
 }
 
 func (c *Client) addOperationDescribeCertificatesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeCertificates{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeCertificates{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeCertificates"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -102,9 +118,6 @@ func (c *Client) addOperationDescribeCertificatesMiddlewares(stack *middleware.S
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -118,6 +131,9 @@ func (c *Client) addOperationDescribeCertificatesMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeCertificatesValidationMiddleware(stack); err != nil {
@@ -136,6 +152,9 @@ func (c *Client) addOperationDescribeCertificatesMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -239,7 +258,6 @@ func newServiceMetadataMiddleware_opDescribeCertificates(region string) *awsmidd
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeCertificates",
 	}
 }
