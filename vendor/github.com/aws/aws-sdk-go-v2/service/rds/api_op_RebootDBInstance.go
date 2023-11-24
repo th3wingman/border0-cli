@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -45,9 +46,9 @@ type RebootDBInstanceInput struct {
 	// This member is required.
 	DBInstanceIdentifier *string
 
-	// A value that indicates whether the reboot is conducted through a Multi-AZ
-	// failover. Constraint: You can't enable force failover if the instance isn't
-	// configured for Multi-AZ.
+	// Specifies whether the reboot is conducted through a Multi-AZ failover.
+	// Constraint: You can't enable force failover if the instance isn't configured for
+	// Multi-AZ.
 	ForceFailover *bool
 
 	noSmithyDocumentSerde
@@ -70,12 +71,22 @@ type RebootDBInstanceOutput struct {
 }
 
 func (c *Client) addOperationRebootDBInstanceMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpRebootDBInstance{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpRebootDBInstance{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "RebootDBInstance"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -96,9 +107,6 @@ func (c *Client) addOperationRebootDBInstanceMiddlewares(stack *middleware.Stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -112,6 +120,9 @@ func (c *Client) addOperationRebootDBInstanceMiddlewares(stack *middleware.Stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpRebootDBInstanceValidationMiddleware(stack); err != nil {
@@ -132,6 +143,9 @@ func (c *Client) addOperationRebootDBInstanceMiddlewares(stack *middleware.Stack
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -139,7 +153,6 @@ func newServiceMetadataMiddleware_opRebootDBInstance(region string) *awsmiddlewa
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "RebootDBInstance",
 	}
 }

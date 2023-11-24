@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -30,14 +31,14 @@ func (c *Client) ApplyPendingMaintenanceAction(ctx context.Context, params *Appl
 
 type ApplyPendingMaintenanceActionInput struct {
 
-	// The pending maintenance action to apply to this resource. Valid values:
+	// The pending maintenance action to apply to this resource. Valid Values:
 	// system-update , db-upgrade , hardware-maintenance , ca-certificate-rotation
 	//
 	// This member is required.
 	ApplyAction *string
 
 	// A value that specifies the type of opt-in request, or undoes an opt-in request.
-	// An opt-in request of type immediate can't be undone. Valid values:
+	// An opt-in request of type immediate can't be undone. Valid Values:
 	//   - immediate - Apply the maintenance action immediately.
 	//   - next-maintenance - Apply the maintenance action during the next maintenance
 	//   window for the resource.
@@ -69,12 +70,22 @@ type ApplyPendingMaintenanceActionOutput struct {
 }
 
 func (c *Client) addOperationApplyPendingMaintenanceActionMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpApplyPendingMaintenanceAction{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpApplyPendingMaintenanceAction{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ApplyPendingMaintenanceAction"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -95,9 +106,6 @@ func (c *Client) addOperationApplyPendingMaintenanceActionMiddlewares(stack *mid
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -111,6 +119,9 @@ func (c *Client) addOperationApplyPendingMaintenanceActionMiddlewares(stack *mid
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpApplyPendingMaintenanceActionValidationMiddleware(stack); err != nil {
@@ -131,6 +142,9 @@ func (c *Client) addOperationApplyPendingMaintenanceActionMiddlewares(stack *mid
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -138,7 +152,6 @@ func newServiceMetadataMiddleware_opApplyPendingMaintenanceAction(region string)
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ApplyPendingMaintenanceAction",
 	}
 }

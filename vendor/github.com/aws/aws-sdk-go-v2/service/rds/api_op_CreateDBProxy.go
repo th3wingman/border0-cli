@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -63,24 +64,24 @@ type CreateDBProxyInput struct {
 	// This member is required.
 	VpcSubnetIds []string
 
-	// Whether the proxy includes detailed information about SQL statements in its
-	// logs. This information helps you to debug issues involving SQL behavior or the
-	// performance and scalability of the proxy connections. The debug information
-	// includes the text of SQL statements that you submit through the proxy. Thus,
-	// only enable this setting when needed for debugging, and only when you have
-	// security measures in place to safeguard any sensitive information that appears
-	// in the logs.
-	DebugLogging bool
+	// Specifies whether the proxy includes detailed information about SQL statements
+	// in its logs. This information helps you to debug issues involving SQL behavior
+	// or the performance and scalability of the proxy connections. The debug
+	// information includes the text of SQL statements that you submit through the
+	// proxy. Thus, only enable this setting when needed for debugging, and only when
+	// you have security measures in place to safeguard any sensitive information that
+	// appears in the logs.
+	DebugLogging *bool
 
 	// The number of seconds that a connection to the proxy can be inactive before the
 	// proxy disconnects it. You can set this value higher or lower than the connection
 	// timeout limit for the associated database.
 	IdleClientTimeout *int32
 
-	// A Boolean parameter that specifies whether Transport Layer Security (TLS)
-	// encryption is required for connections to the proxy. By enabling this setting,
-	// you can enforce encrypted TLS connections to the proxy.
-	RequireTLS bool
+	// Specifies whether Transport Layer Security (TLS) encryption is required for
+	// connections to the proxy. By enabling this setting, you can enforce encrypted
+	// TLS connections to the proxy.
+	RequireTLS *bool
 
 	// An optional set of key-value pairs to associate arbitrary data of your choosing
 	// with the proxy.
@@ -104,12 +105,22 @@ type CreateDBProxyOutput struct {
 }
 
 func (c *Client) addOperationCreateDBProxyMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateDBProxy{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCreateDBProxy{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateDBProxy"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -130,9 +141,6 @@ func (c *Client) addOperationCreateDBProxyMiddlewares(stack *middleware.Stack, o
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -146,6 +154,9 @@ func (c *Client) addOperationCreateDBProxyMiddlewares(stack *middleware.Stack, o
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateDBProxyValidationMiddleware(stack); err != nil {
@@ -166,6 +177,9 @@ func (c *Client) addOperationCreateDBProxyMiddlewares(stack *middleware.Stack, o
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -173,7 +187,6 @@ func newServiceMetadataMiddleware_opCreateDBProxy(region string) *awsmiddleware.
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CreateDBProxy",
 	}
 }

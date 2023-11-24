@@ -43,7 +43,7 @@ type DescribeDBInstanceAutomatedBackupsInput struct {
 
 	// (Optional) The user-supplied instance identifier. If this parameter is
 	// specified, it must match the identifier of an existing DB instance. It returns
-	// information from the specific DB instance' automated backup. This parameter
+	// information from the specific DB instance's automated backup. This parameter
 	// isn't case-sensitive.
 	DBInstanceIdentifier *string
 
@@ -54,11 +54,11 @@ type DescribeDBInstanceAutomatedBackupsInput struct {
 	// A filter that specifies which resources to return based on status. Supported
 	// filters are the following:
 	//   - status
-	//   - active - automated backups for current instances
-	//   - retained - automated backups for deleted instances and after backup
-	//   replication is stopped
-	//   - creating - automated backups that are waiting for the first automated
-	//   snapshot to be available
+	//   - active - Automated backups for current instances.
+	//   - creating - Automated backups that are waiting for the first automated
+	//   snapshot to be available.
+	//   - retained - Automated backups for deleted instances and after backup
+	//   replication is stopped.
 	//   - db-instance-id - Accepts DB instance identifiers and Amazon Resource Names
 	//   (ARNs). The results list includes only information about the DB instance
 	//   automated backups identified by these ARNs.
@@ -101,12 +101,22 @@ type DescribeDBInstanceAutomatedBackupsOutput struct {
 }
 
 func (c *Client) addOperationDescribeDBInstanceAutomatedBackupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeDBInstanceAutomatedBackups{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeDBInstanceAutomatedBackups{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeDBInstanceAutomatedBackups"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -127,9 +137,6 @@ func (c *Client) addOperationDescribeDBInstanceAutomatedBackupsMiddlewares(stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -143,6 +150,9 @@ func (c *Client) addOperationDescribeDBInstanceAutomatedBackupsMiddlewares(stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeDBInstanceAutomatedBackupsValidationMiddleware(stack); err != nil {
@@ -161,6 +171,9 @@ func (c *Client) addOperationDescribeDBInstanceAutomatedBackupsMiddlewares(stack
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -265,7 +278,6 @@ func newServiceMetadataMiddleware_opDescribeDBInstanceAutomatedBackups(region st
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeDBInstanceAutomatedBackups",
 	}
 }

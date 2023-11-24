@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -37,9 +38,9 @@ type ModifyOptionGroupInput struct {
 	// This member is required.
 	OptionGroupName *string
 
-	// A value that indicates whether to apply the change immediately or during the
-	// next maintenance window for each instance associated with the option group.
-	ApplyImmediately bool
+	// Specifies whether to apply the change immediately or during the next
+	// maintenance window for each instance associated with the option group.
+	ApplyImmediately *bool
 
 	// Options in this list are added to the option group or, if already present, the
 	// specified configuration is used to update the existing configuration.
@@ -63,12 +64,22 @@ type ModifyOptionGroupOutput struct {
 }
 
 func (c *Client) addOperationModifyOptionGroupMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpModifyOptionGroup{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpModifyOptionGroup{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyOptionGroup"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -89,9 +100,6 @@ func (c *Client) addOperationModifyOptionGroupMiddlewares(stack *middleware.Stac
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -105,6 +113,9 @@ func (c *Client) addOperationModifyOptionGroupMiddlewares(stack *middleware.Stac
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpModifyOptionGroupValidationMiddleware(stack); err != nil {
@@ -125,6 +136,9 @@ func (c *Client) addOperationModifyOptionGroupMiddlewares(stack *middleware.Stac
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -132,7 +146,6 @@ func newServiceMetadataMiddleware_opModifyOptionGroup(region string) *awsmiddlew
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ModifyOptionGroup",
 	}
 }

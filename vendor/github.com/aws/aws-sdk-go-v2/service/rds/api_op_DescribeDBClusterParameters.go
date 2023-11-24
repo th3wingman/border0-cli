@@ -55,8 +55,10 @@ type DescribeDBClusterParametersInput struct {
 	// Constraints: Minimum 20, maximum 100.
 	MaxRecords *int32
 
-	// A value that indicates to return only parameters for a specific source.
-	// Parameter sources can be engine , service , or customer .
+	// A specific source to return parameters for. Valid Values:
+	//   - customer
+	//   - engine
+	//   - service
 	Source *string
 
 	noSmithyDocumentSerde
@@ -81,12 +83,22 @@ type DescribeDBClusterParametersOutput struct {
 }
 
 func (c *Client) addOperationDescribeDBClusterParametersMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeDBClusterParameters{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeDBClusterParameters{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeDBClusterParameters"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -107,9 +119,6 @@ func (c *Client) addOperationDescribeDBClusterParametersMiddlewares(stack *middl
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -123,6 +132,9 @@ func (c *Client) addOperationDescribeDBClusterParametersMiddlewares(stack *middl
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeDBClusterParametersValidationMiddleware(stack); err != nil {
@@ -141,6 +153,9 @@ func (c *Client) addOperationDescribeDBClusterParametersMiddlewares(stack *middl
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -246,7 +261,6 @@ func newServiceMetadataMiddleware_opDescribeDBClusterParameters(region string) *
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeDBClusterParameters",
 	}
 }

@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -44,6 +45,11 @@ type DeleteDBClusterInput struct {
 	// This member is required.
 	DBClusterIdentifier *string
 
+	// Specifies whether to remove automated backups immediately after the DB cluster
+	// is deleted. This parameter isn't case-sensitive. The default is to remove
+	// automated backups immediately after the DB cluster is deleted.
+	DeleteAutomatedBackups *bool
+
 	// The DB cluster snapshot identifier of the new DB cluster snapshot created when
 	// SkipFinalSnapshot is disabled. Specifying this parameter and also skipping the
 	// creation of a final DB cluster snapshot with the SkipFinalShapshot parameter
@@ -53,13 +59,13 @@ type DeleteDBClusterInput struct {
 	//   - Can't end with a hyphen or contain two consecutive hyphens
 	FinalDBSnapshotIdentifier *string
 
-	// A value that indicates whether to skip the creation of a final DB cluster
-	// snapshot before the DB cluster is deleted. If skip is specified, no DB cluster
-	// snapshot is created. If skip isn't specified, a DB cluster snapshot is created
-	// before the DB cluster is deleted. By default, skip isn't specified, and the DB
-	// cluster snapshot is created. By default, this parameter is disabled. You must
-	// specify a FinalDBSnapshotIdentifier parameter if SkipFinalSnapshot is disabled.
-	SkipFinalSnapshot bool
+	// Specifies whether to skip the creation of a final DB cluster snapshot before
+	// the DB cluster is deleted. If skip is specified, no DB cluster snapshot is
+	// created. If skip isn't specified, a DB cluster snapshot is created before the DB
+	// cluster is deleted. By default, skip isn't specified, and the DB cluster
+	// snapshot is created. By default, this parameter is disabled. You must specify a
+	// FinalDBSnapshotIdentifier parameter if SkipFinalSnapshot is disabled.
+	SkipFinalSnapshot *bool
 
 	noSmithyDocumentSerde
 }
@@ -89,12 +95,22 @@ type DeleteDBClusterOutput struct {
 }
 
 func (c *Client) addOperationDeleteDBClusterMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDeleteDBCluster{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDeleteDBCluster{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DeleteDBCluster"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -115,9 +131,6 @@ func (c *Client) addOperationDeleteDBClusterMiddlewares(stack *middleware.Stack,
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -131,6 +144,9 @@ func (c *Client) addOperationDeleteDBClusterMiddlewares(stack *middleware.Stack,
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDeleteDBClusterValidationMiddleware(stack); err != nil {
@@ -151,6 +167,9 @@ func (c *Client) addOperationDeleteDBClusterMiddlewares(stack *middleware.Stack,
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -158,7 +177,6 @@ func newServiceMetadataMiddleware_opDeleteDBCluster(region string) *awsmiddlewar
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DeleteDBCluster",
 	}
 }

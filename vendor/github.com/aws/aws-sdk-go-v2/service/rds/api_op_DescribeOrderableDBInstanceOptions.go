@@ -84,9 +84,9 @@ type DescribeOrderableDBInstanceOptionsInput struct {
 	// Default: 100 Constraints: Minimum 20, maximum 10000.
 	MaxRecords *int32
 
-	// A value that indicates whether to show only VPC or non-VPC offerings. RDS
-	// Custom supports only VPC offerings. RDS Custom supports only VPC offerings. If
-	// you describe non-VPC offerings for RDS Custom, the output shows VPC offerings.
+	// Specifies whether to show only VPC or non-VPC offerings. RDS Custom supports
+	// only VPC offerings. RDS Custom supports only VPC offerings. If you describe
+	// non-VPC offerings for RDS Custom, the output shows VPC offerings.
 	Vpc *bool
 
 	noSmithyDocumentSerde
@@ -112,12 +112,22 @@ type DescribeOrderableDBInstanceOptionsOutput struct {
 }
 
 func (c *Client) addOperationDescribeOrderableDBInstanceOptionsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeOrderableDBInstanceOptions{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeOrderableDBInstanceOptions{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeOrderableDBInstanceOptions"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -138,9 +148,6 @@ func (c *Client) addOperationDescribeOrderableDBInstanceOptionsMiddlewares(stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -154,6 +161,9 @@ func (c *Client) addOperationDescribeOrderableDBInstanceOptionsMiddlewares(stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeOrderableDBInstanceOptionsValidationMiddleware(stack); err != nil {
@@ -172,6 +182,9 @@ func (c *Client) addOperationDescribeOrderableDBInstanceOptionsMiddlewares(stack
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -277,7 +290,6 @@ func newServiceMetadataMiddleware_opDescribeOrderableDBInstanceOptions(region st
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeOrderableDBInstanceOptions",
 	}
 }
