@@ -120,8 +120,8 @@ github.com/borderzero/border0-go v1.3.14 h1:uUb09dvE2oXA2D1mcQKkTppVtKvXSKi1HO+n
 github.com/borderzero/border0-go v1.3.14/go.mod h1:Yll5qVCxLLICOwODQEG3O/D5Q7AtuLgbbDoj06shFaQ=
 github.com/borderzero/border0-proto v1.0.19 h1:2L/cg/f7kZpbqxSdx28wsMO/r5ZzDmoD1PWqE870MoY=
 github.com/borderzero/border0-proto v1.0.19/go.mod h1:BhNopgYg3o/p5bYLVcKYISS4S49Ci6iAWNCbQpTzzqs=
-github.com/borderzero/discovery v0.1.27 h1:yGqg/prxQF8Tze8tWcBOTcTQIpjkPyVjz/j4fpFv3WI=
-github.com/borderzero/discovery v0.1.27/go.mod h1:Nek+7cNSiXbLn7dSYygFyAFf5wZUdFVtyZoFbbXP/ZE=
+github.com/borderzero/discovery v0.1.28 h1:9MEMNMU7R9Tsr9BzIDycAb+hafKdLu2QDRZofONA+g0=
+github.com/borderzero/discovery v0.1.28/go.mod h1:Nek+7cNSiXbLn7dSYygFyAFf5wZUdFVtyZoFbbXP/ZE=
 github.com/brianvoe/gofakeit v3.18.0+incompatible h1:wDOmHc9DLG4nRjUVVaxA+CEglKOW72Y5+4WNxUIkjM8=
 github.com/brianvoe/gofakeit v3.18.0+incompatible/go.mod h1:kfwdRA90vvNhPutZWfH7WPaDzUjz+CZFqG+rPkOjGOc=
 github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
