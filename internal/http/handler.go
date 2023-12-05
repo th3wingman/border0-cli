@@ -550,6 +550,11 @@ func GetDeviceAuthorization(sessionToken string) (*models.SessionTokenForm, erro
 	if err != nil {
 		return nil, errors.New("failed to decode device auth response")
 	}
+
+	if form.Token == "" || form.State == "not_authorized" {
+		return nil, ErrUnauthorized
+	}
+
 	return &form, nil
 }
 
