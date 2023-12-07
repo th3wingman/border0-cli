@@ -352,6 +352,7 @@ func (s *kubectlExecSession) handleChannel(
 		s.logger.Error("failed to determine target for remote command executor", zap.Error(err))
 		return
 	}
+	channel.Write([]byte("\r\n")) // reset cursor to beginning of new line
 
 	shells := set.New[string]("bash", "zsh", "ash", "sh")
 	for _, shell := range shells.Slice() {

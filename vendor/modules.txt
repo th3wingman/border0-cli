@@ -174,15 +174,15 @@ github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect/types
 github.com/aws/aws-sdk-go-v2/service/ecs
 github.com/aws/aws-sdk-go-v2/service/ecs/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/ecs/types
-# github.com/aws/aws-sdk-go-v2/service/eks v1.35.2
+# github.com/aws/aws-sdk-go-v2/service/eks v1.35.3
 ## explicit; go 1.19
 github.com/aws/aws-sdk-go-v2/service/eks
 github.com/aws/aws-sdk-go-v2/service/eks/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/eks/types
-# github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.1
+# github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.3
 ## explicit; go 1.19
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
-# github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.4
+# github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.8
 ## explicit; go 1.19
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
 # github.com/aws/aws-sdk-go-v2/service/rds v1.63.1
@@ -210,7 +210,7 @@ github.com/aws/aws-sdk-go-v2/service/sso/types
 github.com/aws/aws-sdk-go-v2/service/ssooidc
 github.com/aws/aws-sdk-go-v2/service/ssooidc/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/ssooidc/types
-# github.com/aws/aws-sdk-go-v2/service/sts v1.25.4
+# github.com/aws/aws-sdk-go-v2/service/sts v1.26.3
 ## explicit; go 1.19
 github.com/aws/aws-sdk-go-v2/service/sts
 github.com/aws/aws-sdk-go-v2/service/sts/internal/endpoints
@@ -274,7 +274,7 @@ github.com/borderzero/border0-go/types/service
 # github.com/borderzero/border0-proto v1.0.19
 ## explicit; go 1.20
 github.com/borderzero/border0-proto/connector
-# github.com/borderzero/discovery v0.1.28
+# github.com/borderzero/discovery v0.1.29
 ## explicit; go 1.20
 github.com/borderzero/discovery
 github.com/borderzero/discovery/discoverers
