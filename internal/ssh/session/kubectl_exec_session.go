@@ -469,42 +469,13 @@ func (s *kubectlExecSession) askForTarget(ctx context.Context, channel ssh.Chann
 		namespace = selectedNamespace
 	}
 
-	// if there is a service allowlist for this namespace, collect services and their selectors
-	compareChosenPodAgainstServiceSelectors := false
-	serviceSelectors := map[string][]string{}
-	serviceAllowlist, serviceAllowlistPresent := s.proxyConfig.KubectlExecProxy.NamespaceServiceAllowlist[namespace]
-	if serviceAllowlistPresent && len(serviceAllowlist) != 0 {
-		serviceSelectorsDedup := map[string]set.Set[string]{}
+	// if there is a selectors allowlist for this namespace
+	compareChosenPodAgainstSelectors := false
+	selectors := map[string][]string{}
 
-		compareChosenPodAgainstServiceSelectors = true
-		listSvcCtx, cancel := context.WithTimeout(ctx, time.Second*5)
-		defer cancel()
-		services, err := clientset.CoreV1().Services(namespace).List(listSvcCtx, metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list services in namespace %s: %v", namespace, err)
-		}
-		for _, svc := range services.Items {
-			if slices.Contains(
-				s.proxyConfig.KubectlExecProxy.NamespaceServiceAllowlist[namespace],
-				svc.Name,
-			) {
-				for selectorKey, selectorValue := range svc.Spec.Selector {
-					if _, ok := serviceSelectorsDedup[selectorKey]; !ok {
-						serviceSelectorsDedup[selectorKey] = set.New[string]()
-					}
-					serviceSelectorsDedup[selectorKey].Add(selectorValue)
-				}
-			}
-		}
-		if len(serviceSelectorsDedup) == 0 {
-			channel.Write([]byte("No targets available to you - sorry :("))
-			return nil, fmt.Errorf("No (allowlisted) services found in namespace \"%s\"", namespace)
-		}
-
-		// convert map of set to map of slice
-		for k, v := range serviceSelectorsDedup {
-			serviceSelectors[k] = v.Slice()
-		}
+	if namespaceSelectors, ok := s.proxyConfig.KubectlExecProxy.NamespaceSelectorsAllowlist[namespace]; ok && len(namespaceSelectors) != 0 {
+		compareChosenPodAgainstSelectors = true
+		selectors = namespaceSelectors
 	}
 
 	// get pods from k8s api
@@ -515,16 +486,11 @@ func (s *kubectlExecSession) askForTarget(ctx context.Context, channel ssh.Chann
 		return nil, fmt.Errorf("failed to list pods in namespace \"%s\": %v", namespace, err)
 	}
 
-	// filter them if needed based on the service selectors and the pod allowlist. Otherwise just extract the name.
+	// filter them if needed based on selectors. Otherwise just extract the name.
 	pods := []string{}
 	for _, pod := range podList.Items {
-		if compareChosenPodAgainstServiceSelectors {
-			if !maps.MatchesFilters(pod.ObjectMeta.Labels, serviceSelectors, nil) {
-				continue
-			}
-		}
-		if len(s.proxyConfig.KubectlExecProxy.NamespacePodAllowlist[namespace]) != 0 {
-			if _, allowed := s.proxyConfig.KubectlExecProxy.NamespacePodAllowlist[namespace][pod.Name]; !allowed {
+		if compareChosenPodAgainstSelectors {
+			if !maps.MatchesFilters(pod.ObjectMeta.Labels, selectors, nil) {
 				continue
 			}
 		}
@@ -570,49 +536,27 @@ func (s *kubectlExecSession) askForTarget(ctx context.Context, channel ssh.Chann
 		return nil, fmt.Errorf("No containers available in pod \"%s\" of namespace \"%s\"", pod, namespace)
 	}
 
-	// filter allowed containers
-	containers := []string{}
-	if len(s.proxyConfig.KubectlExecProxy.NamespacePodAllowlist[namespace]) != 0 &&
-		len(s.proxyConfig.KubectlExecProxy.NamespacePodAllowlist[namespace][pod]) != 0 {
-		allowedContainersInPod := s.proxyConfig.KubectlExecProxy.NamespacePodAllowlist[namespace][pod]
-		for _, container := range describedPod.Spec.Containers {
-			if slices.Contains(allowedContainersInPod, container.Name) {
-				containers = append(containers, container.Name)
-			}
-		}
-	} else {
-		containers = slice.Transform(describedPod.Spec.Containers, func(container v1.Container) string { return container.Name })
-	}
-
-	if len(containers) == 0 {
-		channel.Write([]byte("No targets available to you - sorry :("))
-		return nil, fmt.Errorf("No (allowlisted) containers found in pod \"%s\" of namespace \"%s\"", pod, namespace)
-	}
-
 	container := ""
 	if len(describedPod.Spec.Containers) == 1 {
 		container = describedPod.Spec.Containers[0].Name
 	} else {
-		// pick a container if there's more than one
-		if len(describedPod.Spec.Containers) > 1 {
-			containerChoices := slice.Transform(describedPod.Spec.Containers, func(container v1.Container) string { return container.Name })
-			// pick a container
-			containerPrompt := promptui.Select{
-				Label:             "Choose a container",
-				Items:             containerChoices,
-				Stdout:            channel,
-				Stdin:             channel,
-				StartInSearchMode: true,
-				Searcher: func(input string, index int) bool {
-					return strings.Contains(strings.ToLower(containerChoices[index]), strings.ToLower(input))
-				},
-			}
-			_, selectedContainer, err := containerPrompt.Run()
-			if err != nil {
-				return nil, fmt.Errorf("unable to select container: %v", err)
-			}
-			container = selectedContainer
+		// pick a container
+		containerChoices := slice.Transform(describedPod.Spec.Containers, func(container v1.Container) string { return container.Name })
+		containerPrompt := promptui.Select{
+			Label:             "Choose a container",
+			Items:             containerChoices,
+			Stdout:            channel,
+			Stdin:             channel,
+			StartInSearchMode: true,
+			Searcher: func(input string, index int) bool {
+				return strings.Contains(strings.ToLower(containerChoices[index]), strings.ToLower(input))
+			},
 		}
+		_, selectedContainer, err := containerPrompt.Run()
+		if err != nil {
+			return nil, fmt.Errorf("unable to select container: %v", err)
+		}
+		container = selectedContainer
 	}
 
 	return &kubectlExecTarget{
