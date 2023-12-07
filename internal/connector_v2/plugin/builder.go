@@ -115,6 +115,38 @@ func newAwsEcsDiscoveryPlugin(
 	return newPlugin(pluginId, logger, engine), nil
 }
 
+func newAwsEksDiscoveryPlugin(
+	ctx context.Context,
+	logger *zap.Logger,
+	pluginId string,
+	config *connector.AwsEksDiscoveryPluginConfiguration,
+) (Plugin, error) {
+	if config == nil {
+		return nil, fmt.Errorf("received nil eks discovery plugin configuration for plugin %s", pluginId)
+	}
+
+	awsConfigs, err := getAwsConfigs(ctx, config.BaseAwsPluginConfiguration)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build AWS configurations for plugin %s: %v", pluginId, err)
+	}
+
+	engineOpts := []engines.ContinuousEngineOption{}
+	for _, awsConfig := range awsConfigs {
+		engineOpts = append(engineOpts, engines.WithDiscoverer(
+			discoverers.NewAwsEksDiscoverer(
+				awsConfig,
+				discoverers.WithAwsEksDiscovererDiscovererId(fmt.Sprintf("aws eks ( region = %s )", awsConfig.Region)),
+				discoverers.WithAwsEksDiscovererInclusionServiceTags(config.IncludeWithTags),
+				discoverers.WithAwsEksDiscovererExclusionServiceTags(config.ExcludeWithTags),
+			),
+			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
+		))
+	}
+	engine := engines.NewContinuousEngine(engineOpts...)
+
+	return newPlugin(pluginId, logger, engine), nil
+}
+
 func newAwsRdsDiscoveryPlugin(
 	ctx context.Context,
 	logger *zap.Logger,
