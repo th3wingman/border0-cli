@@ -48,8 +48,6 @@ func New(options Options, optFns ...func(*Options)) *Client {
 
 	setResolvedDefaultsMode(&options)
 
-	resolveRetryer(&options)
-
 	resolveHTTPClient(&options)
 
 	resolveHTTPSignerV4(&options)
@@ -64,7 +62,11 @@ func New(options Options, optFns ...func(*Options)) *Client {
 		fn(&options)
 	}
 
+	resolveRetryer(&options)
+
 	ignoreAnonymousAuth(&options)
+
+	wrapWithAnonymousAuth(&options)
 
 	resolveAuthSchemes(&options)
 
@@ -73,6 +75,15 @@ func New(options Options, optFns ...func(*Options)) *Client {
 	}
 
 	return client
+}
+
+// Options returns a copy of the client configuration.
+//
+// Callers SHOULD NOT perform mutations on any inner structures within client
+// config. Config overrides should instead be made on a per-operation basis through
+// functional options.
+func (c *Client) Options() Options {
+	return c.options.Copy()
 }
 
 func (c *Client) invokeOperation(ctx context.Context, opID string, params interface{}, optFns []func(*Options), stackFns ...func(*middleware.Stack, Options) error) (result interface{}, metadata middleware.Metadata, err error) {
@@ -138,7 +149,7 @@ func (m *setOperationInputMiddleware) HandleSerialize(ctx context.Context, in mi
 
 func addProtocolFinalizerMiddlewares(stack *middleware.Stack, options Options, operation string) error {
 	if err := stack.Finalize.Add(&resolveAuthSchemeMiddleware{operation: operation, options: options}, middleware.Before); err != nil {
-		return fmt.Errorf("add ResolveAuthScheme: %v", err)
+		return fmt.Errorf("add ResolveAuthScheme: %w", err)
 	}
 	if err := stack.Finalize.Insert(&getIdentityMiddleware{options: options}, "ResolveAuthScheme", middleware.After); err != nil {
 		return fmt.Errorf("add GetIdentity: %v", err)
@@ -147,7 +158,7 @@ func addProtocolFinalizerMiddlewares(stack *middleware.Stack, options Options, o
 		return fmt.Errorf("add ResolveEndpointV2: %v", err)
 	}
 	if err := stack.Finalize.Insert(&signRequestMiddleware{}, "ResolveEndpointV2", middleware.After); err != nil {
-		return fmt.Errorf("add Signing: %v", err)
+		return fmt.Errorf("add Signing: %w", err)
 	}
 	return nil
 }
@@ -522,7 +533,7 @@ func (m *presignContextPolyfillMiddleware) HandleFinalize(ctx context.Context, i
 
 	schemeID := rscheme.Scheme.SchemeID()
 
-	if schemeID == "aws.auth#sigv4" {
+	if schemeID == "aws.auth#sigv4" || schemeID == "com.amazonaws.s3#sigv4express" {
 		if sn, ok := smithyhttp.GetSigV4SigningName(&rscheme.SignerProperties); ok {
 			ctx = awsmiddleware.SetSigningName(ctx, sn)
 		}
