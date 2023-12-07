@@ -19,14 +19,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.39.1
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.137.1
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.33.2
-	github.com/aws/aws-sdk-go-v2/service/eks v1.35.2
+	github.com/aws/aws-sdk-go-v2/service/eks v1.35.3
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.23.2
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.43.1
 	github.com/aws/session-manager-plugin v0.0.0-20230808183647-dbfa0bfdb04b
 	github.com/bluele/factory-go v0.0.1
 	github.com/borderzero/border0-go v1.4.1
 	github.com/borderzero/border0-proto v1.0.19
-	github.com/borderzero/discovery v0.1.28
+	github.com/borderzero/discovery v0.1.29
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/creack/pty v1.1.18
@@ -79,12 +79,12 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.8 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.8 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.7.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/rds v1.63.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.17.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.19.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.25.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.26.3 // indirect
 	github.com/aws/smithy-go v1.18.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
