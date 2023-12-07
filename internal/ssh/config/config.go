@@ -57,9 +57,8 @@ type KubectlExecProxy struct {
 	MasterUrl      string
 	KubeconfigPath string
 
-	NamespaceAllowlist        []string
-	NamespaceServiceAllowlist map[string][]string
-	NamespacePodAllowlist     map[string]map[string][]string
+	NamespaceAllowlist          []string
+	NamespaceSelectorsAllowlist map[string]map[string][]string
 }
 
 func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSProfile string, hostkey *ssh.Signer, org *models.Organization, border0API border0.Border0API) (*ProxyConfig, error) {
@@ -126,9 +125,8 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 		proxyConfig.IsKubectlExec = true
 
 		proxyConfig.KubectlExecProxy = &KubectlExecProxy{
-			NamespaceAllowlist:        socket.ConnectorLocalData.K8sNamespaceAllowlist,
-			NamespaceServiceAllowlist: socket.ConnectorLocalData.K8sNamespaceServiceAllowlist,
-			NamespacePodAllowlist:     socket.ConnectorLocalData.K8sNamespacePodAllowlist,
+			NamespaceAllowlist:          socket.ConnectorLocalData.K8sNamespaceAllowlist,
+			NamespaceSelectorsAllowlist: socket.ConnectorLocalData.K8sNamespaceSelectorsAllowlist,
 
 			// optional fields. Used only for standard (non eks) kubernetes.
 			MasterUrl:      socket.ConnectorLocalData.K8sMasterUrl,

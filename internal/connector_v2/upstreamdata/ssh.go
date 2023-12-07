@@ -61,8 +61,7 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceKubectlExec(s *model
 
 	s.ConnectorLocalData.IsKubectlExec = true
 	s.ConnectorLocalData.K8sNamespaceAllowlist = config.NamespaceAllowlist
-	s.ConnectorLocalData.K8sNamespaceServiceAllowlist = config.NamespaceServiceAllowlist
-	s.ConnectorLocalData.K8sNamespacePodAllowlist = config.NamespacePodAllowlist
+	s.ConnectorLocalData.K8sNamespaceSelectorsAllowlist = config.NamespaceSelectorsAllowlist
 
 	switch config.KubectlExecTargetType {
 	case service.KubectlExecTargetTypeAwsEks:

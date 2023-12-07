@@ -65,14 +65,13 @@ type ConnectorLocalData struct {
 	AWSEC2InstanceConnectEnabled bool
 	AwsCredentials               *common.AwsCredentials
 
-	IsKubectlExec                bool
-	K8sNamespaceAllowlist        []string
-	K8sNamespaceServiceAllowlist map[string][]string
-	K8sNamespacePodAllowlist     map[string]map[string][]string
-	K8sMasterUrl                 string
-	K8sKubeconfigPath            string
-	IsAwsEks                     bool
-	AwsEksCluster                string
+	IsKubectlExec                  bool
+	K8sNamespaceAllowlist          []string
+	K8sNamespaceSelectorsAllowlist map[string]map[string][]string
+	K8sMasterUrl                   string
+	K8sKubeconfigPath              string
+	IsAwsEks                       bool
+	AwsEksCluster                  string
 }
 
 func (c *ConnectorData) Tags() map[string]string {
