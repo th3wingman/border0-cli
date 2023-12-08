@@ -255,8 +255,8 @@ func (s *kubectlExecSession) getKubeconfig(ctx context.Context) (*rest.Config, e
 		// retrieve k8s bearer token
 		token, err := iamAuthTokenGenerator.GetWithOptions(&token.GetTokenOptions{
 			ClusterID:   s.proxyConfig.KubectlExecProxy.AwsEksClusterName,
-			Region:      "eu-west-2", // OK if empty
-			Session:     session,     // have to pass it or else default credential chain is used
+			Region:      s.proxyConfig.AwsConfig.Region, // OK if empty
+			Session:     session,                        // have to pass it or else default credential chain is used
 			SessionName: fmt.Sprintf("border0-k8s-%d", time.Now().UnixNano()),
 		})
 		if err != nil {
