@@ -140,6 +140,7 @@ func enableAwsDiscoveryPluginsForConnector(
 	for _, pluginType := range []string{
 		connector.PluginTypeAwsEc2Discovery,
 		connector.PluginTypeAwsEcsDiscovery,
+		connector.PluginTypeAwsEksDiscovery,
 		connector.PluginTypeAwsRdsDiscovery,
 	} {
 		pluginConfig, err := border0Client.GetDefaultPluginConfiguration(ctx, pluginType)
