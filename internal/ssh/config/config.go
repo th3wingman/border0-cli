@@ -28,6 +28,7 @@ type ProxyConfig struct {
 	ECSSSMProxy        *ECSSSMProxy
 	IsKubectlExec      bool
 	KubectlExecProxy   *KubectlExecProxy
+	IsDockerExec       bool
 	AwsConfig          aws.Config
 	AwsUpstreamType    string
 	Logger             *zap.Logger
