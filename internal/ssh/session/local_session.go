@@ -1,10 +1,8 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +16,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
 	"github.com/borderzero/border0-cli/internal/ssh/server"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	gliderlabs_ssh "github.com/gliderlabs/ssh"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
@@ -27,6 +26,9 @@ type localSessionHandler struct {
 	logger *zap.Logger
 	config *config.ProxyConfig
 }
+
+// ensure localSessionHandler implements SessionHandler.
+var _ SessionHandler = (*localSessionHandler)(nil)
 
 type localSession struct {
 	config             *config.ProxyConfig
@@ -79,8 +81,13 @@ func (s *localSessionHandler) Proxy(conn net.Conn) {
 		}
 
 		session.metadata = e2EEncryptionConn.Metadata
-		session.sshServerConfig.PublicKeyCallback = session.publicKeyCallback
 		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.config.OrgSshCA,
+			s.config.Border0API,
+			s.config.Socket,
+			e2EEncryptionConn.Metadata,
+		)
 	}
 
 	var err error
@@ -254,7 +261,7 @@ func (s *localChannel) handleRequest(req *ssh.Request) {
 		}
 
 		s.ptyTerm = string(req.Payload[4 : 4+length])
-		w, h := parseDims(req.Payload[length+4:])
+		w, h := common.ParseDims(req.Payload[length+4:])
 		s.window.Width = int(w)
 		s.window.Height = int(h)
 		s.winch = make(chan gliderlabs_ssh.Window, 1)
@@ -267,7 +274,7 @@ func (s *localChannel) handleRequest(req *ssh.Request) {
 			return
 		}
 
-		w, h := parseDims(req.Payload)
+		w, h := common.ParseDims(req.Payload)
 		s.window.Width = int(w)
 		s.window.Height = int(h)
 		s.winch <- s.window
@@ -302,7 +309,7 @@ func (c *localChannel) handleSftp(req *ssh.Request) {
 	if c.config.IsRecordingEnabled() {
 		pr, pw := io.Pipe()
 
-		r := NewRecording(c.logger, pr, c.config.Socket.SocketID, c.metadata.SessionKey, c.config.Border0API, c.window.Width, c.window.Height)
+		r := common.NewRecording(c.logger, pr, c.config.Socket.SocketID, c.metadata.SessionKey, c.config.Border0API, c.window.Width, c.window.Height)
 		if err := r.Record(); err != nil {
 			c.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -339,7 +346,7 @@ func (c *localChannel) handleExec(req *ssh.Request) {
 		pwc := NewPipeWriteChannel(c.downstreamChannel)
 		c.downstreamChannel = pwc
 
-		r := NewRecording(c.logger, pwc.reader, c.config.Socket.SocketID, c.metadata.SessionKey, c.config.Border0API, c.window.Width, c.window.Height)
+		r := common.NewRecording(c.logger, pwc.reader, c.config.Socket.SocketID, c.metadata.SessionKey, c.config.Border0API, c.window.Width, c.window.Height)
 		if err := r.Record(); err != nil {
 			c.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -392,43 +399,4 @@ func (c *localChannel) handleExec(req *ssh.Request) {
 	exitStatus := server.ExecCmd(c.downstreamChannel, command, c.ptyTerm, c.pty, c.winch, cmd, uid, gid, c.username)
 	status := struct{ Status uint32 }{Status: uint32(exitStatus)}
 	c.downstreamChannel.SendRequest("exit-status", false, ssh.Marshal(&status))
-}
-
-func (s *localSession) publicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	cert, ok := key.(*ssh.Certificate)
-	if !ok {
-		return nil, errors.New("can not cast certificate")
-	}
-
-	if s.config.OrgSshCA == nil {
-		return nil, errors.New("error: unable to validate certificate, no CA configured")
-	}
-
-	if bytes.Equal(cert.SignatureKey.Marshal(), s.config.OrgSshCA.Marshal()) {
-	} else {
-		return nil, errors.New("error: invalid client certificate")
-	}
-
-	if s.metadata.UserEmail != cert.KeyId {
-		return nil, errors.New("error: ssh certificate does not match tls certificate")
-	}
-
-	var certChecker ssh.CertChecker
-	if err := certChecker.CheckCert("mysocket_ssh_signed", cert); err != nil {
-		return nil, fmt.Errorf("error: invalid client certificate: %s", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	actions, _, err := s.config.Border0API.Evaluate(ctx, s.config.Socket, s.metadata.ClientIP, s.metadata.UserEmail, s.metadata.SessionKey)
-	if err != nil {
-		return nil, fmt.Errorf("error: failed to authorize: %s", err)
-	}
-
-	if len(actions) == 0 {
-		return nil, errors.New("error: authorization failed")
-	}
-
-	return &ssh.Permissions{}, nil
 }

@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -21,6 +20,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	sshConfig "github.com/borderzero/border0-cli/internal/ssh/config"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
@@ -99,8 +99,12 @@ func (s *kubectlExecSessionHandler) Proxy(conn net.Conn) {
 		}
 		k8sSess.e2eeMetadata = e2EEncryptionConn.Metadata
 		k8sSess.logger = k8sSess.logger.With(zap.String("session_key", k8sSess.e2eeMetadata.SessionKey))
-		// set the ssh server config's callback to the method on the kubectlExecSession
-		k8sSess.sshServerConfig.PublicKeyCallback = k8sSess.publicKeyCallback
+		k8sSess.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.proxyConfig.OrgSshCA,
+			s.proxyConfig.Border0API,
+			s.proxyConfig.Socket,
+			e2EEncryptionConn.Metadata,
+		)
 	}
 
 	// accept SSH connection from Border0 proxy
@@ -174,7 +178,7 @@ func (s *kubectlExecSession) handleChannels(ctx context.Context) error {
 				// handled mostly for the benefit of session recordings
 				case req.Type == "pty-req":
 					termLen := req.Payload[3]
-					w, h := parseDims(req.Payload[termLen+4:])
+					w, h := common.ParseDims(req.Payload[termLen+4:])
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
 					termSizeQueueChan <- &remotecommand.TerminalSize{
@@ -186,7 +190,7 @@ func (s *kubectlExecSession) handleChannels(ctx context.Context) error {
 					}
 				// handled mostly for the benefit of session recordings
 				case req.Type == "window-change":
-					w, h := parseDims(req.Payload)
+					w, h := common.ParseDims(req.Payload)
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
 					termSizeQueueChan <- &remotecommand.TerminalSize{
@@ -340,7 +344,7 @@ func (s *kubectlExecSession) handleChannel(
 	if s.proxyConfig.IsRecordingEnabled() {
 		pwc := NewPipeWriteChannel(channel)
 		channel = pwc
-		r := NewRecording(s.logger, pwc.reader, s.proxyConfig.Socket.SocketID, s.e2eeMetadata.SessionKey, s.proxyConfig.Border0API, s.sshWidth, s.sshHeight)
+		r := common.NewRecording(s.logger, pwc.reader, s.proxyConfig.Socket.SocketID, s.e2eeMetadata.SessionKey, s.proxyConfig.Border0API, s.sshWidth, s.sshHeight)
 		if err := r.Record(); err != nil {
 			s.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -568,46 +572,6 @@ func (s *kubectlExecSession) askForTarget(ctx context.Context, channel ssh.Chann
 		pod:       pod,
 		container: container,
 	}, nil
-}
-
-// FIXME: make generic, ssm uses the exact same code
-func (s *kubectlExecSession) publicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	cert, ok := key.(*ssh.Certificate)
-	if !ok {
-		return nil, errors.New("can not cast certificate")
-	}
-
-	if s.proxyConfig.OrgSshCA == nil {
-		return nil, errors.New("error: unable to validate certificate, no CA configured")
-	}
-
-	if bytes.Equal(cert.SignatureKey.Marshal(), s.proxyConfig.OrgSshCA.Marshal()) {
-	} else {
-		return nil, errors.New("error: invalid client certificate")
-	}
-
-	if s.e2eeMetadata.UserEmail != cert.KeyId {
-		return nil, errors.New("error: ssh certificate does not match tls certificate")
-	}
-
-	var certChecker ssh.CertChecker
-	if err := certChecker.CheckCert("mysocket_ssh_signed", cert); err != nil {
-		return nil, fmt.Errorf("error: invalid client certificate: %s", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	actions, _, err := s.proxyConfig.Border0API.Evaluate(ctx, s.proxyConfig.Socket, s.e2eeMetadata.ClientIP, s.e2eeMetadata.UserEmail, s.e2eeMetadata.SessionKey)
-	if err != nil {
-		return nil, fmt.Errorf("error: failed to authorize: %s", err)
-	}
-
-	if len(actions) == 0 {
-		return nil, errors.New("error: authorization failed")
-	}
-
-	return &ssh.Permissions{}, nil
 }
 
 // getRemoteCommandExecutor returns an abstraction for a multiplexed bidirectional
