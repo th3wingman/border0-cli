@@ -85,6 +85,8 @@ func Proxy(l net.Listener, c config.ProxyConfig) error {
 		handler = session.NewEc2InstanceConnectSessionHandler(c.Logger, &c)
 	case c.IsKubectlExec:
 		handler = session.NewKubectlExecSessionHandler(c.Logger, &c)
+	case c.IsDockerExec:
+		handler = session.NewDockerExecSessionHandler(c.Logger, &c)
 	default:
 		var err error
 		handler, err = session.NewSshSessionHandler(c.Logger, &c)
