@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -9,7 +8,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +20,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
@@ -30,6 +29,9 @@ type sshSessionHandler struct {
 	logger *zap.Logger
 	config *config.ProxyConfig
 }
+
+// ensure sshSessionHandler implements SessionHandler.
+var _ SessionHandler = (*sshSessionHandler)(nil)
 
 type sshSession struct {
 	config             *config.ProxyConfig
@@ -142,8 +144,13 @@ func (s *sshSessionHandler) Proxy(conn net.Conn) {
 		}
 
 		session.metadata = e2EEncryptionConn.Metadata
-		session.sshServerConfig.PublicKeyCallback = session.sshPublicKeyCallback
 		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.config.OrgSshCA,
+			s.config.Border0API,
+			s.config.Socket,
+			e2EEncryptionConn.Metadata,
+		)
 
 		if s.config.Border0CertAuth {
 			session.sshClientConfig.Auth = []ssh.AuthMethod{ssh.
@@ -441,7 +448,7 @@ func (s *sshChannel) handleRequest(req *ssh.Request) {
 		}
 
 		termLen := req.Payload[3]
-		w, h := parseDims(req.Payload[termLen+4:])
+		w, h := common.ParseDims(req.Payload[termLen+4:])
 		s.width = int(w)
 		s.height = int(h)
 
@@ -454,7 +461,7 @@ func (s *sshChannel) handleRequest(req *ssh.Request) {
 			req.Reply(false, nil)
 			return
 		}
-		w, h := parseDims(req.Payload)
+		w, h := common.ParseDims(req.Payload)
 		s.width = int(w)
 		s.height = int(h)
 
@@ -654,7 +661,7 @@ func closeChannel(downstreamChannel ssh.Channel, err error) {
 	downstreamChannel.Close()
 }
 
-func (s *sshChannel) record(reader *io.Reader) (*Recording, error) {
+func (s *sshChannel) record(reader *io.Reader) (*common.Recording, error) {
 	pr, pw := io.Pipe()
 	s.sessionWriter = pw
 
@@ -662,52 +669,13 @@ func (s *sshChannel) record(reader *io.Reader) (*Recording, error) {
 		*reader = io.TeeReader(*reader, pw)
 	}
 
-	r := NewRecording(s.logger, pr, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.width, s.height)
+	r := common.NewRecording(s.logger, pr, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.width, s.height)
 
 	if err := r.Record(); err != nil {
 		return nil, err
 	}
 
 	return r, nil
-}
-
-func (s *sshSession) sshPublicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	cert, ok := key.(*ssh.Certificate)
-	if !ok {
-		return nil, errors.New("can not cast certificate")
-	}
-
-	if s.config.OrgSshCA == nil {
-		return nil, errors.New("error: unable to validate certificate, no CA configured")
-	}
-
-	if bytes.Equal(cert.SignatureKey.Marshal(), s.config.OrgSshCA.Marshal()) {
-	} else {
-		return nil, errors.New("error: invalid client certificate")
-	}
-
-	if s.metadata.UserEmail != cert.KeyId {
-		return nil, errors.New("error: ssh certificate does not match tls certificate")
-	}
-
-	var certChecker ssh.CertChecker
-	if err := certChecker.CheckCert("mysocket_ssh_signed", cert); err != nil {
-		return nil, fmt.Errorf("error: invalid client certificate: %s", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	actions, _, err := s.config.Border0API.Evaluate(ctx, s.config.Socket, s.metadata.ClientIP, s.metadata.UserEmail, s.metadata.SessionKey)
-	if err != nil {
-		return nil, fmt.Errorf("error: failed to authorize: %s", err)
-	}
-
-	if len(actions) == 0 {
-		return nil, errors.New("error: authorization failed")
-	}
-
-	return &ssh.Permissions{}, nil
 }
 
 func (s *sshSession) userPublicKeyCallback() ([]ssh.Signer, error) {

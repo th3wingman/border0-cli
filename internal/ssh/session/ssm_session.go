@@ -1,10 +1,8 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -24,6 +22,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	"github.com/manifoldco/promptui"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
@@ -39,6 +38,9 @@ type ssmSessionHandler struct {
 	config    *config.ProxyConfig
 	ssmClient *ssm.Client
 }
+
+// ensure ssmSessionHandler implements SessionHandler.
+var _ SessionHandler = (*ssmSessionHandler)(nil)
 
 type ssmSession struct {
 	awsSession.Session
@@ -112,8 +114,13 @@ func (s *ssmSessionHandler) Proxy(conn net.Conn) {
 		}
 
 		session.metadata = e2EEncryptionConn.Metadata
-		session.sshServerConfig.PublicKeyCallback = session.publicKeyCallback
 		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.config.OrgSshCA,
+			s.config.Border0API,
+			s.config.Socket,
+			e2EEncryptionConn.Metadata,
+		)
 	}
 
 	var err error
@@ -169,7 +176,7 @@ func (s *ssmSession) handleChannels() error {
 					continue
 				case req.Type == "pty-req":
 					termLen := req.Payload[3]
-					w, h := parseDims(req.Payload[termLen+4:])
+					w, h := common.ParseDims(req.Payload[termLen+4:])
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
 
@@ -177,7 +184,7 @@ func (s *ssmSession) handleChannels() error {
 						req.Reply(true, nil)
 					}
 				case req.Type == "window-change":
-					w, h := parseDims(req.Payload)
+					w, h := common.ParseDims(req.Payload)
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
 
@@ -479,7 +486,7 @@ func (s *ssmSession) handleSSMShell(channel ssh.Channel, req *ssh.Request) {
 		pwc := NewPipeWriteChannel(channel)
 		channel = pwc
 
-		r := NewRecording(s.logger, pwc.reader, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.sshWidth, s.sshHeight)
+		r := common.NewRecording(s.logger, pwc.reader, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.sshWidth, s.sshHeight)
 		if err := r.Record(); err != nil {
 			s.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -660,43 +667,4 @@ func (s *ssmSession) handleWindowChange(width, height int) error {
 	}
 
 	return nil
-}
-
-func (s *ssmSession) publicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	cert, ok := key.(*ssh.Certificate)
-	if !ok {
-		return nil, errors.New("can not cast certificate")
-	}
-
-	if s.config.OrgSshCA == nil {
-		return nil, errors.New("error: unable to validate certificate, no CA configured")
-	}
-
-	if bytes.Equal(cert.SignatureKey.Marshal(), s.config.OrgSshCA.Marshal()) {
-	} else {
-		return nil, errors.New("error: invalid client certificate")
-	}
-
-	if s.metadata.UserEmail != cert.KeyId {
-		return nil, errors.New("error: ssh certificate does not match tls certificate")
-	}
-
-	var certChecker ssh.CertChecker
-	if err := certChecker.CheckCert("mysocket_ssh_signed", cert); err != nil {
-		return nil, fmt.Errorf("error: invalid client certificate: %s", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	actions, _, err := s.config.Border0API.Evaluate(ctx, s.config.Socket, s.metadata.ClientIP, s.metadata.UserEmail, s.metadata.SessionKey)
-	if err != nil {
-		return nil, fmt.Errorf("error: failed to authorize: %s", err)
-	}
-
-	if len(actions) == 0 {
-		return nil, errors.New("error: authorization failed")
-	}
-
-	return &ssh.Permissions{}, nil
 }
