@@ -164,11 +164,7 @@ func (s *kubectlExecSession) handleChannels(ctx context.Context) error {
 			return fmt.Errorf("failed to accept channel: %s", err)
 		}
 
-		termSizeQueueChan := make(chan *remotecommand.TerminalSize, 50)
-		termSizeQ := &terminalWindowSizeQueue{
-			ctx: channelCtx,
-			c:   termSizeQueueChan,
-		}
+		termSizeQueue := newTerminalWindowSizeQueue(ctx)
 
 		go func(in <-chan *ssh.Request) {
 			for req := range in {
@@ -181,10 +177,10 @@ func (s *kubectlExecSession) handleChannels(ctx context.Context) error {
 					w, h := common.ParseDims(req.Payload[termLen+4:])
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
-					termSizeQueueChan <- &remotecommand.TerminalSize{
+					termSizeQueue.push(&remotecommand.TerminalSize{
 						Width:  uint16(w),
 						Height: uint16(h),
-					}
+					})
 					if req.WantReply {
 						req.Reply(true, nil)
 					}
@@ -193,10 +189,10 @@ func (s *kubectlExecSession) handleChannels(ctx context.Context) error {
 					w, h := common.ParseDims(req.Payload)
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
-					termSizeQueueChan <- &remotecommand.TerminalSize{
+					termSizeQueue.push(&remotecommand.TerminalSize{
 						Width:  uint16(w),
 						Height: uint16(h),
-					}
+					})
 					if req.WantReply {
 						req.Reply(true, nil)
 					}
@@ -204,7 +200,7 @@ func (s *kubectlExecSession) handleChannels(ctx context.Context) error {
 					if req.WantReply {
 						req.Reply(true, nil)
 					}
-					go s.handleChannel(channelCtx, channel, termSizeQ, s.downstreamSshConn.User())
+					go s.handleChannel(channelCtx, channel, termSizeQueue, s.downstreamSshConn.User())
 				default:
 					req.Reply(false, nil)
 				}
@@ -304,24 +300,6 @@ func (s *kubectlExecSession) getKubeconfig(ctx context.Context) (*rest.Config, e
 	}
 	return kubeConfig, nil
 
-}
-
-type terminalWindowSizeQueue struct {
-	ctx context.Context
-	c   chan *remotecommand.TerminalSize
-}
-
-// ensure terminalWindowSizeQueue implements remotecommand.TerminalSizeQueue.
-var _ remotecommand.TerminalSizeQueue = (*terminalWindowSizeQueue)(nil)
-
-func (q *terminalWindowSizeQueue) Next() *remotecommand.TerminalSize {
-	select {
-	case size := <-q.c:
-		return size
-	case <-q.ctx.Done():
-		close(q.c)
-		return nil
-	}
 }
 
 func (s *kubectlExecSession) handleChannel(
@@ -613,4 +591,38 @@ func getRemoteCommandExecutor(
 	}
 
 	return exec, nil
+}
+
+type terminalWindowSizeQueue struct {
+	ctx  context.Context
+	c    chan *remotecommand.TerminalSize
+	done bool
+}
+
+// ensure terminalWindowSizeQueue implements remotecommand.TerminalSizeQueue.
+var _ remotecommand.TerminalSizeQueue = (*terminalWindowSizeQueue)(nil)
+
+func newTerminalWindowSizeQueue(ctx context.Context) *terminalWindowSizeQueue {
+	return &terminalWindowSizeQueue{
+		ctx: ctx,
+		c:   make(chan *remotecommand.TerminalSize, 50),
+	}
+}
+
+func (q *terminalWindowSizeQueue) Next() *remotecommand.TerminalSize {
+	if q.done {
+		return nil
+	}
+	select {
+	case size := <-q.c:
+		return size
+	case <-q.ctx.Done():
+		q.done = true
+		defer close(q.c)
+		return nil
+	}
+}
+
+func (q *terminalWindowSizeQueue) push(ts *remotecommand.TerminalSize) {
+	q.c <- ts
 }
