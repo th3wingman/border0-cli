@@ -32,7 +32,7 @@ require (
 	github.com/creack/pty v1.1.18
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/fatih/color v1.15.0
-	github.com/gliderlabs/ssh v0.3.5
+	github.com/gliderlabs/ssh v0.3.6
 	github.com/go-mysql-org/go-mysql v1.7.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.4.0
