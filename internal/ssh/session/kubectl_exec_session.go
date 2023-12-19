@@ -335,7 +335,7 @@ func (s *kubectlExecSession) handleChannel(
 		s.logger.Error("failed to determine target for remote command executor", zap.Error(err))
 		return
 	}
-	channel.Write([]byte("\n"))
+	channel.Write([]byte("\r\n"))
 
 	// we iterate over the slice and not the set
 	// because order is not maintained for the set
