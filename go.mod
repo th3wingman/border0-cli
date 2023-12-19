@@ -11,7 +11,7 @@ require (
 	github.com/Code-Hex/go-generics-cache v1.3.1
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/aws/aws-sdk-go v1.44.332
-	github.com/aws/aws-sdk-go-v2 v1.23.5
+	github.com/aws/aws-sdk-go-v2 v1.24.0
 	github.com/aws/aws-sdk-go-v2/config v1.25.2
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.1
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.4
@@ -19,7 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.39.1
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.140.0
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.35.3
-	github.com/aws/aws-sdk-go-v2/service/eks v1.35.3
+	github.com/aws/aws-sdk-go-v2/service/eks v1.36.0
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.23.2
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.44.3
 	github.com/aws/session-manager-plugin v0.0.0-20230808183647-dbfa0bfdb04b
@@ -64,9 +64,9 @@ require (
 	golang.org/x/sys v0.15.0
 	golang.org/x/term v0.15.0
 	google.golang.org/grpc v1.59.0
-	k8s.io/api v0.28.4
-	k8s.io/apimachinery v0.28.4
-	k8s.io/client-go v0.28.4
+	k8s.io/api v0.29.0
+	k8s.io/apimachinery v0.29.0
+	k8s.io/client-go v0.29.0
 	k8s.io/kubectl v0.27.2
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	nhooyr.io/websocket v1.8.7
@@ -76,8 +76,8 @@ require (
 require (
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.8 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.8 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.9 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.9 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.7.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.8 // indirect
@@ -85,7 +85,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.17.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.19.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.3 // indirect
-	github.com/aws/smithy-go v1.18.1 // indirect
+	github.com/aws/smithy-go v1.19.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
@@ -108,6 +108,7 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
+	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
