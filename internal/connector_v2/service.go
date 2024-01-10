@@ -57,6 +57,9 @@ const (
 	backoffMaxInterval = 1 * time.Hour
 	serviceConfigPath  = "/etc/border0/"
 	sshHostKeyFile     = "ssh_host_ecdsa_key"
+
+	initOpConstBackoffInterval = 500 * time.Millisecond
+	initOpConstBackoffRetries  = 2 // 3 attempts total
 )
 
 type ConnectorService struct {
@@ -161,7 +164,7 @@ func (c *ConnectorService) controlStream() error {
 	go c.heartbeat(ctx)
 	go c.uploadConnectorMetadata(ctx)
 
-	errChan := make(chan error)
+	fatalErrChan := make(chan error)
 	msgChan := make(chan struct {
 		response *pb.ControlStreamReponse
 		error    error
@@ -191,7 +194,7 @@ func (c *ConnectorService) controlStream() error {
 			}
 
 			return nil
-		case err := <-errChan:
+		case err := <-fatalErrChan:
 			return err
 		case msg := <-msgChan:
 			if msg.error != nil {
@@ -208,24 +211,44 @@ func (c *ConnectorService) controlStream() error {
 				switch r := msg.response.GetRequestType().(type) {
 				case *pb.ControlStreamReponse_ConnectorConfig:
 					if err := c.handleConnectorConfig(r.ConnectorConfig); err != nil {
-						c.logger.Error("Failed to handle connector config", zap.Error(err))
+						c.logger.Error("failed to handle connector config", zap.Error(err))
 					}
 				case *pb.ControlStreamReponse_Init:
 					if err := c.handleInit(r.Init); err != nil {
-						c.logger.Error("Failed to handle init", zap.Error(err))
-						errChan <- fmt.Errorf("failed to handle init: %w", err)
+						c.logger.Error("failed to handle init", zap.Error(err))
+						fatalErrChan <- fmt.Errorf("failed to handle init: %w", err)
 					}
 				case *pb.ControlStreamReponse_UpdateConfig:
 					switch t := r.UpdateConfig.GetConfigType().(type) {
 					case *pb.UpdateConfig_PluginConfig:
-						if err := c.handlePluginConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetPluginConfig()); err != nil {
-							c.logger.Error("Failed to handle plugin config", zap.Error(err))
-							errChan <- fmt.Errorf("failed to handle plugin config: %w", err)
+						retryFunc := func() error {
+							if err := c.handlePluginConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetPluginConfig()); err != nil {
+								return err
+							}
+							return nil
+						}
+						backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+						if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+							c.logger.Error(
+								fmt.Sprintf("failed to handle plugin %s (%d attempts)", r.UpdateConfig.GetAction().String(), initOpConstBackoffRetries+1),
+								zap.String("plugin_id", r.UpdateConfig.GetPluginConfig().GetId()),
+								zap.Error(err),
+							)
 						}
 					case *pb.UpdateConfig_SocketConfig:
-						if err := c.handleSocketConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetSocketConfig()); err != nil {
-							c.logger.Error("Failed to handle socket config", zap.Error(err))
-							errChan <- fmt.Errorf("failed to handle socket config: %w", err)
+						retryFunc := func() error {
+							if err := c.handleSocketConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetSocketConfig()); err != nil {
+								return err
+							}
+							return nil
+						}
+						backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+						if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+							c.logger.Error(
+								fmt.Sprintf("failed to handle socket %s (%d attempts)", r.UpdateConfig.GetAction().String(), initOpConstBackoffRetries+1),
+								zap.String("socket_id", r.UpdateConfig.GetSocketConfig().GetId()),
+								zap.Error(err),
+							)
 						}
 					default:
 						c.logger.Error("unknown config type", zap.Any("type", t))
@@ -261,14 +284,14 @@ func (c *ConnectorService) controlStream() error {
 				case *pb.ControlStreamReponse_Heartbeat:
 				case *pb.ControlStreamReponse_Stop:
 					c.logger.Info("stopping connector as requested by server")
-					errChan <- backoff.Permanent(nil)
+					fatalErrChan <- backoff.Permanent(nil)
 				case *pb.ControlStreamReponse_Disconnect:
 					c.logger.Info("disconnecting connector as requested by server")
 					err := stream.CloseSend()
 					if err != nil {
-						errChan <- fmt.Errorf("failed to close control stream: %w", err)
+						fatalErrChan <- fmt.Errorf("failed to close control stream: %w", err)
 					}
-					errChan <- fmt.Errorf("connector was disconnected by server")
+					fatalErrChan <- fmt.Errorf("connector was disconnected by server")
 				case *pb.ControlStreamReponse_Authorize:
 					if v, ok := c.requests.Load(r.Authorize.GetRequestId()); ok {
 						responseChan, ok := v.(chan *pb.ControlStreamReponse)
@@ -363,46 +386,98 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		Certificates: certificates,
 	}
 
-	knownPlugins := set.New[string]()
+	initMessagePlugins := set.New[string]()
 
 	for _, config := range pluginConfig {
+		initMessagePlugins.Add(config.GetId())
+
 		var action pb.Action
 		if _, ok := c.plugins[config.GetId()]; ok {
 			action = pb.Action_UPDATE
 		} else {
 			action = pb.Action_CREATE
 		}
-		if err := c.handlePluginConfig(action, config); err != nil {
-			return fmt.Errorf("failed to handle plugin config: %w", err)
+
+		retryFunc := func() error {
+			if err := c.handlePluginConfig(action, config); err != nil {
+				return fmt.Errorf("failed to handle plugin configuration: %w", err)
+			}
+			return nil
 		}
-		knownPlugins.Add(config.GetId())
+		backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+		if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+			c.logger.Error(
+				fmt.Sprintf("failed to initialize/update plugin during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+				zap.String("plugin_id", config.GetId()),
+				zap.Error(err),
+			)
+		}
 	}
 	for id := range c.plugins {
-		if !knownPlugins.Has(id) {
-			if err := c.handlePluginConfig(pb.Action_DELETE, &pb.PluginConfig{Id: id}); err != nil {
-				return fmt.Errorf("failed to handle plugin config: %w", err)
+		if !initMessagePlugins.Has(id) {
+			retryFunc := func() error {
+				if err := c.handlePluginConfig(pb.Action_DELETE, &pb.PluginConfig{Id: id}); err != nil {
+					return fmt.Errorf("failed to handle plugin config: %w", err)
+				}
+				return nil
+			}
+			backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+			if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+				c.logger.Error(
+					fmt.Sprintf("failed to remove plugin during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+					zap.String("plugin_id", id),
+					zap.Error(err),
+				)
 			}
 		}
 	}
 
-	knownSockets := set.New[string]()
+	initMessageSocket := set.New[string]()
 
 	for _, config := range socketConfg {
+		initMessageSocket.Add(config.GetId())
+
 		var action pb.Action
 		if _, ok := c.sockets[config.GetId()]; ok {
 			action = pb.Action_UPDATE
 		} else {
 			action = pb.Action_CREATE
 		}
-		if err := c.handleSocketConfig(action, config); err != nil {
-			return fmt.Errorf("failed to handle socket config: %w", err)
+
+		retryFunc := func() error {
+			if err := c.handleSocketConfig(action, config); err != nil {
+				return fmt.Errorf("failed to handle socket configuration: %w", err)
+			}
+			return nil
 		}
-		knownSockets.Add(config.GetId())
+		backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+		if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+			c.logger.Error(
+				fmt.Sprintf("failed to initialize/update socket during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+				zap.String("plugin_id", config.GetId()),
+				zap.Error(err),
+			)
+		}
 	}
 	for id := range c.sockets {
-		if !knownSockets.Has(id) {
-			if err := c.handleSocketConfig(pb.Action_DELETE, &pb.SocketConfig{Id: id}); err != nil {
-				return fmt.Errorf("failed to handle socket config: %w", err)
+		if !initMessageSocket.Has(id) {
+			retryFunc := func() error {
+				if err := c.handleSocketConfig(pb.Action_DELETE, &pb.SocketConfig{Id: id}); err != nil {
+					return fmt.Errorf("failed to handle socket configuration: %w", err)
+				}
+				return nil
+			}
+			backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+			if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+				c.logger.Error(
+					fmt.Sprintf("failed to remove socket during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+					zap.String("plugin_id", id),
+					zap.Error(err),
+				)
 			}
 		}
 	}
@@ -420,7 +495,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 	switch action {
 	case pb.Action_CREATE:
-		c.logger.Info("new plugin", zap.String("plugin", config.GetId()))
+		c.logger.Info("initializing plugin", zap.String("plugin", config.GetId()))
 
 		if _, ok := c.plugins[config.GetId()]; ok {
 			return fmt.Errorf("plugin already exists")
@@ -435,7 +510,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 		c.plugins[config.GetId()] = p
 	case pb.Action_UPDATE:
-		c.logger.Info("update plugin", zap.String("plugin", config.GetId()))
+		c.logger.Info("updating plugin", zap.String("plugin", config.GetId()))
 
 		p, ok := c.plugins[config.GetId()]
 		if !ok {
@@ -455,7 +530,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 		c.plugins[config.GetId()] = p
 	case pb.Action_DELETE:
-		c.logger.Info("delete plugin", zap.String("plugin", config.GetId()))
+		c.logger.Info("removing plugin", zap.String("plugin", config.GetId()))
 
 		p, ok := c.plugins[config.GetId()]
 		if !ok {
@@ -477,7 +552,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.SocketConfig) error {
 	switch action {
 	case pb.Action_CREATE:
-		c.logger.Info("new socket", zap.String("socket", config.GetId()))
+		c.logger.Info("initializing socket", zap.String("socket", config.GetId()))
 
 		if _, ok := c.sockets[config.GetId()]; ok {
 			return fmt.Errorf("socket already exists")
@@ -490,7 +565,7 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 
 		c.sockets[config.GetId()] = socket
 	case pb.Action_UPDATE:
-		c.logger.Info("update socket", zap.String("socket", config.GetId()))
+		c.logger.Info("updating socket", zap.String("socket", config.GetId()))
 
 		socket, ok := c.sockets[config.GetId()]
 		if !ok {
@@ -522,7 +597,7 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 
 		c.sockets[config.GetId()] = socket
 	case pb.Action_DELETE:
-		c.logger.Info("delete socket", zap.String("socket", config.GetId()))
+		c.logger.Info("removing socket", zap.String("socket", config.GetId()))
 
 		socket, ok := c.sockets[config.GetId()]
 		if !ok {
