@@ -15,6 +15,7 @@ var (
 	idpDisableGoogle    bool
 	idpDisableGithub    bool
 	idpDisableMicrosoft bool
+	idpDisableEmailCode bool
 )
 
 func getIDPDisableCmd() *cobra.Command {
@@ -32,12 +33,12 @@ func getIDPDisableCmdHandler() func(cmd *cobra.Command, args []string) {
 			util.FailPretty("failed to get Border0 API client: %s", err)
 		}
 
-		globals := countTrueValues(idpDisableGoogle, idpDisableGithub, idpDisableMicrosoft)
+		globals := countTrueValues(idpDisableGoogle, idpDisableGithub, idpDisableMicrosoft, idpDisableEmailCode)
 		isGlobal := globals > 0
 
 		if (idpDisableName != "" && isGlobal) || (idpDisableName == "" && !isGlobal) || (globals > 1) {
 			cmd.Help()
-			util.FailPretty("one (and only one) of --google, --github, --microsoft, or --name must set")
+			util.FailPretty("one (and only one) of --google, --github, --microsoft, --email-code, or --name must set")
 		}
 
 		if idpDisableGoogle {
@@ -48,6 +49,9 @@ func getIDPDisableCmdHandler() func(cmd *cobra.Command, args []string) {
 		}
 		if idpDisableMicrosoft {
 			idpDisableName = identityProviderTypeGlobalMicrosoft
+		}
+		if idpDisableEmailCode {
+			idpDisableName = identityProviderTypeGlobalEmailCode
 		}
 
 		reqBody := &toggleStatusRequest{
