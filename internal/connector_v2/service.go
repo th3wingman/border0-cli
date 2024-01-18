@@ -13,8 +13,6 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"os"
-	"os/user"
 	"strings"
 	"sync"
 	"time"
@@ -933,68 +931,16 @@ func (c *ConnectorService) hostkey() (*gossh.Signer, error) {
 		return c.sshPrivateHostKey, nil
 	}
 
-	var keyFilePath string
-	if _, err := os.Stat(serviceConfigPath + sshHostKeyFile); err == nil {
-		keyFilePath = serviceConfigPath + sshHostKeyFile
-	} else {
-		u, err := user.Current()
-		if err == nil {
-			if _, err := os.Stat(u.HomeDir + "/.border0/" + sshHostKeyFile); err == nil {
-				keyFilePath = u.HomeDir + "/.border0/" + sshHostKeyFile
-			}
-		}
-	}
-
-	if keyFilePath != "" {
-		keyBytes, err := os.ReadFile(keyFilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read host key %s: %w", keyFilePath, err)
-		}
-
-		privateKey, err := gossh.ParsePrivateKey(keyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse host key: %w", err)
-		}
-
-		c.sshPrivateHostKey = &privateKey
-		return c.sshPrivateHostKey, nil
-	}
-
-	_, privKey, err := ed25519.GenerateKey(rand.Reader)
+	hostkeySigner, err := b0Util.Hostkey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate host key: %w", err)
-	}
-
-	sshPrivKey, err := gossh.NewSignerFromKey(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert ed25519 key to ssh key: %w", err)
-	}
-
-	c.sshPrivateHostKey = &sshPrivKey
-
-	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal private key to PKCS#8: %w", err)
-	}
-
-	privKeyPEM := &pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: pkcs8Bytes,
-	}
-
-	serviceConfigPathErr := b0Util.StoreHostkey(pem.EncodeToMemory(privKeyPEM), serviceConfigPath, sshHostKeyFile)
-	if serviceConfigPathErr != nil {
-		u, err := user.Current()
-		if err != nil {
-			return nil, fmt.Errorf("failed to store the ssh hostkey file %w %w", err, serviceConfigPathErr)
-		}
-
-		err = b0Util.StoreHostkey(pem.EncodeToMemory(privKeyPEM), u.HomeDir+"/.border0/", sshHostKeyFile)
-		if err != nil {
-			c.logger.Warn("failed to store the ssh hostkey file", zap.Error(serviceConfigPathErr), zap.Error(err))
-			return c.sshPrivateHostKey, nil
+		if hostkeySigner == nil {
+			return nil, fmt.Errorf("failed to get hostkey: %s", err)
+		} else {
+			c.logger.Warn("failed to store hostkey", zap.Error(err))
 		}
 	}
+
+	c.sshPrivateHostKey = hostkeySigner
 
 	return c.sshPrivateHostKey, nil
 }
@@ -1025,7 +971,11 @@ func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
 
 	c.connectorCertificate, err = b0Util.GetEndToEndEncryptionCertificate(orgID, connectorID)
 	if err != nil {
-		return nil, err
+		c.logger.Warn("failed to get end to end encryption certificate", zap.Error(err))
+	}
+
+	if c.connectorCertificate != nil {
+		return c.connectorCertificate, nil
 	}
 
 	_, privKey, err := ed25519.GenerateKey(rand.Reader)
@@ -1099,7 +1049,7 @@ func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
 
 	c.connectorCertificate = &cert
 
-	if err := b0Util.StoreConnectorCertifcate(privKeyBytes, certificate, orgID, connectorID); err != nil {
+	if err := b0Util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), certificate, orgID, connectorID); err != nil {
 		c.logger.Warn("failed to store the end to end encryption certificate", zap.Error(err))
 	}
 
