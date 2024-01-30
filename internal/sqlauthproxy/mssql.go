@@ -13,26 +13,39 @@ import (
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	mssql "github.com/microsoft/go-mssqldb"
+	"github.com/microsoft/go-mssqldb/azuread"
 	"github.com/microsoft/go-mssqldb/msdsn"
 	"go.uber.org/zap"
 	"k8s.io/client-go/util/cert"
 )
 
+const applicationclientid = "7f98cb04-cd1e-40df-9140-3bf7e2cea4db"
+
 type mssqlHandler struct {
 	Config
-	UpstreamConfig  msdsn.Config
-	server          *mssql.Server
-	awsCredentials  aws.CredentialsProvider
-	upstreamAddress string
+	server         *mssql.Server
+	dsn            string
+	awsCredentials aws.CredentialsProvider
+	config         msdsn.Config
 }
 
 func newMssqlHandler(c Config) (*mssqlHandler, error) {
-	config, err := msdsn.Parse(fmt.Sprintf("sqlserver://%s:%s@%s:%d", c.Username, c.Password, c.Hostname, c.Port))
+	var azureCfg string
+	if c.AzureAD {
+		if c.Username == "" {
+			azureCfg = "?fedauth=ActiveDirectoryIntegrated"
+		} else {
+			azureCfg = fmt.Sprintf("?fedauth=ActiveDirectoryPassword&applicationclientid=%s", applicationclientid)
+		}
+	}
+
+	dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%d%s", c.Username, c.Password, c.Hostname, c.Port, azureCfg)
+
+	config, err := msdsn.Parse(dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	upstreamAddress := net.JoinHostPort(c.Hostname, fmt.Sprintf("%d", c.Port))
 	var awsCredentials aws.CredentialsProvider
 	if c.RdsIam {
 		cfg, err := util.GetAwsConfig(context.Background(), c.AwsRegion, c.AwsCredentials)
@@ -74,7 +87,6 @@ func newMssqlHandler(c Config) (*mssqlHandler, error) {
 		} else if c.UpstreamCertFile != "" || c.UpstreamKeyFile != "" {
 			return nil, fmt.Errorf("upstream cert and key must both be provided")
 		}
-
 	}
 
 	if !c.E2eEncryptionEnabled {
@@ -90,11 +102,11 @@ func newMssqlHandler(c Config) (*mssqlHandler, error) {
 	}
 
 	return &mssqlHandler{
-		Config:          c,
-		UpstreamConfig:  config,
-		server:          server,
-		awsCredentials:  awsCredentials,
-		upstreamAddress: upstreamAddress,
+		Config:         c,
+		server:         server,
+		dsn:            dsn,
+		awsCredentials: awsCredentials,
+		config:         config,
 	}, nil
 }
 
@@ -118,12 +130,24 @@ func (h mssqlHandler) handleClient(c net.Conn) {
 		return
 	}
 
-	h.UpstreamConfig.Database = login.Database
-	var tokenProvider func(ctx context.Context) (string, error)
+	var dialer mssql.Dialer
+	if h.DialerFunc != nil {
+		dialer = gcpDialer{DialContextFunc: h.DialerFunc}
+	}
 
-	if h.RdsIam {
-		tokenProvider = func(ctx context.Context) (string, error) {
-			authToken, err := auth.BuildAuthToken(ctx, h.upstreamAddress, h.AwsRegion, h.Username, h.awsCredentials)
+	upstreamAddress := net.JoinHostPort(h.Hostname, fmt.Sprintf("%d", h.Port))
+
+	var connector *mssql.Connector
+	switch {
+	case h.AzureAD:
+		connector, err = azuread.NewConnector(h.dsn)
+		if err != nil {
+			h.Logger.Error("failed to create azure ad connector", zap.Error(err))
+			return
+		}
+	case h.RdsIam:
+		tokenProviderWithCtx := func(ctx context.Context) (string, error) {
+			authToken, err := auth.BuildAuthToken(ctx, upstreamAddress, h.AwsRegion, h.Username, h.awsCredentials)
 			if err != nil {
 				h.Logger.Error("failed to create authentication token", zap.Error(err))
 				return "", err
@@ -131,15 +155,18 @@ func (h mssqlHandler) handleClient(c net.Conn) {
 			}
 			return authToken, nil
 		}
-	}
 
-	var dialer mssql.Dialer
-	if h.DialerFunc != nil {
-		dialer = gcpDialer{DialContextFunc: h.DialerFunc}
+		connector, err = mssql.NewConnectorWithAccessTokenProvider(h.dsn, tokenProviderWithCtx)
+		if err != nil {
+			h.Logger.Error("failed to create rds iam connector", zap.Error(err))
+			return
+		}
+	default:
+		connector = mssql.NewConnectorFromConfig(h.config)
 	}
 
 	// connect upstream
-	upstreamConn, err := mssql.NewClient(ctx, h.UpstreamConfig, tokenProvider, dialer)
+	upstreamConn, err := mssql.NewClient(ctx, connector, dialer, login.Database)
 	if err != nil {
 		h.Logger.Error("failed to connect upstream", zap.Error(err))
 		return
