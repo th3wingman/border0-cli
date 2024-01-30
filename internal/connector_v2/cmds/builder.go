@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/smithy-go/logging"
 	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-go/types/connector"
 	"github.com/shirou/gopsutil/v3/host"
@@ -27,6 +28,7 @@ func trySetAwsEc2IdentityMetadata(ctx context.Context, cmd *connector.Metadata) 
 		// ignored error
 		return
 	}
+	awsConfig.Logger = logging.Nop{} // don't log anything
 	identityDoc, err := imds.NewFromConfig(awsConfig).GetInstanceIdentityDocument(ctx, &imds.GetInstanceIdentityDocumentInput{})
 	if err != nil {
 		// ignored error
