@@ -15,17 +15,17 @@ See https://github.com/songgao/packets for functions for parsing various packets
 ## Supported Platforms
 
 * Linux
-* Windows (experimental; APIs might change)
+* Windows
 * macOS (point-to-point TUN only)
 
 ## Installation
 ```
-go get -u github.com/songgao/water
-go get -u github.com/songgao/water/waterutil
+go get -u github.com/borderzero/water
+go get -u github.com/borderzero/water/waterutil
 ```
 
 ## Documentation
-[http://godoc.org/github.com/songgao/water](http://godoc.org/github.com/songgao/water)
+[http://godoc.org/github.com/borderzero/water](http://godoc.org/github.com/borderzero/water)
 
 ## Example
 
@@ -38,7 +38,7 @@ import (
 	"log"
 
 	"github.com/songgao/packets/ethernet"
-	"github.com/songgao/water"
+	"github.com/borderzero/water"
 )
 
 func main() {
@@ -102,7 +102,7 @@ package main
 import (
 	"log"
 
-	"github.com/songgao/water"
+	"github.com/borderzero/water"
 )
 
 func main() {
@@ -155,6 +155,52 @@ You'd see the ICMP packets printed out:
 
 1. Only Point-to-Point user TUN devices are supported. TAP devices are *not* supported natively by macOS.
 2. Custom interface names are not supported by macOS. Interface names are automatically generated serially, using the `utun<#>` naming convention.
+
+### TUN on Windows:
+To use it with windows,you will need to download file [wintun.dll](https://www.wintun.net/) in running dir.
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/borderzero/water"
+)
+
+func main() {
+	ifce, err := water.New(water.Config{
+		DeviceType: water.TUN,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Interface Name: %s\n", ifce.Name())
+
+	packet := make([]byte, 2000)
+	for {
+		n, err := ifce.Read(packet)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Packet Received: % x\n", packet[:n])
+	}
+}
+```
+```dos
+go run main.go
+```
+In a new cmd (admin right):
+```dos
+# Replace with your device name, it can be achieved by ifce.Name().
+netsh interface ip set address name="Ehternet 2" source=static addr=10.1.0.10 mask=255.255.255.0 gateway=none
+```
+
+```dos
+ping 10.1.0.255
+```
+You'll see output containing the IPv4 ICMP frame same as the Linux version.
 
 ### TAP on Windows:
 

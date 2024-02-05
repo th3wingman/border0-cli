@@ -332,6 +332,12 @@ github.com/borderzero/discovery
 github.com/borderzero/discovery/discoverers
 github.com/borderzero/discovery/engines
 github.com/borderzero/discovery/utils
+# github.com/borderzero/water v0.0.0-20240205004738-edb1d3cd8361
+## explicit; go 1.21.6
+github.com/borderzero/water
+# github.com/borderzero/wintundll-downloader-go v0.0.4
+## explicit; go 1.21.6
+github.com/borderzero/wintundll-downloader-go/wintundll
 # github.com/brianvoe/gofakeit v3.18.0+incompatible
 ## explicit
 github.com/brianvoe/gofakeit
@@ -822,9 +828,6 @@ github.com/sirupsen/logrus
 # github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 ## explicit
 github.com/skratchdot/open-golang/open
-# github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8
-## explicit
-github.com/songgao/water
 # github.com/spf13/afero v1.9.5
 ## explicit; go 1.16
 github.com/spf13/afero
@@ -1038,6 +1041,12 @@ golang.org/x/tools/internal/tokeninternal
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/internal/versions
+# golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2
+## explicit; go 1.17
+golang.zx2c4.com/wintun
+# golang.zx2c4.com/wireguard/windows v0.5.3
+## explicit; go 1.18
+golang.zx2c4.com/wireguard/windows/tunnel/winipcfg
 # google.golang.org/api v0.126.0
 ## explicit; go 1.19
 google.golang.org/api/googleapi

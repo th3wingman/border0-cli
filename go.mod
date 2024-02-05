@@ -1,8 +1,6 @@
 module github.com/borderzero/border0-cli
 
-go 1.21
-
-toolchain go1.21.0
+go 1.21.6
 
 require (
 	cloud.google.com/go/cloudsqlconn v1.2.4
@@ -28,6 +26,8 @@ require (
 	github.com/borderzero/border0-go v1.4.16
 	github.com/borderzero/border0-proto v1.0.19
 	github.com/borderzero/discovery v0.1.30
+	github.com/borderzero/water v0.0.0-20240205004738-edb1d3cd8361
+	github.com/borderzero/wintundll-downloader-go v0.0.4
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/creack/pty v1.1.18
@@ -54,9 +54,7 @@ require (
 	github.com/pingcap/errors v0.11.5-0.20210425183316-da1aaba5fb63
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil/v3 v3.23.4
-	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
-	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.4
@@ -66,6 +64,7 @@ require (
 	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.16.0
 	golang.org/x/term v0.16.0
+	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/grpc v1.59.0
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
@@ -135,6 +134,7 @@ require (
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
+	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
@@ -144,6 +144,7 @@ require (
 	golang.org/x/exp v0.0.0-20231214170342-aacd6d4b4611 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/tools v0.16.1 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	google.golang.org/api v0.126.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231030173426-d783a09b4405 // indirect
 	rsc.io/qr v0.2.0 // indirect

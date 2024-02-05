@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -15,7 +16,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/borderzero/border0-cli/internal/enum"
 	"github.com/borderzero/border0-cli/internal/vpnlib"
-	"github.com/songgao/water"
+	"github.com/borderzero/water"
+	"github.com/borderzero/wintundll-downloader-go/wintundll"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/net/icmp"
@@ -77,7 +79,31 @@ var clientVpnCmd = &cobra.Command{
 
 		defer conn.Close()
 
-		iface, err := water.New(water.Config{DeviceType: water.TUN})
+		var iface *water.Interface
+		waterConfig := water.Config{DeviceType: water.TUN}
+		// Check if OS is windows, using GOOS env variable
+		if runtime.GOOS == "windows" {
+
+			// First make sure the wintun driver is installed
+
+			err := wintundll.Ensure(
+				wintundll.WithDownloadURL("https://www.wintun.net/builds/wintun-0.14.1.zip"),
+				wintundll.WithDownloadTimeout(time.Second*10),
+				wintundll.WithDllPathToEnsure(`C:\Windows\System32\wintun.dll`),
+			)
+			if err != nil {
+				return fmt.Errorf("error ensuring Wintun driver is installed: %w", err)
+			}
+
+			waterConfig = water.Config{
+				DeviceType: water.TUN,
+				PlatformSpecificParams: water.PlatformSpecificParams{
+					Name: "border0VPN",
+				},
+			}
+		}
+		// Create a TUN interface with the given configuration.
+		iface, err = water.New(waterConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create TUN iface: %v", err)
 		}
@@ -91,13 +117,6 @@ var clientVpnCmd = &cobra.Command{
 		}
 		logger.Logger.Info("Received control message", zap.Any("control_message", ctrl))
 
-		// get the existing default route, so we can override it
-		// This will return both the gateway IP and the interface name
-		LocalGatewayIp, gatewayInterface, err := vpnlib.GetDefaultGateway()
-		if err != nil {
-			return fmt.Errorf("failed to get default route: %v", err)
-		}
-
 		if err = vpnlib.AddIpToIface(iface.Name(), ctrl.ClientIp, ctrl.ServerIp, ctrl.SubnetSize); err != nil {
 			log.Println("failed to add IPs to interface", err)
 		}
@@ -108,30 +127,42 @@ var clientVpnCmd = &cobra.Command{
 		// Notify the `sigCh` channel for SIGINT (Ctrl+C) signals.
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 
-		// Before we add new routes, we need to add a more specific route to the gateway gatewayIp
-		// This is because we want the VPN gateway IP to be routed through the existing gateway
-		// If we don't do this, the VPN gateway IP will be routed through the VPN, which will cause a loop
-
-		// The IP of the VPN gateway the the remote end of conn.
-		// So let's get the IP of the remote end of conn and then turn that into a /32 route
-		// and route it via the old gateway
-		vpnGatewayIp := conn.RemoteAddr().(*net.TCPAddr).IP.String() + "/32"
-
-		if err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{vpnGatewayIp}); err != nil {
-			log.Fatalf("failed to add static route for VPN Gateway %s, towards %s (%s): %v\n", vpnGatewayIp, gatewayInterface, LocalGatewayIp.String(), err)
-		}
-
 		// keep track of the routes we need to delete when we exit
 		routesToDel := []networkRoute{}
-		// add the newly create static route for VPN gateway to the list of routes to delete
-		routesToDel = append(routesToDel, networkRoute{network: vpnGatewayIp, nextHopIp: LocalGatewayIp.String()})
+
+		// we should also add a defer, so we clean this up when we exit
+		defer cleanUpAfterSessionDown(routesToDel)
 
 		// rewrite default route to 0.0.0.0/1 and 128.0.0.1
 		for i, route := range ctrl.Routes {
 			if route == "0.0.0.0/0" {
-				// then delete this route
+
+				// get the existing default route, so we can override it
+				// This will return both the gateway IP and the interface name
+
+				LocalGatewayIp, _, err := vpnlib.GetDefaultGateway()
+				if err != nil {
+					return fmt.Errorf("failed to get default route: %v", err)
+				}
+				// Before we add new routes, we need to add a more specific route to the gateway gatewayIp
+				// This is because we want the VPN gateway IP to be routed through the existing gateway
+				// If we don't do this, the VPN gateway IP will be routed through the VPN, which will cause a loop
+
+				// The IP of the VPN gateway the the remote end of conn.
+				// So let's get the IP of the remote end of conn and then turn that into a /32 route
+				// and route it via the old gateway
+				vpnGatewayIp := conn.RemoteAddr().(*net.TCPAddr).IP.String() + "/32"
+
+				if err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{vpnGatewayIp}); err != nil {
+					log.Fatalf("failed to add static route for VPN Gateway %s, towards %s: %v\n", vpnGatewayIp, LocalGatewayIp.String(), err)
+				}
+
+				// add the newly create static route for VPN gateway to the list of routes to delete
+				routesToDel = append(routesToDel, networkRoute{network: vpnGatewayIp, nextHopIp: LocalGatewayIp.String()})
+
+				// then delete this route (0.0.0.0/0) from the list of routes
 				ctrl.Routes = append(ctrl.Routes[:i], ctrl.Routes[i+1:]...)
-				// and add two new routes
+				// and add two new more specific routes
 				ctrl.Routes = append(ctrl.Routes, "0.0.0.0/1", "128.0.0.0/1")
 
 				// Also get the DNS servers from the server and add them to the map
@@ -184,9 +215,6 @@ var clientVpnCmd = &cobra.Command{
 						routesToDel = append(routesToDel, networkRoute{network: dnsServer, nextHopIp: LocalGatewayIp.String()})
 					}
 				}
-
-				// we should also add a defer, so we clean this up when we exit
-				defer cleanUpAfterSessionDown(routesToDel)
 				break
 
 			}
@@ -195,7 +223,21 @@ var clientVpnCmd = &cobra.Command{
 		// Now we can add the routes that the server sent to us a the client
 		// These routes will be routed through the VPN
 
-		if err = vpnlib.AddRoutesToIface(iface.Name(), ctrl.Routes); err != nil {
+		// check if we're running on Windows , if so we need to sleep for a few seconds
+		// Seems like it's slow to update the routing table on Windows
+		// if we don't wait, windows will use the wrong "Interface" for the route.
+		// It seems to then choose the old default gateway, which is not what we want
+		// So we wait a few seconds, and then add the routes, it then picks the VPN interfaces as the correct interface
+		if runtime.GOOS == "windows" {
+			fmt.Printf("Adding VPN routes, waiting for interface to be ready...")
+			// for loop with one 500ms sleep each
+			for i := 0; i < 10; i++ {
+				time.Sleep(500 * time.Millisecond)
+				fmt.Print(".")
+			}
+			fmt.Println()
+		}
+		if err = vpnlib.AddRoutesViaGateway(ctrl.ServerIp, ctrl.Routes); err != nil {
 			log.Println("failed to add routes to interface", err)
 		}
 
@@ -203,6 +245,8 @@ var clientVpnCmd = &cobra.Command{
 		cm := vpnlib.NewConnectionMap()
 		cm.Set(ctrl.ServerIp, conn)
 		defer cm.Delete(ctrl.ServerIp)
+
+		fmt.Println("Connected to", conn.RemoteAddr())
 
 		// Start a goroutine to handle OS signals and make sure we clean up when we exit
 		go func() {
