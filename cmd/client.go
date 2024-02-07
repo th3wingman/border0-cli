@@ -23,7 +23,9 @@ import (
 
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/cmd/client/db"
+	"github.com/borderzero/border0-cli/cmd/client/rdp"
 	clientTls "github.com/borderzero/border0-cli/cmd/client/tls"
+	"github.com/borderzero/border0-cli/cmd/client/vnc"
 	"github.com/borderzero/border0-cli/cmd/logger"
 
 	"github.com/borderzero/border0-cli/cmd/client/hosts"
@@ -146,6 +148,8 @@ func init() {
 	hosts.AddCommandsTo(clientCmd)
 	ssh.AddCommandsTo(clientCmd)
 	clientTls.AddCommandsTo(clientCmd)
+	rdp.AddCommandsTo(clientCmd)
+	vnc.AddCommandsTo(clientCmd)
 	vpn.AddCommandsTo(clientCmd)
 	httpproxy.AddCommandsTo(clientCmd)
 }
