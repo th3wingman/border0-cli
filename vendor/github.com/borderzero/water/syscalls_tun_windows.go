@@ -12,7 +12,6 @@ import (
 	"time"
 	_ "unsafe"
 
-	"github.com/borderzero/wintundll-downloader-go/wintundll"
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wintun"
 )
@@ -116,14 +115,6 @@ func openTunDev(config Config) (ifce *Interface, err error) {
 	// it to fail to create an interface as claims it already exists
 	gUID, _ := generateRandomGUID()
 
-	// Next, make sure the Wintun driver is installed
-	err = wintundll.Ensure(
-		wintundll.WithDownloadURL("https://www.wintun.net/builds/wintun-0.14.1.zip"),
-		wintundll.WithDownloadTimeout(time.Second*10),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Error ensuring Wintun driver is installed: %w", err)
-	}
 	if config.PlatformSpecificParams.Name == "" {
 		config.PlatformSpecificParams.Name = "WaterIface"
 	}

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
@@ -28,12 +29,14 @@ func openRDP(address string) error {
 		return fmt.Errorf("failed to create RDP file: %w", err)
 	}
 
-	// We open the client twice... because
+	// On MacOS we open the client twice... because
 	// Microsoft's Remote Desktop client refuses
 	// to configure a new machine if the app is not
 	// already open.
-	open.Run(rdpFilePath)
-	time.Sleep(time.Second * 1)
+	if runtime.GOOS == "darwin" {
+		open.Run(rdpFilePath)
+		time.Sleep(time.Second * 1)
+	}
 	return open.Run(rdpFilePath)
 }
 
