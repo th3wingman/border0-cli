@@ -26,7 +26,7 @@ require (
 	github.com/borderzero/border0-go v1.4.16
 	github.com/borderzero/border0-proto v1.0.19
 	github.com/borderzero/discovery v0.1.30
-	github.com/borderzero/water v0.0.0-20240205004738-edb1d3cd8361
+	github.com/borderzero/water v0.0.1
 	github.com/borderzero/wintundll-downloader-go v0.0.4
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
