@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -30,6 +31,13 @@ var (
 	hostname     string
 	sshLoginName string
 	wsProxy      string
+)
+
+var (
+	wsProxyToOriginHeader = map[string]string{
+		"wss://ws.border0.com/ws":         "https://client.border0.com",
+		"wss://ws.staging.border0.com/ws": "https://client.staging.border0.com",
+	}
 )
 
 type HostDB struct {
@@ -171,8 +179,13 @@ var sshCmd = &cobra.Command{
 
 			wsURL := parsedURL.String()
 
+			httpHeader := http.Header{}
+			if originHeader, ok := wsProxyToOriginHeader[wsProxy]; ok {
+				httpHeader.Set("Origin", originHeader)
+			}
+
 			ctx := context.Background()
-			wsConn, _, err := websocket.Dial(ctx, wsURL, nil)
+			wsConn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: httpHeader})
 			if err != nil {
 				return fmt.Errorf("failed to perform WebSocket handshake on %s: %w", wsURL, err)
 			}
