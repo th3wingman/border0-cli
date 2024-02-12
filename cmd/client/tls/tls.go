@@ -1,7 +1,6 @@
 package tls
 
 import (
-	"bufio"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -99,7 +98,7 @@ var clientTlsCmd = &cobra.Command{
 					}
 
 					log.Print("Connection established from ", lcon.RemoteAddr())
-					utils.Copy(conn, lcon)
+					utils.Copy(conn, lcon, lcon)
 				}()
 			}
 		} else {
@@ -115,7 +114,7 @@ var clientTlsCmd = &cobra.Command{
 				}
 			}
 
-			utils.Copy(conn, bufio.ReadWriter{Reader: bufio.NewReader(os.Stdin), Writer: bufio.NewWriter(os.Stdout)})
+			utils.Copy(conn, os.Stdin, os.Stdout)
 		}
 
 		return err

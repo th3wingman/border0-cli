@@ -111,7 +111,7 @@ func StartLocalProxyAndOpenClient(
 			}
 
 			log.Print("Connection established from ", lcon.RemoteAddr())
-			Copy(conn, lcon)
+			Copy(conn, lcon, lcon)
 		}()
 	}
 }
