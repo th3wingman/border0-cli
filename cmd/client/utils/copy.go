@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-func Copy(a, b io.ReadWriter) {
-	toStdoutChan := copyStream(a, b)
-	toRemoteChan := copyStream(b, a)
+func Copy(conn net.Conn, in io.Reader, out io.Writer) {
+	toStdoutChan := copyStream(conn, out)
+	toRemoteChan := copyStream(in, conn)
 
 	select {
 	case <-toStdoutChan:
