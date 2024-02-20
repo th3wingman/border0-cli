@@ -1,6 +1,6 @@
 module github.com/borderzero/border0-cli
 
-go 1.21.6
+go 1.22
 
 require (
 	cloud.google.com/go/cloudsqlconn v1.2.4

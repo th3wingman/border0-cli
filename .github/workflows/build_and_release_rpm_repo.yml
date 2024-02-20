@@ -18,21 +18,21 @@ jobs:
       PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
           role-session-name: RPMBuildAndDeploy4border0cli
           role-duration-seconds: 1800 # 30 minutes
 
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.20.1' # The Go version to download (if necessary) and use.
+          go-version-file: go.mod
       - run: go version
 
       - name: Generate git repo version string
