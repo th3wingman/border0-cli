@@ -20,11 +20,11 @@ jobs:
     name: Checkout Code
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Cache code
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .
           key: ${{ github.run_id }}
@@ -38,12 +38,12 @@ jobs:
         target: [windows-amd64, windows-arm64, linux-amd64, linux-arm64, linux-arm, linux-armv6, linux-386, darwin-amd64, darwin-arm64, openbsd-amd64]
     steps:
       - name: Download cached code
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .
           key: ${{ github.run_id }}
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Print Versions
@@ -65,7 +65,7 @@ jobs:
           echo ${BORDER0_BIN}
           echo "BORDER0_BIN=border0_${BORDER0_BIN}" >> $GITHUB_ENV
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: |
@@ -84,11 +84,11 @@ jobs:
       actions: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: List artifacts
@@ -100,7 +100,7 @@ jobs:
           for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
           tree ./bin
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
@@ -148,11 +148,11 @@ jobs:
       actions: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: List artifacts
@@ -164,7 +164,7 @@ jobs:
           for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
           tree ./bin
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -222,11 +222,11 @@ jobs:
       actions: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: List artifacts
@@ -238,7 +238,7 @@ jobs:
           for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
           tree ./bin
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
@@ -278,11 +278,11 @@ jobs:
       actions: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: List artifacts
@@ -294,7 +294,7 @@ jobs:
           for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
           tree ./bin
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-2
           role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
@@ -335,7 +335,7 @@ jobs:
       CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
     steps:
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v3
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-region: us-east-2
         role-to-assume: ${{ secrets.PROD_BUILD_AND_DEPLOY_ROLE }}
