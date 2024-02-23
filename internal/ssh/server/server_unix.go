@@ -47,7 +47,7 @@ func ExecCmd(channel gossh.Channel, command string, ptyTerm string, isPty bool, 
 		}
 		cmd.Args = append(cmd.Args, "-c", command)
 	} else {
-		if euid == 0 && loginCmd != "" {
+		if euid == 0 && loginCmd != "" && isPty {
 			cmd.Path = loginCmd
 			if hasBusyBoxLogin(loginCmd) {
 				cmd.Args = []string{loginCmd, "-p", "-h", "Border0", "-f", username}
