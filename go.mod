@@ -2,6 +2,8 @@ module github.com/borderzero/border0-cli
 
 go 1.22
 
+toolchain go1.22.0
+
 require (
 	cloud.google.com/go/cloudsqlconn v1.2.4
 	github.com/ActiveState/termtest/conpty v0.5.0
