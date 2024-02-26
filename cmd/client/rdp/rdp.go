@@ -26,7 +26,8 @@ var clientRdpCmd = &cobra.Command{
 		}
 
 		if hostname == "" {
-			pickedHost, err := client.PickHost(hostname, enum.TLSSocket)
+			// TODO(devs): Remove TLSSocket once we have exposed CRUD for RDP sockets in the admin portal.
+			pickedHost, err := client.PickHost(hostname, enum.RDPSocket, enum.TLSSocket)
 			if err != nil {
 				return fmt.Errorf("failed to pick host: %v", err)
 			}

@@ -8,4 +8,5 @@ const (
 	TCPSocket      = "tcp"
 	TLSSocket      = "tls"
 	VNCSocket      = "vnc"
+	RDPSocket      = "rdp"
 )
