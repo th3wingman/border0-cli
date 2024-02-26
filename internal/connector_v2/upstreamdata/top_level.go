@@ -43,6 +43,8 @@ func (u *UpstreamDataBuilder) Build(s *models.Socket, config service.Configurati
 		return u.buildUpstreamDataForSshService(s, config.SshServiceConfiguration)
 	case service.ServiceTypeTls:
 		return u.buildUpstreamDataForTlsService(s, config.TlsServiceConfiguration)
+	case service.ServiceTypeVnc:
+		return u.buildUpstreamDataForVncService(s, config.VncServiceConfiguration)
 	default:
 		return fmt.Errorf("unsupported service type: %s", s.SocketType)
 	}
