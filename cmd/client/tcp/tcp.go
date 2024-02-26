@@ -1,4 +1,4 @@
-package tls
+package tcp
 
 import (
 	"crypto/tls"
@@ -21,18 +21,14 @@ var (
 	listener int
 )
 
-// clientTlsCmd represents the client tls command
-var clientTlsCmd = &cobra.Command{
-	Use:               "tls",
-	Short:             "Connect to a border0 TLS protected socket",
-	ValidArgsFunction: client.AutocompleteHost,
-	RunE: func(cmd *cobra.Command, args []string) error {
+func getRunE(socketTypesToList ...string) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			hostname = args[0]
 		}
 
 		if hostname == "" {
-			pickedHost, err := client.PickHost(hostname, enum.TLSSocket)
+			pickedHost, err := client.PickHost(hostname, socketTypesToList...)
 			if err != nil {
 				return err
 			}
@@ -118,12 +114,31 @@ var clientTlsCmd = &cobra.Command{
 		}
 
 		return err
-	},
+	}
+}
+
+// clientTcpCmd represents the client tcp command
+var clientTcpCmd = &cobra.Command{
+	Use:               "tcp",
+	Short:             "Connect to a border0 TCP socket",
+	ValidArgsFunction: client.AutocompleteHost,
+	RunE:              getRunE(enum.TCPSocket, enum.TLSSocket),
+}
+
+// clientTlsCmd represents the client tls command
+var clientTlsCmd = &cobra.Command{
+	Use:               "tls",
+	Short:             "Connect to a border0 TLS socket",
+	ValidArgsFunction: client.AutocompleteHost,
+	RunE:              getRunE(enum.TLSSocket),
 }
 
 func AddCommandsTo(client *cobra.Command) {
-	client.AddCommand(clientTlsCmd)
+	clientTcpCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
+	clientTcpCmd.Flags().IntVarP(&listener, "listener", "l", 0, "Listener port number")
+	client.AddCommand(clientTcpCmd)
 
 	clientTlsCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
 	clientTlsCmd.Flags().IntVarP(&listener, "listener", "l", 0, "Listener port number")
+	client.AddCommand(clientTlsCmd)
 }
