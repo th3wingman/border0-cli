@@ -112,6 +112,8 @@ func ExecCmd(ctx context.Context, channel gossh.Channel, command string, ptyTerm
 			if cmd.ProcessState == nil {
 				cmd.Process.Kill()
 			}
+
+			return cmd.ProcessState.ExitCode()
 		}
 	} else {
 		sysProcAttr.Setsid = true
