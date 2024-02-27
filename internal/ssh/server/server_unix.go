@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/creack/pty"
@@ -24,7 +23,7 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-func ExecCmd(channel gossh.Channel, command string, ptyTerm string, isPty bool, winCh <-chan ssh.Window, cmd exec.Cmd, uid, gid uint64, username string) int {
+func ExecCmd(ctx context.Context, channel gossh.Channel, command string, ptyTerm string, isPty bool, winCh <-chan ssh.Window, cmd exec.Cmd, uid, gid uint64, username string) int {
 	euid := os.Geteuid()
 	var loginCmd string
 	if selinux.EnforceMode() != selinux.Enforcing {
@@ -83,39 +82,39 @@ func ExecCmd(channel gossh.Channel, command string, ptyTerm string, isPty bool, 
 			return 255
 		}
 
+		defer f.Close()
+
 		go func() {
 			for win := range winCh {
 				setWinsize(f, win.Width, win.Height)
 			}
 		}()
 
-		var wg sync.WaitGroup
-		wg.Add(2)
+		go io.Copy(f, channel)
+		go io.Copy(channel, f)
+		done := make(chan error, 1)
 
 		go func() {
-			defer wg.Done()
-			io.Copy(f, channel)
-			f.Close()
-			if cmd.ProcessState == nil {
-				cmd.Process.Signal(syscall.SIGKILL)
+			done <- cmd.Wait()
+		}()
+
+		select {
+		case err := <-done:
+			if err != nil {
+				if execErr, ok := err.(*exec.ExitError); ok {
+					return execErr.ProcessState.ExitCode()
+				}
+				return 1
+			} else {
+				return 0
 			}
-		}()
+		case <-ctx.Done():
+			if cmd.ProcessState == nil {
+				cmd.Process.Kill()
+			}
 
-		go func() {
-			defer wg.Done()
-			time.Sleep(200 * time.Millisecond)
-			io.Copy(channel, f)
-			channel.Close()
-		}()
-
-		wg.Wait()
-		cmd.Wait()
-
-		if cmd.ProcessState == nil {
-			cmd.Process.Signal(syscall.SIGKILL)
+			return cmd.ProcessState.ExitCode()
 		}
-
-		return cmd.ProcessState.ExitCode()
 	} else {
 		sysProcAttr.Setsid = true
 		cmd.SysProcAttr = sysProcAttr
