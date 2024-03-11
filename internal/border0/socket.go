@@ -132,7 +132,7 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string, logger 
 		return nil, err
 	}
 
-	sckContext, sckCancel := context.WithCancel(context.Background())
+	sckContext, sckCancel := context.WithCancel(ctx)
 
 	var upstreamUsername string
 	if socketFromApi.UpstreamUsername != nil {
@@ -557,8 +557,14 @@ func (s *Socket) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("no listener")
 	}
 
-	r := <-s.acceptChan
-	return r.conn, r.err
+	for {
+		select {
+		case <-s.context.Done():
+			return nil, s.context.Err()
+		case r := <-s.acceptChan:
+			return r.conn, r.err
+		}
+	}
 }
 
 func (s *Socket) connecorAuthHandshake(conn net.Conn) {

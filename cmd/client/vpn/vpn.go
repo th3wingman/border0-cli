@@ -1,8 +1,10 @@
 package vpn
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -41,6 +43,9 @@ var clientVpnCmd = &cobra.Command{
 			hostname = args[0]
 		}
 
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+
 		if hostname == "" {
 			pickedHost, err := client.PickHost(hostname, enum.TLSSocket)
 			if err != nil {
@@ -74,17 +79,15 @@ var clientVpnCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to connect: %v", err)
 		}
-
 		defer conn.Close()
 
 		iface, err := vpnlib.CreateTun()
 		if err != nil {
 			return fmt.Errorf("failed to create TUN interface: %v", err)
 		}
+		defer iface.Close()
 
 		logger.Logger.Info("Created TUN interface", zap.String("interface_name", iface.Name()))
-
-		defer iface.Close()
 
 		ctrl, err := vpnlib.GetControlMessage(conn)
 		if err != nil {
@@ -96,16 +99,12 @@ var clientVpnCmd = &cobra.Command{
 			log.Println("failed to add IPs to interface", err)
 		}
 
-		// Create a channel to receive OS signals.
+		// channel for interrupts
 		sigCh := make(chan os.Signal, 1)
-
-		// Notify the `sigCh` channel for SIGINT (Ctrl+C) signals.
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 
 		// keep track of the routes we need to delete when we exit
 		routesToDel := []networkRoute{}
-
-		// we should also add a defer, so we clean this up when we exit
 		defer cleanUpAfterSessionDown(routesToDel)
 
 		// Get the remote address of the tunnel connection
@@ -157,17 +156,17 @@ var clientVpnCmd = &cobra.Command{
 					}
 
 					if err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{vpnGatewayIp}); err != nil {
-						log.Fatalf("failed to add static route for VPN Gateway %s, towards %s: %v\n", vpnGatewayIp, LocalGatewayIp.String(), err)
+						return fmt.Errorf("failed to add static route for VPN Gateway %s, towards %s: %v", vpnGatewayIp, LocalGatewayIp.String(), err)
 					}
 
 					// add the newly create static route for VPN gateway to the list of routes to delete
 					routesToDel = append(routesToDel, networkRoute{network: vpnGatewayIp, nextHopIp: LocalGatewayIp.String()})
-
-				} else if addressFamily == 6 {
+				} else {
 					// TODO placeholder for ipv6
 					// for now we don't support bypass routes for ipv6
 					// once we start announcing ipv6 routes, we can should add support for bypass routes
 					// for now we just skip this
+					fmt.Printf("WARNING: got a route with a non IPv4 address family routes[%d] (%s)\n", i, route)
 				}
 			}
 		}
@@ -221,35 +220,36 @@ var clientVpnCmd = &cobra.Command{
 		if err = vpnlib.AddRoutesViaGateway(ctrl.ServerIp, ctrl.Routes); err != nil {
 			log.Println("failed to add routes to interface", err)
 		}
-
-		// create the connection map
-		cm := vpnlib.NewConnectionMap()
-		cm.Set(ctrl.ServerIp, conn)
-		defer cm.Delete(ctrl.ServerIp)
-
 		fmt.Println("Connected to", conn.RemoteAddr())
+
+		// liste
+		icmpConn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+		if err != nil {
+			return fmt.Errorf("failed to open ICMP \"connection\": %v", err)
+		}
+		defer icmpConn.Close()
 
 		// Start a goroutine to handle OS signals and make sure we clean up when we exit
 		go func() {
 			<-sigCh
-			cleanUpAfterSessionDown(routesToDel)
-			os.Exit(0)
-
+			fmt.Println("shutdown signal received")
+			// cancelling top level context will
+			// - stop the tun to conn copy routine
+			cancel()
+			// we *MUST* manually close the socket connection
+			// because it is not tied to the context. This will
+			// - stop the conn to tun copy routine which will make the main routine reach the end
+			//   - a defer statement closes the TUN iface
+			//   - a defer statement closes the icmp "conn"
+			conn.Close()
 		}()
 
 		// Now start the Tun to Conn goroutine
 		// This will listen for packets on the TUN interface and forward them to the right connection
-		go vpnlib.TunToConnCopy(iface, cm, true, conn)
+		go vpnlib.TunToConnCopy(ctx, iface, conn)
 
 		// Let's start a goroutine that send keep alive ping messges to the other side
 		go func() {
-			// Create ICMP Echo message
-			c, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
-			if err != nil {
-				fmt.Println("Error opening ICMP socket:", err)
-				return
-			}
-			defer c.Close()
 			msg := icmp.Message{
 				Type: ipv4.ICMPTypeEcho, Code: 0,
 				Body: &icmp.Echo{
@@ -264,17 +264,26 @@ var clientVpnCmd = &cobra.Command{
 				return
 			}
 
+			icmpKeepAliveInterval := time.Second * 120
+			lastPing := time.Now().Add(icmpKeepAliveInterval * -1)
+
 			for {
-				// send an ICMP ping to ctrl.ServerIp
-				n, err := c.WriteTo(b, &net.IPAddr{IP: net.ParseIP(ctrl.ServerIp)})
-				if err != nil {
-					fmt.Println("Error writing ICMP keep alive message:", err)
+				select {
+				case <-ctx.Done():
 					return
-				} else if n != len(b) {
-					fmt.Println("Got short write from WriteTo")
-					return
+				default:
+					if time.Since(lastPing) >= icmpKeepAliveInterval {
+						n, err := icmpConn.WriteTo(b, &net.IPAddr{IP: net.ParseIP(ctrl.ServerIp)})
+						if err != nil {
+							fmt.Println("Error writing ICMP keep alive message:", err)
+							return
+						} else if n != len(b) {
+							fmt.Println("Got short write from WriteTo")
+							return
+						}
+						lastPing = time.Now()
+					}
 				}
-				time.Sleep(120 * time.Second)
 			}
 		}()
 
@@ -282,23 +291,28 @@ var clientVpnCmd = &cobra.Command{
 		// This will listen for packets on the connection and forward them to the TUN interface
 		// note: this blocks
 
-		if err = vpnlib.ConnToTunCopy(conn, iface); err != nil {
-			fmt.Println("Error forwarding packets:", err)
-			return fmt.Errorf("failed to forward between tls conn and TUN iface: %v", err)
+		if err = vpnlib.ConnToTunCopy(ctx, conn, iface); err != nil {
+			if !errors.Is(err, net.ErrClosed) {
+				fmt.Println("Error forwarding packets:", err)
+				return fmt.Errorf("failed to forward between tls conn and TUN iface: %v", err)
+			}
 		}
 
-		fmt.Println("Done forwarding packets")
 		return nil
 	},
 }
 
 func cleanUpAfterSessionDown(routesToDelete []networkRoute) {
+	fmt.Println("Cleaning up routes...")
+
 	for _, route := range routesToDelete {
 		err := vpnlib.DeleteRoutesViaGateway(route.nextHopIp, []string{route.network})
 		if err != nil {
 			log.Println("failed to delete static route during session clean up", route.network, "via", route.nextHopIp, err)
 		}
 	}
+
+	fmt.Println("Done cleaning up routes!")
 }
 
 func establishConnection(connectorAuthenticationEnabled, end2EndEncryptionEnabled bool, addr string, tlsConfig *tls.Config, caCertificate *x509.Certificate) (conn net.Conn, err error) {
