@@ -73,6 +73,11 @@ type ConnectorLocalData struct {
 	AwsEksCluster                  string
 	AzureAD                        bool
 	Kerberos                       bool
+
+	// vpn sockets
+	IsVpn     bool
+	VpnSubnet string
+	Routes    []string
 }
 
 func (c *ConnectorData) Tags() map[string]string {

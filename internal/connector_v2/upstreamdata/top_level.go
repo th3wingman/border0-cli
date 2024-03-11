@@ -47,6 +47,8 @@ func (u *UpstreamDataBuilder) Build(s *models.Socket, config service.Configurati
 		return u.buildUpstreamDataForVncService(s, config.VncServiceConfiguration)
 	case service.ServiceTypeRdp:
 		return u.buildUpstreamDataForRdpService(s, config.RdpServiceConfiguration)
+	case service.ServiceTypeVpn:
+		return u.buildUpstreamDataForVpnService(s, config.VpnServiceConfiguration)
 	default:
 		return fmt.Errorf("unsupported service type: %s", s.SocketType)
 	}
