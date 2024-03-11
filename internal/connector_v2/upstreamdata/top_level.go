@@ -41,8 +41,6 @@ func (u *UpstreamDataBuilder) Build(s *models.Socket, config service.Configurati
 		return u.buildUpstreamDataForHttpService(s, config.HttpServiceConfiguration)
 	case service.ServiceTypeSsh:
 		return u.buildUpstreamDataForSshService(s, config.SshServiceConfiguration)
-	case service.ServiceTypeTcp:
-		return u.buildUpstreamDataForTcpService(s, config.TcpServiceConfiguration)
 	case service.ServiceTypeTls:
 		return u.buildUpstreamDataForTlsService(s, config.TlsServiceConfiguration)
 	case service.ServiceTypeVnc:
