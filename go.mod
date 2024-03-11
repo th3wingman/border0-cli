@@ -25,7 +25,7 @@ require (
 	github.com/aws/session-manager-plugin v0.0.0-20230808183647-dbfa0bfdb04b
 	github.com/aws/smithy-go v1.19.0
 	github.com/bluele/factory-go v0.0.1
-	github.com/borderzero/border0-go v1.4.21
+	github.com/borderzero/border0-go v1.4.23
 	github.com/borderzero/border0-proto v1.0.19
 	github.com/borderzero/discovery v0.1.30
 	github.com/borderzero/water v0.0.1
@@ -61,11 +61,11 @@ require (
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.24.0
-	golang.org/x/crypto v0.18.0
-	golang.org/x/net v0.19.0
+	golang.org/x/crypto v0.21.0
+	golang.org/x/net v0.21.0
 	golang.org/x/sync v0.5.0
-	golang.org/x/sys v0.16.0
-	golang.org/x/term v0.16.0
+	golang.org/x/sys v0.18.0
+	golang.org/x/term v0.18.0
 	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/grpc v1.59.0
 	k8s.io/api v0.29.0
