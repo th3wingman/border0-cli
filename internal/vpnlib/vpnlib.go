@@ -16,8 +16,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-
-	"github.com/borderzero/water"
 )
 
 const (
@@ -537,7 +535,7 @@ func TunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionM
 	}
 }
 
-func ConnToTunCopy(ctx context.Context, conn net.Conn, iface *water.Interface) error {
+func ConnToTunCopy(ctx context.Context, conn net.Conn, tun io.Writer) error {
 	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
 
 	for {
@@ -588,7 +586,7 @@ func ConnToTunCopy(ctx context.Context, conn net.Conn, iface *water.Interface) e
 				continue
 			}
 			// write the packet to the TUN iface
-			if _, err = iface.Write(packetBuffer); err != nil {
+			if _, err = tun.Write(packetBuffer); err != nil {
 				fmt.Printf("Failed to write packet to the TUN iface: %v\n", err)
 				continue
 			}
