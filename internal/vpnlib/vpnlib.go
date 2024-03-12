@@ -4,6 +4,7 @@
 package vpnlib
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -22,8 +23,8 @@ import (
 const (
 	// controlMessageHeaderByteSize is the number of bytes used for the header of the control message.
 	controlMessageHeaderByteSize = 2
-	// headerByteSize is the number of bytes used for the header.
-	headerByteSize = 2
+	// border0HeaderByteSize is the number of bytes used for the header we use in each packet for reconstruction.
+	border0HeaderByteSize = 2
 )
 
 // ControlMessage represents a message used to tell clients
@@ -416,142 +417,182 @@ func addIpToIfaceWindows(iface, localIp string, subnetSize uint8) error {
 	return nil
 }
 
-// Start Tun to Conn thread
-
-func TunToConnCopy(iface *water.Interface, cm *ConnectionMap, returnOnErr bool, conn net.Conn) error {
+// TunToConnCopy reads packets and fowards them to the given connection. This
+// function is used by the VPN "clients" and must *not* be used by the server.
+// This function is *not* resilient to errors and will return upon encountering
+// a read/write error or if the context is cancelled.
+func TunToConnCopy(ctx context.Context, source io.Reader, conn net.Conn) error {
 	packetBufferSize := 9000
 	packetbuffer := make([]byte, packetBufferSize)
-	sizeBuf := make([]byte, headerByteSize)
-	var recipientConn net.Conn
+	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
 
 	for {
-		// read one packet from the TUN iface
-		n, err := iface.Read(packetbuffer)
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				fmt.Printf("TUN iface closed, exiting\n")
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return err
 			}
-			// If error contails "file already closed" then we can return
-			// because the connection was closed
-			if strings.Contains(err.Error(), "file already closed") {
-				if returnOnErr {
-					return err
-				} else {
-					continue
+			return nil
+		default:
+			// read one packet from the source
+			n, err := source.Read(packetbuffer)
+			if err != nil {
+				if !errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					return nil // source was closed, have to return
 				}
-			}
-			fmt.Printf("Failed to read packet from the TUN iface: %v %s\n", err, err)
-			continue
-		}
-
-		// Identify the recipient IP from the packetBuffer
-		// with that IP, find the net conn in the connection map
-
-		packet := packetbuffer[:n] // assuming packetbuffer contains an IP packet
-
-		// for now ignore ipv6 packets
-		ipVersion := (packet[0] & 0xF0) >> 4
-		if ipVersion != 4 {
-			continue
-		}
-		if err := validateIPv4(packet); err != nil {
-			fmt.Printf("Error: %v\n", err)
-			continue
-		}
-		_, dstIp := parseIpFromPacketHeader(packet)
-
-		// Check if conn is not nil
-		if conn == nil {
-			// we didnt get a net.Conn object, so we need to find it in the connection map
-			// This happens only on the server side
-			// Clients provide the conn object
-
-			// TODO: maybe we should use the net.IP object instead of string
-			// to avoid the string conversion, maybe it's not a big deal... not sure?
-			var exists bool
-
-			if recipientConn, exists = cm.Get(dstIp.String()); !exists {
-				//fmt.Printf("No connection exists for IP: %s\n", dstIp)
+				fmt.Printf("WARNING: failed to read packet: %v\n", err)
 				continue
 			}
-		} else {
-			recipientConn = conn
-		}
+			packet := packetbuffer[:n]
 
-		// compute the header to prepend to the packet before writing to net conn
+			// ignore non IPv4 packets
+			ipVersion := (packet[0] & 0xF0) >> 4
+			if ipVersion != 4 {
+				continue
+			}
+			if err := validateIPv4(packet); err != nil {
+				fmt.Printf("WARNING: received invalid IPv4 packet: %v\n", err)
+				continue
+			}
 
-		binary.BigEndian.PutUint16(sizeBuf, uint16(n))
+			// we produce a "border0 header" so that we can write a single packet
+			// across multiple connection writes (under the hood) if needed.
+			binary.BigEndian.PutUint16(b0HeaderBuffer, uint16(n))
 
-		// write the encapsulated packet to the net conn
-
-		_, err = recipientConn.Write(append(sizeBuf, packetbuffer[:n]...))
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				recipientConn.Close()
-				cm.Delete(dstIp.String())
-
-				if returnOnErr {
+			_, err = conn.Write(append(b0HeaderBuffer, packetbuffer[:n]...))
+			if err != nil {
+				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 					return err
 				}
+				fmt.Printf("Failed to write encapsulated packet to the net conn: %v\n", err)
 			}
-			fmt.Printf("Failed to write encapsulated packet to the net conn: %v\n", err)
-			recipientConn.Close()
-			cm.Delete(dstIp.String())
-			if returnOnErr {
+		}
+
+	}
+}
+
+// TunToConnMapCopy reads packets and fowards them to the appropriate connection in a ConnectionMap.
+// This function is used by the VPN "server" and must *not* be used by clients. This function is resilient
+// to errors and will run for as long as the source is not closed and the context is not cancelled.
+func TunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionMap) error {
+	packetBufferSize := 9000
+	packetbuffer := make([]byte, packetBufferSize)
+	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
+
+	for {
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return err
+			}
+			return nil
+		default:
+			// read one packet from the source
+			n, err := source.Read(packetbuffer)
+			if err != nil {
+				if !errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					return nil // source was closed, have to return
+				}
+				fmt.Printf("WARNING: failed to read packet: %v\n", err)
+				continue
+			}
+			packet := packetbuffer[:n]
+
+			// ignore non IPv4 packets
+			ipVersion := (packet[0] & 0xF0) >> 4
+			if ipVersion != 4 {
+				continue
+			}
+			if err := validateIPv4(packet); err != nil {
+				fmt.Printf("WARNING: received invalid IPv4 packet: %v\n", err)
+				continue
+			}
+
+			_, dstIp := parseIpFromPacketHeader(packet)
+			dstIpString := dstIp.String()
+
+			if dstConn, exists := dstMap.Get(dstIpString); exists {
+
+				// we produce a "border0 header" so that we can write a single packet
+				// across multiple connection writes (under the hood) if needed.
+				binary.BigEndian.PutUint16(b0HeaderBuffer, uint16(n))
+
+				// write packet to target connection
+				_, err = dstConn.Write(append(b0HeaderBuffer, packetbuffer[:n]...))
+				if err != nil {
+					// if there's any errors, we kick the client out
+					dstConn.Close()
+					dstMap.Delete(dstIpString)
+
+					if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+						fmt.Printf("INFO: client %s dropped\n", dstIpString)
+					} else {
+						fmt.Printf("WARNING: client %s kicked due to error: %v\n", dstIpString, err)
+					}
+				}
 			} else {
-				continue
+				fmt.Printf("WARNING: received IPv4 for invalid destination address %s: %v\n", dstIpString, err)
 			}
 		}
 	}
 }
 
-func ConnToTunCopy(conn net.Conn, iface *water.Interface) error {
-	headerBuffer := make([]byte, headerByteSize)
+func ConnToTunCopy(ctx context.Context, conn net.Conn, iface *water.Interface) error {
+	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
 
 	for {
-		// read first ${headerByteSize} bytes from the connection
-		// to know how big the next incoming packet is.
-		// Make sure we read all the way to the end of the header using io.ReadFull()
-		headerN, err := io.ReadFull(conn, headerBuffer)
-		if err != nil {
-			if errors.Is(err, io.EOF) ||
-				errors.Is(err, io.ErrUnexpectedEOF) {
-				fmt.Println("Connection closed by remote host")
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return err
-			} else {
+			}
+			return nil
+		default:
+			// read first ${headerByteSize} bytes from the connection
+			// to know how big the next incoming packet is.
+			// Make sure we read all the way to the end of the header using io.ReadFull()
+			headerN, err := io.ReadFull(conn, b0HeaderBuffer)
+			if err != nil {
+				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					fmt.Println("Connection closed by remote host")
+					return nil
+				}
+				if errors.Is(err, net.ErrClosed) {
+					return err // this means the client side closed the connection
+				}
+				// we return error here because we don't know how to
+				// proceed in the packet stream...
 				fmt.Printf("Failed to read header: %v\n", err)
 				return err
 			}
+			if headerN < border0HeaderByteSize {
+				fmt.Printf("Read less than border0HeaderByteSize bytes (%d): %d\n", border0HeaderByteSize, headerN)
+				continue
+			}
 
-		}
-		if headerN < headerByteSize {
-			fmt.Printf("Read less than headerByteSize bytes (%d): %d\n", headerByteSize, headerN)
-			continue
-		}
+			// convert binary header to the size uint16
+			inboundPacketSize := binary.BigEndian.Uint16(b0HeaderBuffer)
 
-		// convert binary header to the size uint16
-		inboundPacketSize := binary.BigEndian.Uint16(headerBuffer)
+			// new empty buffer of the size of the packet we're about to read
+			packetBuffer := make([]byte, inboundPacketSize)
 
-		// new empty buffer of the size of the packet we're about to read
-		packetBuffer := make([]byte, inboundPacketSize)
+			// read the one individual packet
+			packetN, err := io.ReadFull(conn, packetBuffer)
+			if err != nil {
+				fmt.Printf("Failed to read packet from net conn: %v\n", err)
+				continue
+			}
 
-		// read the one individual packet
-		packetN, err := io.ReadFull(conn, packetBuffer)
-		if err != nil {
-			fmt.Printf("Failed to read packet from net conn: %v\n", err)
-			continue
-		}
-		if packetN < int(inboundPacketSize) {
-			fmt.Printf("Read less than the advertised packet size (expected %d, got %d)\n", inboundPacketSize, packetN)
-			continue
-		}
+			if packetN < int(inboundPacketSize) {
+				fmt.Printf("Read less than the advertised packet size (expected %d, got %d)\n", inboundPacketSize, packetN)
+				continue
+			}
+			// write the packet to the TUN iface
+			if _, err = iface.Write(packetBuffer); err != nil {
+				fmt.Printf("Failed to write packet to the TUN iface: %v\n", err)
+				continue
+			}
 
-		// write the packet to the TUN iface
-		if _, err = iface.Write(packetBuffer); err != nil {
-			fmt.Printf("Failed to write packet to the TUN iface: %v\n", err)
-			continue
 		}
 	}
 }

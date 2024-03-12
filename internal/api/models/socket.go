@@ -17,7 +17,6 @@ type Metadata struct {
 	ProviderEnv    string // e.g. "prod, or "dev"
 	ProviderRegion string // e.g. "us-east-1
 	ProviderType   string // e.g. "aws
-
 }
 
 type ConnectorData struct {
@@ -73,6 +72,11 @@ type ConnectorLocalData struct {
 	AwsEksCluster                  string
 	AzureAD                        bool
 	Kerberos                       bool
+
+	// vpn sockets
+	IsVpn            bool
+	DHCPPoolSubnet   string
+	AdvertisedRoutes []string
 }
 
 func (c *ConnectorData) Tags() map[string]string {
