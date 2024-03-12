@@ -31,7 +31,7 @@ type ControlMessage struct {
 	ClientIp   string   `json:"client_ip"`
 	ServerIp   string   `json:"server_ip"`
 	SubnetSize uint8    `json:"subnet_size"`
-	Routes     []string `json:"routes"` // CIDRs
+	Routes     []string `json:"routes,omitempty"` // CIDRs
 }
 
 // Build encodes a control message to ready-to-send bytes.

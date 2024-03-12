@@ -47,7 +47,7 @@ var clientVpnCmd = &cobra.Command{
 		defer cancel()
 
 		if hostname == "" {
-			pickedHost, err := client.PickHost(hostname, enum.TLSSocket)
+			pickedHost, err := client.PickHost(hostname, enum.VPNSocket)
 			if err != nil {
 				return fmt.Errorf("failed to pick host: %v", err)
 			}

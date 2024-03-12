@@ -11,7 +11,6 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForVpnService(s *models.Socket, c
 	if config == nil {
 		return fmt.Errorf("got vpn service with no vpn service configuration")
 	}
-	s.ConnectorLocalData.IsVpn = true
 	s.ConnectorLocalData.AdvertisedRoutes = config.AdvertisedRoutes
 	s.ConnectorLocalData.DHCPPoolSubnet = config.DHCPPoolSubnet
 	return nil
