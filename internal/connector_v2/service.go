@@ -31,6 +31,7 @@ import (
 	sshConfig "github.com/borderzero/border0-cli/internal/ssh/config"
 	"github.com/borderzero/border0-cli/internal/ssh/server"
 	b0Util "github.com/borderzero/border0-cli/internal/util"
+	"github.com/borderzero/border0-cli/internal/vpnlib"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/types/connector"
 	"github.com/borderzero/border0-go/types/service"
@@ -834,6 +835,15 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 	case handlerConfig != nil:
 		if err := sqlauthproxy.Serve(l, *handlerConfig); err != nil {
 			logger.Error("sql proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+		}
+	case socket.SocketType == service.ServiceTypeVpn:
+		if err := vpnlib.RunServer(
+			socket.GetContext(),
+			l,
+			socket.Socket.ConnectorLocalData.DHCPPoolSubnet,
+			socket.Socket.ConnectorLocalData.AdvertisedRoutes,
+		); err != nil {
+			logger.Error("vpn service failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	default:
 		if err := border0.Serve(logger, l, socket.Socket.TargetHostname, socket.Socket.TargetPort); err != nil {

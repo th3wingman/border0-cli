@@ -74,7 +74,6 @@ type ConnectorLocalData struct {
 	Kerberos                       bool
 
 	// vpn sockets
-	IsVpn            bool
 	DHCPPoolSubnet   string
 	AdvertisedRoutes []string
 }

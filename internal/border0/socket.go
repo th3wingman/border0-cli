@@ -161,6 +161,10 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string, logger 
 	}, nil
 }
 
+func (s *Socket) GetContext() context.Context {
+	return s.context
+}
+
 func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socket models.Socket, org *models.Organization, logger *zap.Logger, certificate *tls.Certificate) (*Socket, error) {
 	newCtx, cancel := context.WithCancel(context.Background())
 
