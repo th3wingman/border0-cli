@@ -37,6 +37,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var (
+	ErrHandshakeFailed = errors.New("failed to authenticate against connector")
+)
+
 const (
 	successURL = "https://www.border0.com/logged-in"
 	failURL    = "https://www.border0.com/fail-message"
@@ -933,7 +937,7 @@ func ConnectWithConn(conn *tls.Conn, certificate tls.Certificate, caCert *x509.C
 
 	connectorConn := tls.Client(conn, tlsConfig)
 	if err := connectorConn.Handshake(); err != nil {
-		return nil, fmt.Errorf("failed to authenticate to connector: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrHandshakeFailed, err)
 	}
 
 	if endToEndEncryptionEnabled {

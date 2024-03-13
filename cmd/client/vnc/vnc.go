@@ -26,8 +26,7 @@ var clientVncCmd = &cobra.Command{
 		}
 
 		if hostname == "" {
-			// TODO(devs): Remove TLSSocket once we have exposed CRUD for VNC sockets in the admin portal.
-			pickedHost, err := client.PickHost(hostname, enum.VNCSocket, enum.TLSSocket)
+			pickedHost, err := client.PickHost(hostname, enum.VNCSocket)
 			if err != nil {
 				return fmt.Errorf("failed to pick host: %v", err)
 			}
