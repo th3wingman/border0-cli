@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -114,7 +115,12 @@ func StartLocalProxyAndOpenClient(
 			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
 				conn, err = client.ConnectWithConn(conn, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled)
 				if err != nil {
-					fmt.Printf("failed to connect: %s\n", err)
+					if errors.Is(err, client.ErrHandshakeFailed) {
+						fmt.Printf("Error: %s. You may not be authorized for this socket. Speak to your Border0 administrator\n", err)
+						return
+					}
+					fmt.Printf("Failed to connect: %s\n", err)
+					return
 				}
 			}
 
