@@ -6,13 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"runtime"
 
-	"github.com/borderzero/border0-cli/cmd/logger"
 	"go.uber.org/zap"
 )
+
+const ipForwardingNotEnabledMessage = `
+IP forwarding is not enabled - your VPN will not be able to forward packets.
+To enable ip forwarding run: sysctl -w net.ipv4.ip_forward=1
+Also make sure to enable NAT: iptables -t nat -A POSTROUTING -o <interface> -j MASQUERADE
+`
 
 // optional configuration for the vpn "server" side.
 type serverConfig struct {
@@ -30,6 +34,7 @@ func WithServerLogUndeliverable(log bool) ServerOption {
 // RunServer runs the VPN "server"
 func RunServer(
 	ctx context.Context,
+	logger *zap.Logger,
 	vpnClientListener net.Listener,
 	dhcpPoolSubnet string,
 	advertisedRoutes []string,
@@ -43,7 +48,7 @@ func RunServer(
 	// Create an IP pool that will be used to assign IPs to clients
 	dhcpPool, err := NewIPPool(dhcpPoolSubnet)
 	if err != nil {
-		log.Fatalf("Failed to create IP Pool: %v", err)
+		return fmt.Errorf("failed to create IP Pool: %v", err)
 	}
 	subnetSize := dhcpPool.GetSubnetSize()
 	serverIp := dhcpPool.GetServerIp()
@@ -54,7 +59,13 @@ func RunServer(
 	}
 	defer tun.Close()
 
-	logger.Logger.Info("Started VPN server", zap.String("interface", tun.Name()), zap.String("server_ip", serverIp), zap.String("dhcp_pool_subnet ", dhcpPoolSubnet))
+	logger.Info(
+		"Started VPN server",
+		zap.String("interface", tun.Name()),
+		zap.String("server_ip", serverIp),
+		zap.String("dhcp_pool_subnet", dhcpPoolSubnet),
+		zap.Any("routes", advertisedRoutes),
+	)
 
 	if err = AddServerIp(tun.Name(), serverIp, subnetSize); err != nil {
 		return fmt.Errorf("failed to add server IP to interface: %v", err)
@@ -63,20 +74,17 @@ func RunServer(
 	if runtime.GOOS != "linux" {
 		// On linux the routes are added to the interface when creating the interface and adding the IP
 		if err = AddRoutesToIface(tun.Name(), []string{dhcpPoolSubnet}); err != nil {
-			logger.Logger.Warn("failed to add routes to interface", zap.Error(err))
+			logger.Warn("failed to add routes to interface", zap.Error(err))
 		}
 	}
 
 	if runtime.GOOS == "linux" {
-		// Check if ip forwarding is enabled
 		forwardingEnabled, err := CheckIPForwardingEnabled()
 		if err != nil {
-			logger.Logger.Warn("Failed to check if ip forwarding is enabled", zap.Error(err))
+			logger.Warn("failed to check if ip forwarding is enabled", zap.Error(err))
 		}
 		if !forwardingEnabled {
-			logger.Logger.Warn("Ip forwarding is not enabled, Your VPN will not be able to forward packets")
-			logger.Logger.Warn("To enable ip forwarding run: sysctl -w net.ipv4.ip_forward=1")
-			logger.Logger.Warn("Also make sure to enable NAT: iptables -t nat -A POSTROUTING -o <interface> -j MASQUERADE")
+			logger.Warn(ipForwardingNotEnabledMessage)
 		}
 	}
 
@@ -85,7 +93,7 @@ func RunServer(
 
 	// Now start the Tun to Conn goroutine
 	// This will listen for packets on the TUN interface and forward them to the right connection
-	go tunToConnMapCopy(ctx, tun, connMap, config.logUndeliverable)
+	go tunToConnMapCopy(ctx, logger, tun, connMap, config.logUndeliverable)
 
 	for {
 		select {
@@ -98,12 +106,13 @@ func RunServer(
 			client, err := vpnClientListener.Accept()
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					fmt.Printf("failed to accept new vpn connection: %v\n", err)
+					logger.Error("failed to accept new vpn connection", zap.Error(err))
 				}
 				continue // note: if context is cancelled, above case will catch it
 			}
 			go handleIPPacketConn(
 				ctx,
+				logger,
 				client,
 				tun,
 				dhcpPool,
@@ -116,6 +125,7 @@ func RunServer(
 
 func handleIPPacketConn(
 	ctx context.Context,
+	logger *zap.Logger,
 	client net.Conn,
 	tun io.Writer,
 	dhcpPool *IPPool,
@@ -127,7 +137,7 @@ func handleIPPacketConn(
 	// allocate a new IP in the pool for the new client
 	clientIP, err := dhcpPool.Allocate()
 	if err != nil {
-		fmt.Printf("failed to allocate client IP: %v\n", err)
+		logger.Error("failed to allocate client IP", zap.Error(err))
 		return
 	}
 	defer dhcpPool.Release(clientIP)
@@ -136,7 +146,7 @@ func handleIPPacketConn(
 	connMap.Set(clientIP, client)
 	defer connMap.Delete(clientIP)
 
-	fmt.Printf("new client connected allocated IP: %s\n", clientIP)
+	logger.Info("new client connected", zap.String("peer_ip", clientIP))
 
 	// define control message
 	controlMessage := &ControlMessage{
@@ -147,25 +157,25 @@ func handleIPPacketConn(
 	}
 	controlMessageBytes, err := controlMessage.Build()
 	if err != nil {
-		fmt.Printf("failed to build control message: %v\n", err)
+		logger.Error("failed to build control message", zap.Error(err))
 		return
 	}
 
 	// write control message
 	n, err := client.Write(controlMessageBytes)
 	if err != nil {
-		fmt.Printf("failed to write control message to net conn: %v\n", err)
+		logger.Error("failed to write control message to net conn", zap.Error(err))
 		return
 	}
 	if n < len(controlMessageBytes) {
-		fmt.Printf("failed to write entire control message bytes (is %d, wrote %d)\n", controlMessageBytes, n)
+		logger.Error("failed to write entire control message bytes", zap.Int("bytes_written", n), zap.Int("message_length", len(controlMessageBytes)))
 		return
 	}
 
 	// kick off routine to read packets from clients and forward them to the interface
-	if err = ConnToTunCopy(ctx, client, tun); err != nil {
+	if err = ConnToTunCopy(ctx, logger, client, clientIP, tun); err != nil {
 		if !errors.Is(err, io.EOF) {
-			fmt.Printf("failed to forward packets between client conn and interface: %v\n", err)
+			logger.Error("failed to forward packets between client conn and interface", zap.Error(err))
 		}
 		return
 	}
@@ -174,7 +184,13 @@ func handleIPPacketConn(
 // tunToConnMapCopy reads packets and fowards them to the appropriate connection in a ConnectionMap.
 // This function is used by the VPN "server" and must *not* be used by clients. This function is resilient
 // to errors and will run for as long as the source is not closed and the context is not cancelled.
-func tunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionMap, logUndeliverable bool) error {
+func tunToConnMapCopy(
+	ctx context.Context,
+	logger *zap.Logger,
+	source io.Reader,
+	dstMap *ConnectionMap,
+	logUndeliverable bool,
+) error {
 
 	packetBufferSize := 9000
 	packetbuffer := make([]byte, packetBufferSize)
@@ -194,7 +210,7 @@ func tunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionM
 				if !errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 					return nil // source was closed, have to return
 				}
-				fmt.Printf("WARNING: failed to read packet: %v\n", err)
+				logger.Warn("failed to read packet", zap.Error(err))
 				continue
 			}
 			packet := packetbuffer[:n]
@@ -202,10 +218,11 @@ func tunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionM
 			// ignore non IPv4 packets
 			ipVersion := (packet[0] & 0xF0) >> 4
 			if ipVersion != 4 {
+				logger.Warn("received non IPv4 packet", zap.Uint8("ip_version_byte", uint8(ipVersion)))
 				continue
 			}
 			if err := validateIPv4(packet); err != nil {
-				fmt.Printf("WARNING: received invalid IPv4 packet: %v\n", err)
+				logger.Warn("received invalid IPv4 packet", zap.Error(err))
 				continue
 			}
 
@@ -226,14 +243,14 @@ func tunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionM
 					dstMap.Delete(dstIpString)
 
 					if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-						fmt.Printf("INFO: client %s dropped\n", dstIpString)
+						logger.Info("client disconnected", zap.String("dst_ip", dstIpString))
 					} else {
-						fmt.Printf("WARNING: client %s kicked due to error: %v\n", dstIpString, err)
+						logger.Warn("client kicked due to error", zap.String("dst_ip", dstIpString))
 					}
 				}
 			} else {
 				if logUndeliverable {
-					fmt.Printf("WARNING: received IPv4 for invalid destination address %s: %v\n", dstIpString, err)
+					logger.Info("received IPv4 for invalid destination address", zap.String("dst_ip", dstIpString))
 				}
 			}
 		}

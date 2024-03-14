@@ -430,21 +430,23 @@ var socketConnectVpnCmd = &cobra.Command{
 	Short:             "Connect a VPN socket (TLS under-the-hood)",
 	ValidArgsFunction: AutocompleteSocket,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logger := logger.Logger
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		border0API := api.NewAPI(api.WithVersion(internal.Version))
 
 		if socketID == "" && (len(args) == 0) {
-			return fmt.Errorf("error: no socket provided")
+			return fmt.Errorf("no socket provided")
 		}
 		if len(args) > 0 {
 			socketID = args[0]
 		}
 
-		socket, err := border0.NewSocket(ctx, border0API, socketID, logger.Logger)
+		socket, err := border0.NewSocket(ctx, border0API, socketID, logger)
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			return fmt.Errorf("failed to create socket %v", err)
 		}
 
 		if socket.Socket.ConnectorLocalData == nil {
@@ -459,14 +461,14 @@ var socketConnectVpnCmd = &cobra.Command{
 
 		if proxyHost != "" {
 			if err := socket.WithProxy(proxyHost); err != nil {
-				log.Fatalf("error: %v", err)
+				return fmt.Errorf("failed to set proxy host: %s", err)
 			}
 		}
 
 		if socket.EndToEndEncryptionEnabled {
 			certificate, err := util.GetEndToEndEncryptionCertificate(socket.Organization.ID, "")
 			if err != nil {
-				log.Printf("failed to get connector certificate: %s", err)
+				return fmt.Errorf("failed to get connector certificate: %s", err)
 			}
 
 			if certificate == nil {
@@ -521,7 +523,7 @@ var socketConnectVpnCmd = &cobra.Command{
 				certificate = &tlsCert
 
 				if err := util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), cert, orgID, ""); err != nil {
-					log.Printf("failed to store certificate: %s", err)
+					logger.Warn("failed to store certificate", zap.Error(err))
 				}
 			}
 
@@ -534,7 +536,7 @@ var socketConnectVpnCmd = &cobra.Command{
 
 		l, err := socket.Listen()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			return fmt.Errorf("failed to listen for connections over socket: %v", err)
 		}
 		defer l.Close()
 
@@ -548,7 +550,7 @@ var socketConnectVpnCmd = &cobra.Command{
 		}()
 
 		// blocks until context done
-		return vpnlib.RunServer(ctx, l, vpnSubnet, routes)
+		return vpnlib.RunServer(ctx, logger, l, vpnSubnet, routes)
 	},
 }
 

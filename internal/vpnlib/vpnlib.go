@@ -16,6 +16,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -419,7 +421,12 @@ func addIpToIfaceWindows(iface, localIp string, subnetSize uint8) error {
 // function is used by the VPN "clients" and must *not* be used by the server.
 // This function is *not* resilient to errors and will return upon encountering
 // a read/write error or if the context is cancelled.
-func TunToConnCopy(ctx context.Context, source io.Reader, conn net.Conn) error {
+func TunToConnCopy(
+	ctx context.Context,
+	logger *zap.Logger,
+	source io.Reader,
+	conn net.Conn,
+) error {
 	packetBufferSize := 9000
 	packetbuffer := make([]byte, packetBufferSize)
 	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
@@ -438,7 +445,7 @@ func TunToConnCopy(ctx context.Context, source io.Reader, conn net.Conn) error {
 				if !errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 					return nil // source was closed, have to return
 				}
-				fmt.Printf("WARNING: failed to read packet: %v\n", err)
+				logger.Warn("failed to read packet", zap.Error(err))
 				continue
 			}
 			packet := packetbuffer[:n]
@@ -446,10 +453,11 @@ func TunToConnCopy(ctx context.Context, source io.Reader, conn net.Conn) error {
 			// ignore non IPv4 packets
 			ipVersion := (packet[0] & 0xF0) >> 4
 			if ipVersion != 4 {
+				logger.Warn("received non IPv4 packet", zap.Uint8("ip_version_byte", uint8(ipVersion)))
 				continue
 			}
 			if err := validateIPv4(packet); err != nil {
-				fmt.Printf("WARNING: received invalid IPv4 packet: %v\n", err)
+				logger.Warn("received invalid iPv4 packet", zap.Error(err))
 				continue
 			}
 
@@ -462,14 +470,14 @@ func TunToConnCopy(ctx context.Context, source io.Reader, conn net.Conn) error {
 				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 					return err
 				}
-				fmt.Printf("Failed to write encapsulated packet to the net conn: %v\n", err)
+				logger.Error("failed to write encapsulated packet to the net conn", zap.Error(err))
 			}
 		}
 
 	}
 }
 
-func ConnToTunCopy(ctx context.Context, conn net.Conn, tun io.Writer) error {
+func ConnToTunCopy(ctx context.Context, logger *zap.Logger, conn net.Conn, peerAddress string, tun io.Writer) error {
 	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
 
 	for {
@@ -486,19 +494,19 @@ func ConnToTunCopy(ctx context.Context, conn net.Conn, tun io.Writer) error {
 			headerN, err := io.ReadFull(conn, b0HeaderBuffer)
 			if err != nil {
 				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-					fmt.Println("Connection closed by remote host")
+					logger.Info("connection closed by remote peer", zap.String("peer_ip", peerAddress))
 					return nil
 				}
 				if errors.Is(err, net.ErrClosed) {
-					return err // this means the client side closed the connection
+					return err // this means the local side closed the connection
 				}
 				// we return error here because we don't know how to
 				// proceed in the packet stream...
-				fmt.Printf("Failed to read header: %v\n", err)
+				logger.Error("failed to read border0 header", zap.Error(err))
 				return err
 			}
 			if headerN < border0HeaderByteSize {
-				fmt.Printf("Read less than border0HeaderByteSize bytes (%d): %d\n", border0HeaderByteSize, headerN)
+				logger.Error("read less than border0HeaderByteSize bytes", zap.Int("bytes_read", headerN), zap.Int("bytes_expected", border0HeaderByteSize))
 				continue
 			}
 
@@ -511,17 +519,16 @@ func ConnToTunCopy(ctx context.Context, conn net.Conn, tun io.Writer) error {
 			// read the one individual packet
 			packetN, err := io.ReadFull(conn, packetBuffer)
 			if err != nil {
-				fmt.Printf("Failed to read packet from net conn: %v\n", err)
+				logger.Error("failed to read packet from connection", zap.Error(err))
 				continue
 			}
-
 			if packetN < int(inboundPacketSize) {
-				fmt.Printf("Read less than the advertised packet size (expected %d, got %d)\n", inboundPacketSize, packetN)
+				logger.Error("read less than the advertized packet size", zap.Int("bytes_read", packetN), zap.Uint16("bytes_expected", inboundPacketSize))
 				continue
 			}
 			// write the packet to the TUN iface
 			if _, err = tun.Write(packetBuffer); err != nil {
-				fmt.Printf("Failed to write packet to the TUN iface: %v\n", err)
+				logger.Error("failed to write inbound packet to local TUN interface", zap.Error(err))
 				continue
 			}
 
