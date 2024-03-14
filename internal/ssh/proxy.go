@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net"
 
@@ -98,6 +99,9 @@ func Proxy(l net.Listener, c config.ProxyConfig) error {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			c.Logger.Error("sshauthproxy: failed to accept connection", zap.Error(err))
 			continue
 		}
