@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -854,6 +855,9 @@ func Serve(logger *zap.Logger, l net.Listener, hostname string, port int) error 
 	for {
 		rconn, err := l.Accept()
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			return fmt.Errorf("failed to accept connection: %s", err)
 		}
 
