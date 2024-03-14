@@ -20,15 +20,15 @@ Also make sure to enable NAT: iptables -t nat -A POSTROUTING -o <interface> -j M
 
 // optional configuration for the vpn "server" side.
 type serverConfig struct {
-	logUndeliverable bool
+	verbose bool
 }
 
 // ServerOption represents a configuration option for the vpn "server" side.
 type ServerOption func(*serverConfig)
 
-// WithServerLogUndeliverable returns the ServerOption that toggles logging for undeliverable packets.
-func WithServerLogUndeliverable(log bool) ServerOption {
-	return func(c *serverConfig) { c.logUndeliverable = log }
+// WithServerVerboseLogs returns the ServerOption that toggles verbose logging.
+func WithServerVerboseLogs(verbose bool) ServerOption {
+	return func(c *serverConfig) { c.verbose = verbose }
 }
 
 // RunServer runs the VPN "server"
@@ -40,7 +40,7 @@ func RunServer(
 	advertisedRoutes []string,
 	opts ...ServerOption,
 ) error {
-	config := &serverConfig{logUndeliverable: false}
+	config := &serverConfig{verbose: false}
 	for _, opt := range opts {
 		opt(config)
 	}
@@ -93,7 +93,7 @@ func RunServer(
 
 	// Now start the Tun to Conn goroutine
 	// This will listen for packets on the TUN interface and forward them to the right connection
-	go tunToConnMapCopy(ctx, logger, tun, connMap, config.logUndeliverable)
+	go tunToConnMapCopy(ctx, logger, tun, connMap, config.verbose)
 
 	for {
 		select {
@@ -189,7 +189,7 @@ func tunToConnMapCopy(
 	logger *zap.Logger,
 	source io.Reader,
 	dstMap *ConnectionMap,
-	logUndeliverable bool,
+	verbose bool,
 ) error {
 
 	packetBufferSize := 9000
@@ -218,7 +218,9 @@ func tunToConnMapCopy(
 			// ignore non IPv4 packets
 			ipVersion := (packet[0] & 0xF0) >> 4
 			if ipVersion != 4 {
-				logger.Warn("received non IPv4 packet", zap.Uint8("ip_version_byte", uint8(ipVersion)))
+				if verbose {
+					logger.Info("received non IPv4 packet", zap.Uint8("ip_version_byte", uint8(ipVersion)))
+				}
 				continue
 			}
 			if err := validateIPv4(packet); err != nil {
@@ -249,7 +251,7 @@ func tunToConnMapCopy(
 					}
 				}
 			} else {
-				if logUndeliverable {
+				if verbose {
 					logger.Info("received IPv4 for invalid destination address", zap.String("dst_ip", dstIpString))
 				}
 			}
