@@ -2,6 +2,7 @@ package vpnlib
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -13,13 +14,32 @@ import (
 	"go.uber.org/zap"
 )
 
+// optional configuration for the vpn "server" side.
+type serverConfig struct {
+	logUndeliverable bool
+}
+
+// ServerOption represents a configuration option for the vpn "server" side.
+type ServerOption func(*serverConfig)
+
+// WithServerLogUndeliverable returns the ServerOption that toggles logging for undeliverable packets.
+func WithServerLogUndeliverable(log bool) ServerOption {
+	return func(c *serverConfig) { c.logUndeliverable = log }
+}
+
 // RunServer runs the VPN "server"
 func RunServer(
 	ctx context.Context,
 	vpnClientListener net.Listener,
 	dhcpPoolSubnet string,
 	advertisedRoutes []string,
+	opts ...ServerOption,
 ) error {
+	config := &serverConfig{logUndeliverable: false}
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	// Create an IP pool that will be used to assign IPs to clients
 	dhcpPool, err := NewIPPool(dhcpPoolSubnet)
 	if err != nil {
@@ -65,7 +85,7 @@ func RunServer(
 
 	// Now start the Tun to Conn goroutine
 	// This will listen for packets on the TUN interface and forward them to the right connection
-	go TunToConnMapCopy(ctx, tun, connMap)
+	go tunToConnMapCopy(ctx, tun, connMap, config.logUndeliverable)
 
 	for {
 		select {
@@ -148,5 +168,74 @@ func handleIPPacketConn(
 			fmt.Printf("failed to forward packets between client conn and interface: %v\n", err)
 		}
 		return
+	}
+}
+
+// tunToConnMapCopy reads packets and fowards them to the appropriate connection in a ConnectionMap.
+// This function is used by the VPN "server" and must *not* be used by clients. This function is resilient
+// to errors and will run for as long as the source is not closed and the context is not cancelled.
+func tunToConnMapCopy(ctx context.Context, source io.Reader, dstMap *ConnectionMap, logUndeliverable bool) error {
+
+	packetBufferSize := 9000
+	packetbuffer := make([]byte, packetBufferSize)
+	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
+
+	for {
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
+				return err
+			}
+			return nil
+		default:
+			// read one packet from the source
+			n, err := source.Read(packetbuffer)
+			if err != nil {
+				if !errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					return nil // source was closed, have to return
+				}
+				fmt.Printf("WARNING: failed to read packet: %v\n", err)
+				continue
+			}
+			packet := packetbuffer[:n]
+
+			// ignore non IPv4 packets
+			ipVersion := (packet[0] & 0xF0) >> 4
+			if ipVersion != 4 {
+				continue
+			}
+			if err := validateIPv4(packet); err != nil {
+				fmt.Printf("WARNING: received invalid IPv4 packet: %v\n", err)
+				continue
+			}
+
+			_, dstIp := parseIpFromPacketHeader(packet)
+			dstIpString := dstIp.String()
+
+			if dstConn, exists := dstMap.Get(dstIpString); exists {
+
+				// we produce a "border0 header" so that we can write a single packet
+				// across multiple connection writes (under the hood) if needed.
+				binary.BigEndian.PutUint16(b0HeaderBuffer, uint16(n))
+
+				// write packet to target connection
+				_, err = dstConn.Write(append(b0HeaderBuffer, packetbuffer[:n]...))
+				if err != nil {
+					// if there's any errors, we kick the client out
+					dstConn.Close()
+					dstMap.Delete(dstIpString)
+
+					if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+						fmt.Printf("INFO: client %s dropped\n", dstIpString)
+					} else {
+						fmt.Printf("WARNING: client %s kicked due to error: %v\n", dstIpString, err)
+					}
+				}
+			} else {
+				if logUndeliverable {
+					fmt.Printf("WARNING: received IPv4 for invalid destination address %s: %v\n", dstIpString, err)
+				}
+			}
+		}
 	}
 }

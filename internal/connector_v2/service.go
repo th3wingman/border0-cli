@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -837,11 +838,18 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 			logger.Error("sql proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	case socket.SocketType == service.ServiceTypeVpn:
+		// options defined locally (not in socket config).
+		// these may move to socket config gradually.
+		localServerOpts := []vpnlib.ServerOption{
+			vpnlib.WithServerLogUndeliverable(os.Getenv("VPN_LOG_UNDELIVERABLE_PK") == "true"),
+		}
+
 		if err := vpnlib.RunServer(
 			socket.GetContext(),
 			l,
 			socket.Socket.ConnectorLocalData.DHCPPoolSubnet,
 			socket.Socket.ConnectorLocalData.AdvertisedRoutes,
+			localServerOpts...,
 		); err != nil {
 			logger.Error("vpn service failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
