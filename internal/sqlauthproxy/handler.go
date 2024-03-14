@@ -2,6 +2,7 @@ package sqlauthproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -71,6 +72,9 @@ func Serve(l net.Listener, config Config) error {
 	for {
 		rconn, err := l.Accept()
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			config.Logger.Error("failed to accept connection", zap.Error(err))
 			continue
 		}
