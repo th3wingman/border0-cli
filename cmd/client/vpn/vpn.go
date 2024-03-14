@@ -255,7 +255,7 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 				// for now we don't support bypass routes for ipv6
 				// once we start announcing ipv6 routes, we can should add support for bypass routes
 				// for now we just skip this
-				fmt.Printf("WARNING: got a route with a non IPv4 address family routes[%d] (%s)\n", i, route)
+				fmt.Printf("WARNING: got a route with a non IPv4 address family: routes[%d] (%s)\n", i, route)
 			}
 		}
 	}
