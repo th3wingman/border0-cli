@@ -85,7 +85,7 @@ var clientVpnCmd = &cobra.Command{
 				exponentialBackoff.Multiplier = 1.5
 
 				retryFn := func() error {
-					established, err := runClient(ctx, hostname)
+					established, err := runClient(ctx, logger.Logger, hostname)
 
 					// if the context is cancelled we simply return nil here.
 					// the next run of the loop will catch the ctx.Done and exit
@@ -107,7 +107,7 @@ var clientVpnCmd = &cobra.Command{
 						// established an end to end session with a remote
 						// connector, then we top up the available reconnections.
 						if established {
-							fmt.Println("VPN client disconnected, will attempt to reconnect...")
+							logger.Logger.Info("VPN client disconnected, will attempt to reconnect...", zap.Error(err))
 							attemptsAvailable = maxConnectionAttempts
 							return nil
 						}
@@ -119,7 +119,7 @@ var clientVpnCmd = &cobra.Command{
 					// established an end to end session with a remote
 					// connector, then we top up the available reconnections.
 					if established {
-						fmt.Println("VPN client disconnected, will attempt to reconnect...")
+						logger.Logger.Info("VPN client disconnected, will attempt to reconnect...")
 						attemptsAvailable = maxConnectionAttempts
 					}
 					return nil
@@ -127,7 +127,7 @@ var clientVpnCmd = &cobra.Command{
 
 				err := backoff.Retry(retryFn, backoff.WithMaxRetries(exponentialBackoff, maxBackoffRetries))
 				if err != nil {
-					fmt.Printf("failed to connect to VPN socket: %v\n", err)
+					logger.Logger.Warn("failed to connect to VPN socket", zap.Error(err))
 					continue
 				}
 			}
@@ -140,16 +140,18 @@ var clientVpnCmd = &cobra.Command{
 	},
 }
 
-func runClient(parentCtx context.Context, hostname string) (bool, error) {
+func runClient(parentCtx context.Context, logger *zap.Logger, hostname string) (bool, error) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
-	info, err := client.GetResourceInfo(logger.Logger, hostname)
+	established := false
+
+	info, err := client.GetResourceInfo(logger, hostname)
 	if err != nil {
 		if errors.Is(err, client.ErrResourceNotFound) {
-			return false, err
+			return established, err
 		}
-		return false, fmt.Errorf("failed to get certificate: %v", err)
+		return established, fmt.Errorf("failed to get certificate: %v", err)
 	}
 
 	certificate := tls.Certificate{
@@ -170,26 +172,33 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 
 	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig, info.CaCertificate, wsProxy)
 	if err != nil {
-		return false, fmt.Errorf("failed to connect: %v", err)
+		return established, fmt.Errorf("failed to connect: %v", err)
 	}
 	defer conn.Close()
 
+	// NOTE: This line is important! established is used on every return statement in this function
+	// to signal the caller that a connection was established. The caller uses this information to
+	// determine whether it will retry connecting or not (e.g. if a failure occured after a connection
+	// was successfully established, this function will be re-ran). This is done to make the client
+	// resilient to temporary disconnections e.g. socket re-configurations, etc.
+	established = true
+
 	iface, err := vpnlib.CreateTun()
 	if err != nil {
-		return true, fmt.Errorf("failed to create TUN interface: %v", err)
+		return established, fmt.Errorf("failed to create TUN interface: %v", err)
 	}
 	defer iface.Close()
 
-	logger.Logger.Info("Created TUN interface", zap.String("interface_name", iface.Name()))
+	logger.Info("Created TUN interface", zap.String("interface_name", iface.Name()))
 
 	ctrl, err := vpnlib.GetControlMessage(conn)
 	if err != nil {
-		return true, fmt.Errorf("failed to get control message from connection: %v\nIt's likely the Remote VPN server hasnt been started", err)
+		return established, fmt.Errorf("failed to get control message from connection: %v\nIt's likely the Remote VPN server hasnt been started", err)
 	}
-	logger.Logger.Info("Connected, Session info:", zap.Any("control_message", ctrl))
+	logger.Info("Connected, Session info:", zap.Any("control_message", ctrl))
 
 	if err = vpnlib.AddIpToIface(iface.Name(), ctrl.ClientIp, ctrl.ServerIp, ctrl.SubnetSize); err != nil {
-		log.Println("failed to add IPs to interface", err)
+		return established, fmt.Errorf("failed to add IPs to interface: %v", err)
 	}
 
 	// keep track of the routes we need to delete when we exit
@@ -210,7 +219,7 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 		addressFamily = 6
 		vpnGatewayIp = remoteAddr.IP.String() + "/128"
 	} else {
-		return true, fmt.Errorf("failed to determine address family for remote address: %v", remoteAddr.IP)
+		return established, fmt.Errorf("failed to determine address family for remote address: %v", remoteAddr.IP)
 	}
 
 	// rewrite default route to 0.0.0.0/1 and 128.0.0.1
@@ -241,11 +250,11 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 				// This will return both the gateway IP and the interface name
 				LocalGatewayIp, _, err := vpnlib.GetDefaultGateway(4)
 				if err != nil {
-					return true, fmt.Errorf("failed to get default route: %v", err)
+					return established, fmt.Errorf("failed to get default route: %v", err)
 				}
 
 				if err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{vpnGatewayIp}); err != nil {
-					return true, fmt.Errorf("failed to add static route for VPN Gateway %s, towards %s: %v", vpnGatewayIp, LocalGatewayIp.String(), err)
+					return established, fmt.Errorf("failed to add static route for VPN Gateway %s, towards %s: %v", vpnGatewayIp, LocalGatewayIp.String(), err)
 				}
 
 				// add the newly create static route for VPN gateway to the list of routes to delete
@@ -255,7 +264,7 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 				// for now we don't support bypass routes for ipv6
 				// once we start announcing ipv6 routes, we can should add support for bypass routes
 				// for now we just skip this
-				fmt.Printf("WARNING: got a route with a non IPv4 address family: routes[%d] (%s)\n", i, route)
+				logger.Warn("got a route with a non IPv4 address family", zap.Int("routes_index", i), zap.String("route", route))
 			}
 		}
 	}
@@ -268,20 +277,25 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 		// dnsServersBypassRoutes is a list of DNS servers that we need to add bypass routes for
 		dnsServersBypassRoutes, err := vpnlib.GetDnsByPassRoutes(iface.Name(), ctrl.Routes, addressFamily)
 		if err != nil {
-			log.Println("failed to get DNS servers bypass routes", err)
+			return established, fmt.Errorf("failed to get DNS servers bypass routes: %v", err)
 		}
 		if len(dnsServersBypassRoutes) > 0 {
 			// Now we can add the bypass routes for the DNS servers
 			LocalGatewayIp, _, err := vpnlib.GetDefaultGateway(4)
 			if err != nil {
-				return true, fmt.Errorf("failed to get default route: %v", err)
+				return established, fmt.Errorf("failed to get default route: %v", err)
 			}
 
 			for dnsServer := range dnsServersBypassRoutes {
 				fmt.Println("Adding bypass route for DNS server", dnsServer, "via", LocalGatewayIp.String())
 				err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{dnsServer})
 				if err != nil {
-					log.Println("failed to add bypass route for DNS server", dnsServer, "via", LocalGatewayIp.String(), err)
+					logger.Error(
+						"failed to add bypass route for DNS server",
+						zap.String("dns_server", dnsServer),
+						zap.String("local_gateway", LocalGatewayIp.String()),
+						zap.Error(err),
+					)
 				}
 				// add the newly create static route for DNS server to the list of routes to delete
 				routesToDel = append(routesToDel, networkRoute{network: dnsServer, nextHopIp: LocalGatewayIp.String()})
@@ -298,22 +312,19 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 	// It seems to then choose the old default gateway, which is not what we want
 	// So we wait a few seconds, and then add the routes, it then picks the VPN interfaces as the correct interface
 	if runtime.GOOS == "windows" {
-		fmt.Printf("Adding VPN routes, waiting for interface to be ready...")
-		// for loop with one 500ms sleep each
+		logger.Info("adding VPN routes, waiting 5 seconds for interface to be ready...")
 		for i := 0; i < 10; i++ {
 			time.Sleep(500 * time.Millisecond)
-			fmt.Print(".")
 		}
-		fmt.Println()
 	}
 	if err = vpnlib.AddRoutesViaGateway(ctrl.ServerIp, ctrl.Routes); err != nil {
-		log.Println("failed to add routes to interface", err)
+		return established, fmt.Errorf("failed to add routes to interface: %v", err)
 	}
-	fmt.Println("Connected to", conn.RemoteAddr())
+	logger.Info("connected to vpn server", zap.String("remote_address", conn.RemoteAddr().String()))
 
 	icmpConn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
-		return true, fmt.Errorf("failed to open ICMP \"connection\": %v", err)
+		return established, fmt.Errorf("failed to open ICMP \"connection\": %v", err)
 	}
 	defer icmpConn.Close()
 
@@ -335,7 +346,7 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 
 	// Now start the Tun to Conn goroutine
 	// This will listen for packets on the TUN interface and forward them to the right connection
-	go vpnlib.TunToConnCopy(ctx, iface, conn)
+	go vpnlib.TunToConnCopy(ctx, logger, iface, conn)
 
 	// Let's start a goroutine that send keep alive ping messges to the other side
 	go func() {
@@ -349,7 +360,7 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 		// Convert message to bytes
 		b, err := msg.Marshal(nil)
 		if err != nil {
-			fmt.Println("Error marshaling ICMP message:", err)
+			logger.Error("error marshaling ICMP message, icmp keep-alives will be disabled for this session", zap.Error(err))
 			return
 		}
 
@@ -364,11 +375,12 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 				if time.Since(lastPing) >= icmpKeepAliveInterval {
 					n, err := icmpConn.WriteTo(b, &net.IPAddr{IP: net.ParseIP(ctrl.ServerIp)})
 					if err != nil {
-						fmt.Println("Error writing ICMP keep alive message:", err)
-						return
+						if errors.Is(err, net.ErrClosed) {
+							return
+						}
+						logger.Info("error writing ICMP keep-alive message", zap.Error(err))
 					} else if n != len(b) {
-						fmt.Println("Got short write from WriteTo")
-						return
+						logger.Info("wrote partial ICMP keep-alive message", zap.Int("bytes_written", n), zap.Int("message_size", len(b)))
 					}
 					lastPing = time.Now()
 				}
@@ -379,14 +391,13 @@ func runClient(parentCtx context.Context, hostname string) (bool, error) {
 	// Now start the Conn to Tun goroutine
 	// This will listen for packets on the connection and forward them to the TUN interface
 	// note: this blocks
-	if err = vpnlib.ConnToTunCopy(ctx, conn, iface); err != nil {
+	if err = vpnlib.ConnToTunCopy(ctx, logger, conn, ctrl.ServerIp, iface); err != nil {
 		if !errors.Is(err, net.ErrClosed) {
-			fmt.Println("Error forwarding packets:", err)
-			return true, fmt.Errorf("failed to forward between tls conn and TUN iface: %v", err)
+			return established, fmt.Errorf("failed to forward between tls conn and TUN iface: %v", err)
 		}
 	}
 
-	return true, nil
+	return established, nil
 }
 
 func cleanUpAfterSessionDown(routesToDelete []networkRoute) {

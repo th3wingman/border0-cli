@@ -846,6 +846,7 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 
 		if err := vpnlib.RunServer(
 			socket.GetContext(),
+			logger,
 			l,
 			socket.Socket.ConnectorLocalData.DHCPPoolSubnet,
 			socket.Socket.ConnectorLocalData.AdvertisedRoutes,
