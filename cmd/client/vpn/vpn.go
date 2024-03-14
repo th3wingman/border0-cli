@@ -209,97 +209,86 @@ func runClient(parentCtx context.Context, logger *zap.Logger, hostname string) (
 	// we'll use that to determine the address family
 	remoteAddr := conn.RemoteAddr().(*net.TCPAddr)
 
-	var addressFamily int // Tunnel over IPv4 or IPv6
+	var vpnGatewayAf int // Tunnel over IPv4 or IPv6
 	var vpnGatewayIp string
 
 	if remoteAddr.IP.To4() != nil {
-		addressFamily = 4
+		vpnGatewayAf = 4
 		vpnGatewayIp = remoteAddr.IP.String() + "/32"
 	} else if remoteAddr.IP.To16() != nil {
-		addressFamily = 6
+		vpnGatewayAf = 6
 		vpnGatewayIp = remoteAddr.IP.String() + "/128"
 	} else {
 		return established, fmt.Errorf("failed to determine address family for remote address: %v", remoteAddr.IP)
 	}
 
-	// rewrite default route to 0.0.0.0/1 and 128.0.0.1
-	for i, route := range ctrl.Routes {
+	defaultV4GatewayIp, _, err := vpnlib.GetDefaultGateway(4)
+	if err != nil {
+		return established, fmt.Errorf("failed to get default IPv4 gateway: %v", err)
+	}
 
-		if route == "0.0.0.0/0" {
-
-			// Before we add new routes, we need to add a more specific route to the gateway gatewayIp
-			// This is because we want the VPN gateway IP to be routed through the existing gateway
-			// If we don't do this, the VPN gateway IP will be routed through the VPN, which will cause a loop
-
-			// The IP of the VPN gateway the the remote end of conn.
-			// So let's get the IP of the remote end of conn and then turn that into a /32 route
-			// and route it via the old gateway
-
-			// then delete this route (0.0.0.0/0) from the list of routes
-			ctrl.Routes = append(ctrl.Routes[:i], ctrl.Routes[i+1:]...)
-
-			// and add two new more specific routes
+	// The code block below only runs when the VPN gateway (i.e. the Border0 anycast proxies)
+	// are being talked to via IPv4.
+	//
+	// The code ensures that the Border0 proxy keeps being reached via the *current* default gateway
+	//
+	// We don't care about doing this when the VPN gateway run on IPv6 because the VPN only supports
+	// IPv4 routes, so there is currently no way that a VPN server can instruct a client to override
+	// the existing route to the proxy.
+	//
+	// If we were not to do this (when VPN gateway has an IPv4) then the route to the VPN gateway
+	// would be itself (in a loop). If we did not do it for VPN servers then its likely that
+	// nothing would resolve (if the VPN server cannot connect to the dns server IP addresses).
+	if vpnGatewayAf == 4 {
+		for _, route := range ctrl.Routes {
 			if route == "0.0.0.0/0" {
-				ctrl.Routes = append(ctrl.Routes, "0.0.0.0/1", "128.0.0.0/1")
-			} else if route == "::/0" {
-				ctrl.Routes = append(ctrl.Routes, "200::/3")
-			}
-
-			if addressFamily == 4 {
-				// get the existing default route, so we can override it
-				// This will return both the gateway IP and the interface name
-				LocalGatewayIp, _, err := vpnlib.GetDefaultGateway(4)
-				if err != nil {
-					return established, fmt.Errorf("failed to get default route: %v", err)
+				if err = vpnlib.AddRoutesViaGateway(defaultV4GatewayIp.String(), []string{vpnGatewayIp}); err != nil {
+					return established, fmt.Errorf("failed to add static route for VPN Gateway %s, towards %s: %v", vpnGatewayIp, defaultV4GatewayIp.String(), err)
 				}
-
-				if err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{vpnGatewayIp}); err != nil {
-					return established, fmt.Errorf("failed to add static route for VPN Gateway %s, towards %s: %v", vpnGatewayIp, LocalGatewayIp.String(), err)
-				}
-
-				// add the newly create static route for VPN gateway to the list of routes to delete
-				routesToDel = append(routesToDel, networkRoute{network: vpnGatewayIp, nextHopIp: LocalGatewayIp.String()})
-			} else {
-				// TODO placeholder for ipv6
-				// for now we don't support bypass routes for ipv6
-				// once we start announcing ipv6 routes, we can should add support for bypass routes
-				// for now we just skip this
-				logger.Warn("got a route with a non IPv4 address family", zap.Int("routes_index", i), zap.String("route", route))
+				routesToDel = append(routesToDel, networkRoute{network: vpnGatewayIp, nextHopIp: defaultV4GatewayIp.String()})
 			}
 		}
 	}
 
-	// Check if we need to add bypass routes for the DNS servers
-	// Needed when the DNS server is RFC1918 and is on a different subnet than the default gateway
-	// This is the case in many coffee shops, where the DNS server is on a different subnet than the default gateway
-	// In this case, we need to add a bypass route for the DNS server, so that it's not routed through the VPN
-	if addressFamily == 4 {
-		// dnsServersBypassRoutes is a list of DNS servers that we need to add bypass routes for
-		dnsServersBypassRoutes, err := vpnlib.GetDnsByPassRoutes(iface.Name(), ctrl.Routes, addressFamily)
-		if err != nil {
-			return established, fmt.Errorf("failed to get DNS servers bypass routes: %v", err)
+	processedRoutes := []string{}
+	for _, route := range ctrl.Routes {
+		// special handling for v4 default route
+		if route == "0.0.0.0/0" {
+			processedRoutes = append(processedRoutes, "0.0.0.0/1", "128.0.0.0/1")
+			continue
 		}
-		if len(dnsServersBypassRoutes) > 0 {
-			// Now we can add the bypass routes for the DNS servers
-			LocalGatewayIp, _, err := vpnlib.GetDefaultGateway(4)
-			if err != nil {
-				return established, fmt.Errorf("failed to get default route: %v", err)
-			}
+		// special handling for v6 default route
+		if route == "::/0" {
+			processedRoutes = append(processedRoutes, "200::/3")
+			continue
+		}
+		processedRoutes = append(processedRoutes, route)
+	}
+	ctrl.Routes = processedRoutes
 
-			for dnsServer := range dnsServersBypassRoutes {
-				fmt.Println("Adding bypass route for DNS server", dnsServer, "via", LocalGatewayIp.String())
-				err = vpnlib.AddRoutesViaGateway(LocalGatewayIp.String(), []string{dnsServer})
-				if err != nil {
-					logger.Error(
-						"failed to add bypass route for DNS server",
-						zap.String("dns_server", dnsServer),
-						zap.String("local_gateway", LocalGatewayIp.String()),
-						zap.Error(err),
-					)
-				}
-				// add the newly create static route for DNS server to the list of routes to delete
-				routesToDel = append(routesToDel, networkRoute{network: dnsServer, nextHopIp: LocalGatewayIp.String()})
+	// handle routes to current DNS servers
+	dnsServersBypassRoutes, err := vpnlib.GetDnsByPassRoutes(iface.Name(), ctrl.Routes, 4)
+	if err != nil {
+		return established, fmt.Errorf("failed to get DNS servers bypass routes: %v", err)
+	}
+	if len(dnsServersBypassRoutes) > 0 {
+		for dnsServer := range dnsServersBypassRoutes {
+			logger.Info(
+				"adding bypass route for dns server",
+				zap.String("dns_server", dnsServer),
+				zap.String("default_gateway", defaultV4GatewayIp.String()),
+			)
+			err = vpnlib.AddRoutesViaGateway(defaultV4GatewayIp.String(), []string{dnsServer})
+			if err != nil {
+				logger.Error(
+					"failed to add bypass route for DNS server",
+					zap.String("dns_server", dnsServer),
+					zap.String("default_gateway", defaultV4GatewayIp.String()),
+					zap.Error(err),
+				)
 			}
+			// ensures added routes get cleaned up
+			routesToDel = append(routesToDel, networkRoute{network: dnsServer, nextHopIp: defaultV4GatewayIp.String()})
 		}
 	}
 
