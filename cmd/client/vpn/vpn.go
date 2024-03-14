@@ -16,6 +16,7 @@ import (
 	"github.com/borderzero/border0-cli/cmd/logger"
 	"github.com/borderzero/border0-cli/internal/client"
 	"github.com/borderzero/border0-cli/internal/enum"
+	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-cli/internal/vpnlib"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/spf13/cobra"
@@ -47,6 +48,10 @@ var clientVpnCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			hostname = args[0]
+		}
+
+		if !util.RunningAsAdministrator() {
+			return errors.New("command must be ran as system administrator")
 		}
 
 		if hostname == "" {

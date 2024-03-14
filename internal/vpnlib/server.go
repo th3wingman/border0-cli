@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 
+	"github.com/borderzero/border0-cli/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -43,6 +44,10 @@ func RunServer(
 	config := &serverConfig{verbose: false}
 	for _, opt := range opts {
 		opt(config)
+	}
+
+	if !util.RunningAsAdministrator() {
+		return errors.New("connector must be running as system administrator in order to manage vpn sockets")
 	}
 
 	// Create an IP pool that will be used to assign IPs to clients

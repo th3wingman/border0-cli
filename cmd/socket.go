@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -431,6 +432,10 @@ var socketConnectVpnCmd = &cobra.Command{
 	ValidArgsFunction: AutocompleteSocket,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := logger.Logger
+
+		if !util.RunningAsAdministrator() {
+			return errors.New("command must be ran as system administrator in order to connect vpn sockets")
+		}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
