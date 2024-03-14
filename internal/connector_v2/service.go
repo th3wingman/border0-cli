@@ -841,7 +841,7 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 		// options defined locally (not in socket config).
 		// these may move to socket config gradually.
 		localServerOpts := []vpnlib.ServerOption{
-			vpnlib.WithServerLogUndeliverable(os.Getenv("VPN_LOG_UNDELIVERABLE_PK") == "true"),
+			vpnlib.WithServerVerboseLogs(os.Getenv("VPN_VERBOSE_LOGS") == "true"),
 		}
 
 		if err := vpnlib.RunServer(
