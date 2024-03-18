@@ -88,19 +88,56 @@ func StartLocalProxyAndOpenClient(
 		localListenerAddress = fmt.Sprintf("localhost:%d", allocatedPort)
 	}
 
-	log.Print("Waiting for connections on ", localListenerAddress, "...")
+	// if the user didn't specify a local listener port, we assume this is a one-off
+	// run and they do not wan't to reuse the local listener.
+	if localListenerPort == 0 {
+		errs := make(chan error, 1)
+		defer close(errs)
 
-	go func() {
-		var err error
-		if protocol == "rdp" {
-			err = openRDP(localListenerAddress)
-		} else {
-			err = open.Run(fmt.Sprintf("%s://%s", protocol, localListenerAddress))
-		}
-		if err != nil {
-			log.Printf("Failed to open system's %s client: %v", protocol, err)
-		}
-	}()
+		go func() {
+			var err error
+			if protocol == "rdp" {
+				err = openRDP(localListenerAddress)
+			} else {
+				err = open.Run(fmt.Sprintf("%s://%s", protocol, localListenerAddress))
+			}
+			if err != nil {
+				errs <- fmt.Errorf("failed to open system's %s client: %v", protocol, err)
+			}
+		}()
+
+		go func() {
+			lcon, err := l.Accept()
+			if err != nil {
+				errs <- fmt.Errorf("failed to accept connection in local listener: %v", err)
+				return
+			}
+			defer lcon.Close()
+
+			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
+			if err != nil {
+				if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
+					errs <- fmt.Errorf("failed to connect: %s. You may not be authorized for this socket. Speak to your Border0 administrator", err)
+				} else {
+					errs <- fmt.Errorf("failed to connect: %s", err)
+				}
+				return
+			}
+
+			log.Print("Connection established from ", lcon.RemoteAddr())
+			Copy(conn, lcon, lcon)
+			errs <- nil
+		}()
+
+		// blocks until error
+		err := <-errs
+		return err
+	}
+
+	// If they did provide a listener port, we wont open the client, and we
+	// won't return after one failure.
+
+	log.Print("Waiting for connections on ", localListenerAddress, "...")
 
 	for {
 		lcon, err := l.Accept()
@@ -109,10 +146,12 @@ func StartLocalProxyAndOpenClient(
 		}
 
 		go func() {
+			defer lcon.Close()
+
 			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
 			if err != nil {
 				if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
-					fmt.Printf("Error: %s. You may not be authorized for this socket. Speak to your Border0 administrator\n", err)
+					fmt.Printf("failed to connect: %s. You may not be authorized for this socket. Speak to your Border0 administrator\n", err)
 					return
 				}
 				fmt.Printf("failed to connect: %s\n", err)
