@@ -111,6 +111,7 @@ func StartLocalProxyAndOpenClient(
 			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
 			if err != nil {
 				fmt.Printf("failed to connect: %s\n", err)
+				return
 			}
 
 			log.Print("Connection established from ", lcon.RemoteAddr())
