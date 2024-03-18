@@ -42,7 +42,8 @@ import (
 )
 
 var (
-	ErrHandshakeFailed = errors.New("failed to authenticate against connector")
+	ErrProxyHandshakeFailed     = errors.New("failed to authenticate against Border0 proxy")
+	ErrConnectorHandshakeFailed = errors.New("failed to authenticate against connector")
 )
 
 const (
@@ -910,7 +911,7 @@ func Connect(addr string, tlsNeeded bool, tlsConfig *tls.Config, certificate tls
 	if tlsNeeded || connectorAuthenticationEnabled || endToEndEncryptionEnabled {
 		tlsConn := tls.Client(conn, tlsConfig)
 		if err := tlsConn.Handshake(); err != nil {
-			return nil, fmt.Errorf("failed to handshake with proxy: %w", err)
+			return nil, fmt.Errorf("%w: %v", ErrProxyHandshakeFailed, err)
 		}
 
 		conn = tlsConn
@@ -961,7 +962,7 @@ func connectWithConn(conn net.Conn, certificate tls.Certificate, caCert *x509.Ce
 
 	connectorConn := tls.Client(conn, tlsConfig)
 	if err := connectorConn.Handshake(); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHandshakeFailed, err)
+		return nil, fmt.Errorf("%w: %v", ErrConnectorHandshakeFailed, err)
 	}
 
 	if endToEndEncryptionEnabled {
