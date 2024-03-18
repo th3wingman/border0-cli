@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -110,7 +111,12 @@ func StartLocalProxyAndOpenClient(
 		go func() {
 			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
 			if err != nil {
+				if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
+					fmt.Printf("Error: %s. You may not be authorized for this socket. Speak to your Border0 administrator\n", err)
+					return
+				}
 				fmt.Printf("failed to connect: %s\n", err)
+				return
 			}
 
 			log.Print("Connection established from ", lcon.RemoteAddr())

@@ -142,6 +142,9 @@ var sshCmd = &cobra.Command{
 
 		conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
 		if err != nil {
+			if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
+				return fmt.Errorf("failed to connect: %s. You may not be authorized for this socket. Speak to your Border0 administrator", err)
+			}
 			return fmt.Errorf("failed to connect: %w", err)
 		}
 
