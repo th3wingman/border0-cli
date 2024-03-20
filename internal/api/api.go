@@ -792,3 +792,14 @@ func (a *Border0API) ServerOrgCertificate(ctx context.Context, name string, csr 
 
 	return []byte(signSshOrgCertificateResponse.Certificate), nil
 }
+
+func (a *Border0API) Whoami(ctx context.Context) (map[string]any, error) {
+	m := map[string]any{}
+
+	err := a.Request(http.MethodGet, "iam/whoami", &m, nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
