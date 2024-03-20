@@ -57,11 +57,20 @@ func CheckIfTokenIsExpired(rawToken string) bool {
 
 	if tempJWT != nil {
 		claims := tempJWT.Claims.(jwt.MapClaims)
-		exp := int64(claims["exp"].(float64))
-		if exp-10 > time.Now().Unix() {
-			return false
+		if expfloat, ok := claims["exp"]; ok {
+			exp := int64(expfloat.(float64))
+			if exp-10 > time.Now().Unix() {
+				return false
+			}
+		} else {
+			// no expiry, allow through if service account token
+			if _, ok := claims["service_account_id"]; ok {
+				return false
+			}
 		}
+
 	}
+
 	return true
 }
 
@@ -139,8 +148,11 @@ func MTLSLogin(logger *zap.Logger, hostname string) (string, jwt.MapClaims, erro
 	}
 
 	claims := parsedJWT.Claims.(jwt.MapClaims)
-	if _, ok := claims["user_email"]; !ok {
-		return "", nil, errors.New("can't find claim for user_email")
+	_, userEmailOK := claims["user_email"]
+	_, serviceAccountIdOK := claims["service_account_id"]
+
+	if !userEmailOK && !serviceAccountIdOK {
+		return "", nil, errors.New("can't find claim for user_email nor service_account_id")
 	}
 
 	if _, ok := claims["org_id"]; !ok {

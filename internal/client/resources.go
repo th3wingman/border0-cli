@@ -301,7 +301,7 @@ func saveToken(token string) error {
 	return nil
 }
 
-func IsExistingClientTokenValid(homeDir string) (valid bool, token, email string, err error) {
+func IsExistingClientTokenValid(homeDir string) (valid bool, token, identity string, err error) {
 	if homeDir == "" {
 		homeDir, err = osutil.GetUserHomeDir()
 	}
@@ -314,8 +314,8 @@ func IsExistingClientTokenValid(homeDir string) (valid bool, token, email string
 		err = fmt.Errorf("couldn't get client token: %w", err)
 		return
 	}
-	email, _, err = ValidateClientToken(token)
-	return (err == nil), token, email, err
+	identity, _, err = ValidateClientToken(token)
+	return (err == nil), token, identity, err
 }
 
 func GetClientToken(homeDir string) (string, error) {
@@ -347,7 +347,7 @@ func ClientTokenFile(homedir string) string {
 	return tokenfile
 }
 
-func ValidateClientToken(token string) (email string, claims jwt.MapClaims, err error) {
+func ValidateClientToken(token string) (identity string, claims jwt.MapClaims, err error) {
 	parsedJWT, err := jwt.Parse(token, nil)
 	if parsedJWT == nil {
 		err = fmt.Errorf("couldn't parse token: %w", err)
@@ -355,21 +355,40 @@ func ValidateClientToken(token string) (email string, claims jwt.MapClaims, err 
 	}
 
 	claims = parsedJWT.Claims.(jwt.MapClaims)
-	if _, ok := claims["user_email"]; ok {
-		email = claims["user_email"].(string)
-	} else {
-		err = fmt.Errorf("can't find claim for user_email")
+
+	email, userEmailOK := claims["user_email"]
+	if userEmailOK {
+		identity = email.(string)
+	}
+
+	serviceAccountID, serviceAccountIdOK := claims["service_account_id"]
+	if serviceAccountIdOK {
+		identity = serviceAccountID.(string)
+	}
+
+	if !userEmailOK && !serviceAccountIdOK {
+		err = errors.New("can't find claim for user_email nor service_account_id")
 		return
 	}
 
 	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, false) {
-		exp := claims["exp"].(float64)
-		delta := time.Unix(now, 0).Sub(time.Unix(int64(exp), 0))
-		err = fmt.Errorf("token expired: token for %s expired %v ago", email, delta)
-		return
+
+	checkExpiry := true
+	if serviceAccountIdOK {
+		if _, hasExp := claims["exp"]; !hasExp {
+			checkExpiry = false
+		}
 	}
-	return email, claims, nil
+
+	if checkExpiry {
+		if !claims.VerifyExpiresAt(now, false) {
+			exp := claims["exp"].(float64)
+			delta := time.Unix(now, 0).Sub(time.Unix(int64(exp), 0))
+			err = fmt.Errorf("token expired: token for %s expired %v ago", identity, delta)
+			return
+		}
+	}
+	return identity, claims, nil
 }
 
 func FetchResources(token string, filteredTypes ...string) (resources models.ClientResources, err error) {
