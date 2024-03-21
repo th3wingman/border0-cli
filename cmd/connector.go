@@ -319,7 +319,7 @@ func connectorInstallAws(cmd *cobra.Command) {
 	}()
 
 	loginCmd.Run(cmd, []string{})
-	if err := install.RunCloudInstallWizardForAWS(ctx, internal.Version); err != nil {
+	if err := install.RunCloudInstallWizardForAWS(ctx, inviteCode, internal.Version); err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
 	}
@@ -452,6 +452,7 @@ func init() {
 	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
 	connectorInstallCmd.Flags().BoolVarP(&daemonOnly, "daemon-only", "d", false, "Install the daemon only, do not create connector")
 	connectorInstallCmd.Flags().StringVarP(&token, "token", "t", "", "Border0 token for use by the installed connector")
+	connectorInstallCmd.Flags().StringVarP(&inviteCode, "invite", "i", "", "invite code for installing the connector")
 	connectorInstallCmd.Flags().BoolVar(&qr, "qr", false, "Print a QR code for authenticating with a mobile device")
 	connectorInstallCmd.Flags().MarkHidden("qr")
 
