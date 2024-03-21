@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,8 +18,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
+	"github.com/aws/smithy-go"
 	border0 "github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/connector_v2/invite"
+	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/border0-go/types/connector"
@@ -37,6 +40,7 @@ const (
 	timeoutDescribeVpcSubnetsPage = time.Second * 10
 	timeoutDescribeSsmParameters  = time.Second * 10
 	timeoutCreateBorder0Token     = time.Second * 10
+	timeoutGetSsmParameter        = time.Second * 10
 	timeoutPutSsmParameter        = time.Second * 10
 	timeoutCreateStack            = time.Second * 10
 	timeoutDescribeStackEvents    = time.Second * 10
@@ -433,6 +437,31 @@ func saveBorder0TokenInSsmParameterStore(
 
 	fmt.Printf("🚀 SSM Parameter \"%s\" created successfully!\n", border0TokenSsmParameterPath)
 	return nil
+}
+
+func getBorder0TokenInSsmParameterStore(
+	ctx context.Context,
+	cfg aws.Config,
+	border0TokenSsmParameterPath string,
+) (*string, error) {
+	ssmClient := ssm.NewFromConfig(cfg)
+
+	getSsmParameterCtx, getSsmParameterCtxCancel := context.WithTimeout(ctx, timeoutGetSsmParameter)
+	defer getSsmParameterCtxCancel()
+
+	getParameterOutput, err := ssmClient.GetParameter(getSsmParameterCtx, &ssm.GetParameterInput{
+		Name:           &border0TokenSsmParameterPath,
+		WithDecryption: pointer.To(true),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ParameterNotFound" {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get ssm parameter via the AWS API: %v", err)
+	}
+
+	return getParameterOutput.Parameter.Value, nil
 }
 
 // Improvements:
