@@ -16,6 +16,7 @@ import (
 	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
+
 	"github.com/borderzero/border0-cli/internal/connector_v2/daemon"
 	"github.com/borderzero/border0-cli/internal/connector_v2/install"
 	"github.com/borderzero/border0-cli/internal/connector_v2/invite"
@@ -53,6 +54,8 @@ var (
 	daemonOnly  bool
 	connectorId string
 	inviteCode  string
+
+	tokenPersistenceSsmPath string
 )
 
 type Socket struct {
@@ -338,7 +341,7 @@ func connectorInstallLocal(cmd *cobra.Command) {
 	if !daemonOnly {
 		loginCmd.Run(cmd, []string{})
 	}
-	err := install.RunInstallWizard(cmd.Context(), internal.Version, daemonOnly, token)
+	err := install.RunInstallWizard(cmd.Context(), internal.Version, daemonOnly, token, inviteCode, tokenPersistenceSsmPath)
 	if err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
@@ -453,6 +456,8 @@ func init() {
 	connectorInstallCmd.Flags().BoolVarP(&daemonOnly, "daemon-only", "d", false, "Install the daemon only, do not create connector")
 	connectorInstallCmd.Flags().StringVarP(&token, "token", "t", "", "Border0 token for use by the installed connector")
 	connectorInstallCmd.Flags().StringVarP(&inviteCode, "invite", "i", "", "invite code for installing the connector")
+	connectorInstallCmd.Flags().StringVarP(&tokenPersistenceSsmPath, "token-persistence-ssm-path", "p", "", "path in AWS SSM to persist connector token after exchanging an invite token")
+	connectorInstallCmd.Flags().MarkHidden("token-persistence-ssm-path") // hidden as it is only used in web installer
 	connectorInstallCmd.Flags().BoolVar(&qr, "qr", false, "Print a QR code for authenticating with a mobile device")
 	connectorInstallCmd.Flags().MarkHidden("qr")
 
