@@ -51,6 +51,24 @@ func ExchangeForConnectorToken(ctx context.Context, inviteCode string) (connecto
 	return connectorToken, nil
 }
 
+// ExchangeForAwsConnectorToken uses an invite code to create a new connector and connector token.
+// It excludes some of the behaviour of the ExchangeForConnectorToken because we are getting a connector
+// token for a *remote* machine, not the *local* machine.
+func ExchangeForAwsConnectorToken(ctx context.Context, name, inviteCode string) (connectorID, connectorToken string, err error) {
+	// connector token not yet writen to file, this is the first time the invite code is used, so we need to
+	// use the invite code to exchange for a connector token
+	border0Client := border0.NewAPI(border0.WithVersion(internal.Version))
+
+	reply, err := border0Client.CreateConnectorWithInstallToken(ctx, name, inviteCode)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create connector with invite code: %w", err)
+	}
+	connectorID = reply.Connector.ConnectorID
+	connectorToken = reply.ConnectorToken.Token
+
+	return connectorID, connectorToken, nil
+}
+
 func readConnectorTokenFromFile(inviteCode string) (string, error) {
 	dotBorder0Dir, err := files.DotBorder0Dir()
 	if err != nil {
