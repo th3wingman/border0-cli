@@ -17,6 +17,7 @@ import (
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/manifoldco/promptui"
 	"go.uber.org/zap"
@@ -322,7 +323,7 @@ func (s *dockerExecSession) askForTarget(ctx context.Context, channel ssh.Channe
 	containerListCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	containers, err := cli.ContainerList(containerListCtx, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(containerListCtx, container.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list Docker containers: %v", err)
 	}
