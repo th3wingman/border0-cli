@@ -120,12 +120,12 @@ var clientLoginStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check login status, see if token is still valid",
 	Run: func(cmd *cobra.Command, args []string) {
-		valid, _, email, err := client.IsExistingClientTokenValid("")
+		valid, _, identity, err := client.IsExistingClientTokenValid("")
 		if !valid {
 			fmt.Println(err)
 			fmt.Println("Please login again: border0 client login")
 		} else {
-			fmt.Println("Token Valid, logged in as " + email)
+			fmt.Println("Token Valid, logged in as " + identity)
 		}
 	},
 }
