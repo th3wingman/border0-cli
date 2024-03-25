@@ -12,6 +12,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
@@ -40,7 +41,7 @@ func (s *DockerFinder) Find(ctx context.Context, cfg config.Config, state Discov
 
 	defer cli.Close()
 
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(ctx, container.ListOptions{})
 	s.Logger.Debug("found containers", zap.Any("containers", containers))
 
 	if err != nil {
