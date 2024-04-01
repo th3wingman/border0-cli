@@ -7,6 +7,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal"
 	border0 "github.com/borderzero/border0-cli/internal/api"
+	"github.com/borderzero/border0-cli/internal/connector_v2/config"
 	"github.com/borderzero/border0-cli/internal/files"
 	"github.com/borderzero/border0-cli/internal/util"
 )
@@ -43,7 +44,7 @@ func ExchangeForConnectorToken(ctx context.Context, inviteCode string) (connecto
 
 	// write the connector token to a file invite_<inviteCode> in the .border0 directory, so it can be reused
 	// when the user runs `border0 connector start` again with the same --invite <inviteCode> flag
-	err = writeConnectorTokenToFile(inviteCode, connectorToken)
+	err = writeConnectorTokenToFiles(inviteCode, connectorToken)
 	if err != nil {
 		return "", err
 	}
@@ -85,14 +86,21 @@ func readConnectorTokenFromFile(inviteCode string) (string, error) {
 	return "", nil
 }
 
-func writeConnectorTokenToFile(inviteCode, connectorToken string) error {
+func writeConnectorTokenToFiles(inviteCode, connectorToken string) error {
 	dotBorder0Dir, err := files.DotBorder0Dir()
 	if err != nil {
 		return fmt.Errorf("failed to get .border0 directory: %w", err)
 	}
+
+	// write the connector token to a file invite_<inviteCode> in the .border0 directory
+	// so it can be reused when the user runs `border0 connector start` again WITH the same --invite <inviteCode> flag
 	connectorTokenFile := filepath.Join(dotBorder0Dir, fmt.Sprintf("invite_%s", inviteCode))
 	if err := files.WriteStringToFile(connectorTokenFile, connectorToken); err != nil {
-		return fmt.Errorf("failed to write connector token to file: %w", err)
+		return fmt.Errorf("failed to write connector token to file %s: %w", connectorTokenFile, err)
 	}
-	return nil
+
+	// write the connector token to the config file in the .border0 directory
+	// so it can be reused when the user runs `border0 connector start` again WITHOUT the --invite flag
+	border0ConfigFile := filepath.Join(dotBorder0Dir, "config.yaml")
+	return config.WriteToFile(border0ConfigFile, &config.Configuration{Token: connectorToken})
 }
