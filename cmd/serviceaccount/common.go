@@ -6,6 +6,7 @@ var (
 	tokenName    string
 	description  string
 	role         string
+	active       string
 	lifetimeDays int
 	jsonOutput   bool
 )
