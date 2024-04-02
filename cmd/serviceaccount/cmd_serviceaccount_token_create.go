@@ -29,7 +29,7 @@ func getServiceAccountTokenCreateCmdHandler() func(cmd *cobra.Command, args []st
 		}
 
 		if name == "" {
-			util.FailPretty("name is a required flag")
+			util.FailPretty("service-account-name is a required flag")
 		}
 		if tokenName == "" {
 			util.FailPretty("token-name is a required flag")

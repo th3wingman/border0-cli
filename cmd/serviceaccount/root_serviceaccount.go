@@ -18,6 +18,13 @@ func GetServiceAccountCmdRoot() *cobra.Command {
 	svcAccountCreateCmd.Flags().StringVarP(&role, "role", "r", "", "service account role e.g. 'client', 'member', 'admin'")
 	svcAccountCreateCmd.Flags().BoolVarP(&jsonOutput, "json", "j", false, "print json output")
 
+	svcAccountUpdateCmd := getServiceAccountUpdateCmd()
+	svcAccountUpdateCmd.Flags().StringVarP(&name, "name", "n", "", "service account name")
+	svcAccountUpdateCmd.Flags().StringVarP(&description, "description", "d", "", "service account description")
+	svcAccountUpdateCmd.Flags().StringVarP(&role, "role", "r", "", "service account role e.g. 'client', 'member', 'admin'")
+	svcAccountUpdateCmd.Flags().StringVarP(&active, "active", "a", "", "service account status (true for active, false for inactive)")
+	svcAccountUpdateCmd.Flags().BoolVarP(&jsonOutput, "json", "j", false, "print json output")
+
 	svcAccountDeleteCmd := getServiceAccountDeleteCmd()
 	svcAccountDeleteCmd.Flags().StringVarP(&name, "name", "n", "", "service account name")
 
@@ -29,6 +36,7 @@ func GetServiceAccountCmdRoot() *cobra.Command {
 		svcAccountShowCmd,
 		svcAccountListCmd,
 		svcAccountCreateCmd,
+		svcAccountUpdateCmd,
 		svcAccountDeleteCmd,
 		GetServiceAccountTokenCmdRoot(),
 	)
