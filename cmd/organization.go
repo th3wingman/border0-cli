@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/borderzero/border0-cli/cmd/idp"
+	"github.com/borderzero/border0-cli/cmd/serviceaccount"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	border0_http "github.com/borderzero/border0-cli/internal/http"
 	"github.com/jedib0t/go-pretty/table"
@@ -466,6 +467,7 @@ func init() {
 	organizationCmd.AddCommand(organizationShowCmd)
 	organizationCmd.AddCommand(domainCmd)
 	organizationCmd.AddCommand(idp.GetIDPCmdRoot())
+	organizationCmd.AddCommand(serviceaccount.GetServiceAccountCmdRoot())
 	organizationCmd.AddCommand(notificationCmd)
 
 	domainCmd.AddCommand(domainListCmd)
