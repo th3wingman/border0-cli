@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
@@ -385,6 +386,7 @@ func (c *localChannel) handleExec(ctx context.Context, req *ssh.Request) {
 		"HOME=" + user.HomeDir,
 		"USER=" + user.Username,
 		"SHELL=" + shell,
+		"PATH=" + os.Getenv("PATH"),
 	}
 
 	cmd.Env = append(cmd.Env, c.env...)
