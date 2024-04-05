@@ -7,6 +7,7 @@ import (
 
 const (
 	ipv4HeaderLengthBytes = 20
+	ipv6HeaderLengthBytes = 40
 )
 
 func cidrToUsableIPs(cidr string) ([]string, uint8, error) {
@@ -50,6 +51,17 @@ func validateIPv4(packet []byte) error {
 	ipVersion := (packet[0] & 0xF0) >> 4
 	if ipVersion != 4 {
 		return fmt.Errorf("packet header advertises non IPv4, version: %d", ipVersion)
+	}
+	return nil
+}
+
+func validateIPv6(packet []byte) error {
+	if len(packet) < ipv6HeaderLengthBytes {
+		return fmt.Errorf("packet too short for IPv6")
+	}
+	ipVersion := (packet[0] & 0xF0) >> 4
+	if ipVersion != 6 {
+		return fmt.Errorf("packet header advertises non IPv6, version: %d", ipVersion)
 	}
 	return nil
 }

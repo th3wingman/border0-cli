@@ -25,6 +25,8 @@ const (
 	controlMessageHeaderByteSize = 2
 	// border0HeaderByteSize is the number of bytes used for the header we use in each packet for reconstruction.
 	border0HeaderByteSize = 2
+	// VPN socket MTU size based off header size calculations and compliant with RFC 2460
+	border0MTUSize = "1380"
 )
 
 // ControlMessage represents a message used to tell clients
@@ -342,7 +344,7 @@ func AddServerIp(iface, localIp string, subnetSize uint8) error {
 }
 
 func AddServerIpDarwin(iface, localIp string, subnetSize uint8) error {
-	if err := exec.Command("ifconfig", iface, "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ifconfig", iface, "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting MTU for interface %s: %v", iface, err)
 	}
 	// calculate p2p ip address from localIP take one digit lower
@@ -363,7 +365,7 @@ func AddServerIpLinux(iface, localIp string, subnetSize uint8) error {
 	if err := exec.Command("ip", "addr", "add", serverIp, "dev", iface).Run(); err != nil {
 		return fmt.Errorf("error adding ip %s to interface %s: %v", localIp, iface, err)
 	}
-	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting link for interface %s: %v", iface, err)
 	}
 	return nil
@@ -384,7 +386,7 @@ func AddIpToIface(iface, localIp, remoteIp string, subnetSize uint8) error {
 }
 
 func addIpToIfaceDarwin(iface, localIp, remoteIp string) error {
-	if err := exec.Command("ifconfig", iface, "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ifconfig", iface, "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting MTU for interface %s: %v", iface, err)
 	}
 
@@ -398,7 +400,7 @@ func addIpToIfaceLinux(iface, localIp string, subnetSize uint8) error {
 	if err := exec.Command("ip", "addr", "add", fmt.Sprintf("%s/%d", localIp, subnetSize), "dev", iface).Run(); err != nil {
 		return fmt.Errorf("error adding ip %s to interface %s: %v", localIp, iface, err)
 	}
-	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting link for interface %s: %v", iface, err)
 	}
 	return nil
@@ -450,14 +452,22 @@ func TunToConnCopy(
 			}
 			packet := packetbuffer[:n]
 
-			// ignore non IPv4 packets
+			// Determine IP version
 			ipVersion := (packet[0] & 0xF0) >> 4
-			if ipVersion != 4 {
-				logger.Warn("received non IPv4 packet", zap.Uint8("ip_version_byte", uint8(ipVersion)))
-				continue
-			}
-			if err := validateIPv4(packet); err != nil {
-				logger.Warn("received invalid iPv4 packet", zap.Error(err))
+			switch ipVersion {
+			case 4: // IPv4
+				if err := validateIPv4(packet); err != nil {
+					logger.Warn("received invalid IPv4 packet", zap.Error(err))
+					continue
+				}
+			case 6: // IPv6
+				if err := validateIPv6(packet); err != nil {
+					logger.Warn("received invalid IPv6 packet", zap.Error(err))
+					continue
+				}
+			default:
+				// Unsupported IP version, skip packet
+				logger.Warn("unsupported IP version", zap.Uint8("version", ipVersion))
 				continue
 			}
 
