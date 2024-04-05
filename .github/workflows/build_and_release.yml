@@ -383,3 +383,20 @@ jobs:
               workflow_id: 'bump_version_and_create_pr.yml',
               ref: 'main'
             })
+
+  # trigger AWX-EE build
+  trigger-awx-ee-build:
+    needs: [cloudfront-cache, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AWX-EE build
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.BORDERZERO_GH_ACCESS_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'borderzero',
+              repo: 'awx-ee',
+              workflow_id: 'build-awx-ee.yml',
+              ref: 'main'
+            })
