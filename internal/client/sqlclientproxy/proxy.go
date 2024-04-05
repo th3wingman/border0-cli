@@ -14,21 +14,21 @@ type SqlClientProxy interface {
 }
 
 type sqlClientProxy struct {
-	port      int
-	info      client.ResourceInfo
-	resource  models.ClientResource
-	tlsConfig *tls.Config
-	wsProxy   string
+	port       int
+	info       client.ResourceInfo
+	resource   models.ClientResource
+	tlsConfig  *tls.Config
+	useWsProxy bool
 }
 
-func NewSqlClientProxy(logger *zap.Logger, port int, resource models.ClientResource, wsProxy string) (SqlClientProxy, error) {
+func NewSqlClientProxy(logger *zap.Logger, port int, resource models.ClientResource, useWsProxy bool) (SqlClientProxy, error) {
 	switch resource.DatabaseType {
 	case "mysql":
-		return newMysqlClientProxy(logger, port, resource, wsProxy)
+		return newMysqlClientProxy(logger, port, resource, useWsProxy)
 	case "postgres":
-		return newPostgresClientProxy(logger, port, resource, wsProxy)
+		return newPostgresClientProxy(logger, port, resource, useWsProxy)
 	case "mssql":
-		return newTcpProxy(logger, port, resource, wsProxy)
+		return newTcpProxy(logger, port, resource, useWsProxy)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", resource.DatabaseType)
 	}

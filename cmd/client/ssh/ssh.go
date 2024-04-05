@@ -24,7 +24,7 @@ import (
 var (
 	hostname     string
 	sshLoginName string
-	wsProxy      string
+	useWsProxy   bool
 )
 
 type HostDB struct {
@@ -43,7 +43,7 @@ func AddCommandsTo(client *cobra.Command) {
 	sshCmd.Flags().StringVarP(&hostname, "host", "", "", "The ssh border0 target host")
 	sshCmd.Flags().StringVarP(&sshLoginName, "username", "u", "", "Specifies the user to log in as on the remote machine(deprecated)")
 	sshCmd.Flags().StringVarP(&sshLoginName, "login", "l", "", "Same as username, specifies the user login to use on remote machine")
-	sshCmd.Flags().StringVarP(&wsProxy, "wsproxy", "w", "", "websocket proxy")
+	sshCmd.Flags().BoolVarP(&useWsProxy, "wsproxy", "w", false, "Use websocket proxy")
 
 	client.AddCommand(keySignCmd)
 	keySignCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
@@ -140,7 +140,7 @@ var sshCmd = &cobra.Command{
 			RootCAs:      systemCertPool,
 		}
 
-		conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
+		conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 		if err != nil {
 			if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
 				return fmt.Errorf("failed to connect: %s. You may not be authorized for this socket. Speak to your Border0 administrator", err)

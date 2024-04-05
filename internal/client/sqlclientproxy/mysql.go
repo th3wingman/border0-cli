@@ -47,7 +47,7 @@ func (p *dummyProvider) GetCredential(username string) (password string, found b
 	return "", true, nil
 }
 
-func newMysqlClientProxy(logger *zap.Logger, port int, resource models.ClientResource, wsProxy string) (*mysqlClientProxy, error) {
+func newMysqlClientProxy(logger *zap.Logger, port int, resource models.ClientResource, useWsProxy bool) (*mysqlClientProxy, error) {
 	info, err := client.GetResourceInfo(logger, resource.Hostname())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource info")
@@ -66,11 +66,11 @@ func newMysqlClientProxy(logger *zap.Logger, port int, resource models.ClientRes
 
 	return &mysqlClientProxy{
 		sqlClientProxy: sqlClientProxy{
-			port:      port,
-			info:      info,
-			resource:  resource,
-			tlsConfig: tlsConfig,
-			wsProxy:   wsProxy,
+			port:       port,
+			info:       info,
+			resource:   resource,
+			tlsConfig:  tlsConfig,
+			useWsProxy: useWsProxy,
 		},
 		server: server.NewDefaultServer(),
 	}, nil
@@ -157,5 +157,5 @@ func (p *mysqlClientProxy) handleConnection(ctx context.Context, clientConn net.
 }
 
 func (p *mysqlClientProxy) Dialer(ctx context.Context, network, addr string) (net.Conn, error) {
-	return client.Connect(addr, false, p.tlsConfig, p.tlsConfig.Certificates[0], p.info.CaCertificate, p.info.ConnectorAuthenticationEnabled, p.info.EndToEndEncryptionEnabled, p.wsProxy)
+	return client.Connect(addr, false, p.tlsConfig, p.tlsConfig.Certificates[0], p.info.CaCertificate, p.info.ConnectorAuthenticationEnabled, p.info.EndToEndEncryptionEnabled, p.useWsProxy)
 }

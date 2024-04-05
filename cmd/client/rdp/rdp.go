@@ -12,7 +12,7 @@ import (
 var (
 	hostname          string
 	localListenerPort int
-	wsProxy           string
+	useWsProxy        bool
 )
 
 // clientRdpCmd represents the client rdp command
@@ -34,7 +34,7 @@ var clientRdpCmd = &cobra.Command{
 			hostname = pickedHost.Hostname()
 		}
 
-		return utils.StartLocalProxyAndOpenClient(cmd, args, "rdp", hostname, localListenerPort, wsProxy)
+		return utils.StartLocalProxyAndOpenClient(cmd, args, "rdp", hostname, localListenerPort, useWsProxy)
 	},
 }
 
@@ -43,5 +43,6 @@ func AddCommandsTo(client *cobra.Command) {
 
 	clientRdpCmd.Flags().StringVarP(&hostname, "service", "", "", "The Border0 service identifier")
 	clientRdpCmd.Flags().IntVarP(&localListenerPort, "local-listener-port", "l", 0, "Local listener port number")
-	clientRdpCmd.Flags().StringVarP(&wsProxy, "wsproxy", "w", "", "websocket proxy")
+	clientRdpCmd.Flags().BoolVarP(&useWsProxy, "wsproxy", "w", false, "Use websocket proxy")
+
 }

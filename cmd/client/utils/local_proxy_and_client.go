@@ -51,7 +51,7 @@ func StartLocalProxyAndOpenClient(
 	protocol string,
 	hostname string,
 	localListenerPort int,
-	wsProxy string,
+	useWsProxy bool,
 ) error {
 	info, err := client.GetResourceInfo(logger.Logger, hostname)
 	if err != nil {
@@ -109,7 +109,7 @@ func StartLocalProxyAndOpenClient(
 		}
 
 		go func() {
-			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
+			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 			if err != nil {
 				if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
 					fmt.Printf("Error: %s. You may not be authorized for this socket. Speak to your Border0 administrator\n", err)

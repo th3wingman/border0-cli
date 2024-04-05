@@ -21,7 +21,7 @@ type tcpClientProxy struct {
 	sqlClientProxy
 }
 
-func newTcpProxy(logger *zap.Logger, port int, resource models.ClientResource, wsProxy string) (*tcpClientProxy, error) {
+func newTcpProxy(logger *zap.Logger, port int, resource models.ClientResource, useWsProxy bool) (*tcpClientProxy, error) {
 	info, err := client.GetResourceInfo(logger, resource.Hostname())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource info")
@@ -40,11 +40,11 @@ func newTcpProxy(logger *zap.Logger, port int, resource models.ClientResource, w
 
 	return &tcpClientProxy{
 		sqlClientProxy: sqlClientProxy{
-			port:      port,
-			info:      info,
-			resource:  resource,
-			tlsConfig: tlsConfig,
-			wsProxy:   wsProxy,
+			port:       port,
+			info:       info,
+			resource:   resource,
+			tlsConfig:  tlsConfig,
+			useWsProxy: useWsProxy,
 		},
 	}, nil
 }
@@ -137,5 +137,5 @@ func (p *tcpClientProxy) handleConnection(ctx context.Context, clientConn net.Co
 }
 
 func (p *tcpClientProxy) Dialer(ctx context.Context, network, addr string) (net.Conn, error) {
-	return client.Connect(addr, false, p.tlsConfig, p.tlsConfig.Certificates[0], p.info.CaCertificate, p.info.ConnectorAuthenticationEnabled, p.info.EndToEndEncryptionEnabled, p.wsProxy)
+	return client.Connect(addr, false, p.tlsConfig, p.tlsConfig.Certificates[0], p.info.CaCertificate, p.info.ConnectorAuthenticationEnabled, p.info.EndToEndEncryptionEnabled, p.useWsProxy)
 }

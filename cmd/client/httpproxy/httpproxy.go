@@ -20,7 +20,7 @@ var (
 	hostname      string
 	httpProxyPort int
 	numStreams    int
-	wsProxy       string
+	useWsProxy    bool
 )
 
 type SessionManager struct {
@@ -30,7 +30,7 @@ type SessionManager struct {
 	tlsConfig     *tls.Config
 	hostname      string
 	sessionsMutex sync.Mutex
-	wsProxy       string
+	useWsProxy    bool
 }
 
 // clientProxyCmd represents the client tls command
@@ -88,13 +88,13 @@ var clientProxyCmd = &cobra.Command{
 
 		for i := 0; i < numStreams; i++ {
 
-			_, session, logStream, err := sessionManager.createSession(&info, &tlsConfig, hostname, wsProxy)
+			_, session, logStream, err := sessionManager.createSession(&info, &tlsConfig, hostname, useWsProxy)
 			if err != nil {
 				log.Fatalf("Failed to create upstream session: %v", err)
 			}
 			log.Printf("Upstream connection %d => Connected to %s:%d\n", i, hostname, info.Port)
 
-			sessionManager.addSession(session, logStream, &info, &tlsConfig, hostname, wsProxy)
+			sessionManager.addSession(session, logStream, &info, &tlsConfig, hostname, useWsProxy)
 		}
 
 		// Now start the local listener on which we accept the traffic
@@ -126,7 +126,7 @@ var clientProxyCmd = &cobra.Command{
 
 // SessionManager is a simple struct that holds a slice of yamux sessions
 // here we can add and remove sessions as they are created and closed
-func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.Stream, info *client.ResourceInfo, tlsConfig *tls.Config, hostname, wsProxy string) {
+func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.Stream, info *client.ResourceInfo, tlsConfig *tls.Config, hostname string, useWsProxy bool) {
 	sm.sessionsMutex.Lock()
 	defer sm.sessionsMutex.Unlock()
 	sm.sessions = append(sm.sessions, session)
@@ -134,7 +134,7 @@ func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.St
 	sm.info = info
 	sm.tlsConfig = tlsConfig
 	sm.hostname = hostname
-	sm.wsProxy = wsProxy
+	sm.useWsProxy = useWsProxy
 
 	go func() {
 		<-session.CloseChan() // Wait for the session to close
@@ -142,8 +142,8 @@ func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.St
 	}()
 }
 
-func (sm *SessionManager) createSession(info *client.ResourceInfo, tlsConfig *tls.Config, hostname string, wsProxy string) (net.Conn, *yamux.Session, *yamux.Stream, error) {
-	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), tlsConfig, info.CaCertificate, wsProxy)
+func (sm *SessionManager) createSession(info *client.ResourceInfo, tlsConfig *tls.Config, hostname string, useWsProxy bool) (net.Conn, *yamux.Session, *yamux.Stream, error) {
+	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), tlsConfig, info.CaCertificate, useWsProxy)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -190,7 +190,7 @@ func (sm *SessionManager) removeSession(session *yamux.Session) {
 			log.Printf("attempting to reconnect to %s:%d\n", sm.hostname, sm.info.Port)
 
 			// Reconnect logic
-			_, session, logStream, err := sm.createSession(sm.info, sm.tlsConfig, sm.hostname, sm.wsProxy)
+			_, session, logStream, err := sm.createSession(sm.info, sm.tlsConfig, sm.hostname, sm.useWsProxy)
 			if err != nil {
 				log.Printf("Failed to create stream session: %v\n", err)
 				if len(sm.sessions) == 0 {
@@ -199,7 +199,7 @@ func (sm *SessionManager) removeSession(session *yamux.Session) {
 				return
 			}
 			// Add the new session back to the pool
-			sm.addSession(session, logStream, sm.info, sm.tlsConfig, sm.hostname, sm.wsProxy)
+			sm.addSession(session, logStream, sm.info, sm.tlsConfig, sm.hostname, sm.useWsProxy)
 
 			log.Printf("Reconnect succesfull. Pool size is now %d\n", len(sm.sessions))
 
@@ -240,8 +240,8 @@ func handleClientConnection(clientConn net.Conn, session *yamux.Session) {
 	io.Copy(stream, clientConn)
 }
 
-func establishConnection(connectorAuthenticationEnabled, end2EndEncryptionEnabled bool, addr string, tlsConfig *tls.Config, caCertificate *x509.Certificate, wsProxy string) (conn net.Conn, err error) {
-	return client.Connect(addr, true, tlsConfig, tlsConfig.Certificates[0], caCertificate, connectorAuthenticationEnabled, end2EndEncryptionEnabled, wsProxy)
+func establishConnection(connectorAuthenticationEnabled, end2EndEncryptionEnabled bool, addr string, tlsConfig *tls.Config, caCertificate *x509.Certificate, useWsProxy bool) (conn net.Conn, err error) {
+	return client.Connect(addr, true, tlsConfig, tlsConfig.Certificates[0], caCertificate, connectorAuthenticationEnabled, end2EndEncryptionEnabled, useWsProxy)
 }
 
 func AddCommandsTo(client *cobra.Command) {
@@ -249,5 +249,5 @@ func AddCommandsTo(client *cobra.Command) {
 	clientProxyCmd.Flags().IntVarP(&httpProxyPort, "port", "p", 8080, "port number to listen on")
 	clientProxyCmd.Flags().IntVarP(&numStreams, "connections", "c", 1, "number of parallel connections to open to the Border0 service")
 	clientProxyCmd.Flags().StringVarP(&hostname, "service", "", "", "The Border0 service identifier")
-	clientProxyCmd.Flags().StringVarP(&wsProxy, "wsproxy", "", "", "The WebSocket proxy URL")
+	clientProxyCmd.Flags().BoolVarP(&useWsProxy, "wsproxy", "w", false, "Use websocket proxy")
 }

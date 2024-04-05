@@ -50,6 +50,8 @@ const (
 	successURL            = "https://www.border0.com/logged-in"
 	failURL               = "https://www.border0.com/fail-message"
 	wsProxyToOriginHeader = "https://client.border0.com"
+	defaultWSProxy        = "wss://ws.border0.com/ws"
+	defaultDialTimeout    = 3000 * time.Millisecond //timeout for dialing the target host and fall back to websocket
 )
 
 func CheckIfTokenIsExpired(rawToken string) bool {
@@ -862,7 +864,7 @@ func OnInterruptDo(action func()) {
 	}()
 }
 
-func StartConnectorAuthListener(hostname string, port int, certificate tls.Certificate, caCertificate *x509.Certificate, localPort int, connectorAuthenticationEnabled bool, endToEndEncryptionEnabled bool, wsProxy string) (int, error) {
+func StartConnectorAuthListener(hostname string, port int, certificate tls.Certificate, caCertificate *x509.Certificate, localPort int, connectorAuthenticationEnabled bool, endToEndEncryptionEnabled bool, useWsProxy bool) (int, error) {
 	systemCertPool, err := x509.SystemCertPool()
 	if err != nil {
 		return 0, fmt.Errorf("failed to load system cert pool: %w", err)
@@ -890,7 +892,7 @@ func StartConnectorAuthListener(hostname string, port int, certificate tls.Certi
 			}
 
 			go func() {
-				conn, err := Connect(addr, false, tlsConfig, certificate, caCertificate, connectorAuthenticationEnabled, endToEndEncryptionEnabled, wsProxy)
+				conn, err := Connect(addr, false, tlsConfig, certificate, caCertificate, connectorAuthenticationEnabled, endToEndEncryptionEnabled, useWsProxy)
 				if err != nil {
 					log.Fatalf("failed to connect: %s\n", err)
 				}
@@ -903,21 +905,56 @@ func StartConnectorAuthListener(hostname string, port int, certificate tls.Certi
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-func Connect(addr string, tlsNeeded bool, tlsConfig *tls.Config, certificate tls.Certificate, caCert *x509.Certificate, connectorAuthenticationEnabled bool, endToEndEncryptionEnabled bool, wsProxy string) (net.Conn, error) {
+func Connect(addr string, tlsNeeded bool, tlsConfig *tls.Config, certificate tls.Certificate, caCert *x509.Certificate, connectorAuthenticationEnabled bool, endToEndEncryptionEnabled bool, useWsProxy bool) (net.Conn, error) {
 	var conn net.Conn
-	if wsProxy != "" {
-		wsConn, err := ConnectWSProxy(wsProxy, addr)
+	var wsProxyAddr string
+	if useWsProxy || os.Getenv("BORDER0_WS_PROXY") != "" {
+		// prefer wsProxy flag over env var
+		if useWsProxy {
+			wsProxyAddr = defaultWSProxy
+		} else {
+			wsProxyAddr = os.Getenv("BORDER0_WS_PROXY")
+		}
+
+		wsConn, err := ConnectWSProxy(wsProxyAddr, addr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to ws proxy: %w", err)
 		}
-
 		conn = wsConn
 	} else {
-		netConn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		netConn, err := net.DialTimeout("tcp", addr, defaultDialTimeout)
 		if err != nil {
-			return nil, err
+			// retry with ws proxy, we'll retry on any error
+			// This is to handle the case where the proxy is not reachable
+			// Yay for firewalls and zscalers
+
+			// Inform the user that we are falling back to the ws proxy
+			// and suggest setting the env var to avoid this message
+			helpString := ""
+			if runtime.GOOS == "windows" {
+				helpString = fmt.Sprintf("set BORDER0_WS_PROXY=%s", defaultWSProxy)
+			} else {
+				helpString = fmt.Sprintf("export BORDER0_WS_PROXY=%s", defaultWSProxy)
+			}
+			fmt.Printf("============ Border0 Connection Notice ============\n"+
+				"Direct connection failed. This is possibly due to firewall restrictions in your network.\n"+
+				"Error: %s\n"+
+				"Falling back to using the Border0 WebSocket proxy.\n"+
+				"To default to the WebSocket proxy and avoid this message, use --wsproxy or set the BORDER0_WS_PROXY environment variable:\n"+
+				"%s\n"+
+				"==================================================\n\n", err.Error(), helpString)
+
+			wsConn, err := ConnectWSProxy(defaultWSProxy, addr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to connect to ws proxy: %w", err)
+			}
+
+			// return wsConn as conn
+			conn = wsConn
+
+		} else {
+			conn = netConn
 		}
-		conn = netConn
 	}
 
 	if tlsNeeded || connectorAuthenticationEnabled || endToEndEncryptionEnabled {

@@ -61,8 +61,8 @@ var dbeaverCmd = &cobra.Command{
 
 		connectionName := hostname
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || wsProxy != "" {
-			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, wsProxy)
+		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 			if err != nil {
 				return fmt.Errorf("could not start listener: %w", err)
 			}
