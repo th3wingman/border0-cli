@@ -1,5 +1,5 @@
-name: Build and release
-run-name: Build and release (${{ github.ref_type }}=${{ github.ref_name }})
+name: Build binaries and docker image
+run-name: Build binaries and docker image (${{ github.ref_type }}=${{ github.ref_name }})
 
 on:
   workflow_dispatch:
@@ -123,8 +123,8 @@ jobs:
           -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH} \
           -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
           --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
-          --label "org.opencontainers.image.description=Border0 Tooling version: ${BORDER0_VERSION}" \
-          --label "org.opencontainers.image.licenses=Apache2"
+          --label "org.opencontainers.image.description=Border0 CLI Tooll version: ${BORDER0_VERSION}" \
+          --label "org.opencontainers.image.licenses=Apache2" \
           --push .
           docker buildx ls
       - name: Send slack notification
