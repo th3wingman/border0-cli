@@ -1,0 +1,147 @@
+name: Build and release
+run-name: Build and release (${{ github.ref_type }}=${{ github.ref_name }})
+
+on:
+  workflow_dispatch:
+#   push:
+    # branches: [ main ]
+    # paths:
+    #   - client/**
+    #   - cmd/**
+    #   - internal/**
+    #   - lib/**
+    #   - vendor/**
+    #   - mocks/**
+    #   - go.mod
+    #   - go.sum
+
+jobs:
+  checkout_code:
+    name: Checkout Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache code
+        uses: actions/cache@v4
+        with:
+          path: .
+          key: ${{ github.run_id }}
+
+  build:
+    name: Build CLI
+    needs: checkout_code
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [linux-amd64, linux-arm64, linux-arm, linux-armv6, linux-386, darwin-amd64, darwin-arm64, openbsd-amd64]
+    steps:
+      - name: Download cached code
+        uses: actions/cache@v4
+        with:
+          path: .
+          key: ${{ github.run_id }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Print Versions
+        run: |
+           go version
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+      - name: Build for ${{ matrix.target }}
+        run: |
+          make moddownload
+          make build-${{ matrix.target }}
+      - name: Figure out border0 file name
+        run: |
+          BORDER0_BIN=${{ matrix.target }}
+          BORDER0_BIN=${BORDER0_BIN/-/_}
+          echo ${BORDER0_BIN}
+          echo "BORDER0_BIN=border0_${BORDER0_BIN}" >> $GITHUB_ENV
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            bin/${{ env.BORDER0_BIN }}
+          retention-days: 1
+
+  docker:
+    needs: build
+    name: Release Docker
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: List artifacts
+        run: |
+          tree ./artifacts
+      - name: Move to files around
+        run: |
+          mkdir -p ./bin
+          for file in $(find ./artifacts -name "border0_*" -type f); do mv $file ./bin; done
+          tree ./bin
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate git repo version string
+        run: |
+          BORDER0_VERSION=$(git describe --long --dirty --tags)
+          echo ${BORDER0_VERSION}
+          echo "BORDER0_VERSION=${BORDER0_VERSION}" >> $GITHUB_ENV
+      - name: Configure the image tag variables
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          BRANCH=${BRANCH//\//_} # replace slash (/) with underscore (_) in branch name
+          if [[ "$BRANCH" == "main" ]] ; then RELEASE="latest" ; else RELEASE="rc" ; fi
+          echo -e "RELEASE=${RELEASE}\nBRANCH=${BRANCH}" >> $GITHUB_ENV
+      - name: Build and push
+        run: |
+          docker buildx create --use
+          docker buildx build \
+          --platform darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,linux/arm \
+          -t ghcr.io/${{ github.repository_owner }}/border0:${BORDER0_VERSION} \
+          -t ghcr.io/${{ github.repository_owner }}/border0:${BRANCH} \
+          -t ghcr.io/${{ github.repository_owner }}/border0:${RELEASE} \
+          --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+          --label "org.opencontainers.image.description=Border0 Tooling version: ${BORDER0_VERSION}" \
+          --label "org.opencontainers.image.licenses=Apache2"
+          --push .
+          docker buildx ls
+      - name: Send slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          fields: workflow,repo,message,author,ref,job,took # (default: repo,message)
+          job_name: Release Docker
+          custom_payload: |
+            {
+              text: "Continuous Deployment - Border0 CLI Docker Image",
+              attachments: [{
+                color: '${{ job.status }}' === 'success' ? 'good' : '${{ job.status }}' === 'failure' ? 'danger' : 'warning',
+                text: `${process.env.AS_WORKFLOW} - ${process.env.AS_JOB} (${process.env.AS_MESSAGE}) of ${process.env.AS_REPO} @${process.env.AS_REF} by ${process.env.AS_AUTHOR} ${{ job.status }} in ${process.env.AS_TOOK}`,
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # required
+          MATRIX_CONTEXT: ${{ toJson(matrix) }} # required
+        if: always() # pick up events even if the job failed or canceled.
