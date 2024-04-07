@@ -30,8 +30,10 @@ func (c *Client) DescribeOptionGroups(ctx context.Context, params *DescribeOptio
 
 type DescribeOptionGroupsInput struct {
 
-	// Filters the list of option groups to only include groups associated with a
-	// specific database engine. Valid Values:
+	// A filter to only include option groups associated with this database engine.
+	// Valid Values:
+	//   - db2-ae
+	//   - db2-se
 	//   - mariadb
 	//   - mysql
 	//   - oracle-ee
@@ -89,12 +91,22 @@ type DescribeOptionGroupsOutput struct {
 }
 
 func (c *Client) addOperationDescribeOptionGroupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeOptionGroups{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDescribeOptionGroups{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeOptionGroups"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -115,9 +127,6 @@ func (c *Client) addOperationDescribeOptionGroupsMiddlewares(stack *middleware.S
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -131,6 +140,9 @@ func (c *Client) addOperationDescribeOptionGroupsMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeOptionGroupsValidationMiddleware(stack); err != nil {
@@ -149,6 +161,9 @@ func (c *Client) addOperationDescribeOptionGroupsMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -252,7 +267,6 @@ func newServiceMetadataMiddleware_opDescribeOptionGroups(region string) *awsmidd
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DescribeOptionGroups",
 	}
 }

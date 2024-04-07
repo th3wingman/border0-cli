@@ -26,7 +26,7 @@ const (
 	download_url = "https://download.border0.com"
 )
 
-var ErrUnauthorized = errors.New("unaouthorized")
+var ErrUnauthorized = errors.New("unauthorized")
 
 type ErrorMessage struct {
 	ErrorMessage string `json:"error_message,omitempty"`
@@ -550,6 +550,11 @@ func GetDeviceAuthorization(sessionToken string) (*models.SessionTokenForm, erro
 	if err != nil {
 		return nil, errors.New("failed to decode device auth response")
 	}
+
+	if form.Token == "" || form.State == "not_authorized" {
+		return nil, ErrUnauthorized
+	}
+
 	return &form, nil
 }
 

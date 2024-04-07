@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func ExecCmd(channel gossh.Channel, command string, ptyTerm string, isPty bool, winCh <-chan ssh.Window, cmd exec.Cmd, uid, gid uint64, username string) int {
+func ExecCmd(ctx context.Context, channel gossh.Channel, command string, ptyTerm string, isPty bool, winCh <-chan ssh.Window, cmd exec.Cmd, uid, gid uint64, username string) int {
 	vsn := windows.RtlGetVersion()
 	if vsn.MajorVersion < 10 {
 		log.Println("Windows version too old to support shell")

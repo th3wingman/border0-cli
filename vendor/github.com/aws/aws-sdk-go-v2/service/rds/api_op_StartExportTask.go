@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -14,7 +15,7 @@ import (
 
 // Starts an export of DB snapshot or DB cluster data to Amazon S3. The provided
 // IAM role must have access to the S3 bucket. You can't export snapshot data from
-// RDS Custom DB instances. You can't export cluster data from Multi-AZ DB
+// Db2 or RDS Custom DB instances. You can't export cluster data from Multi-AZ DB
 // clusters. For more information on exporting DB snapshot data, see Exporting DB
 // snapshot data to Amazon S3 (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ExportSnapshot.html)
 // in the Amazon RDS User Guide or Exporting DB cluster snapshot data to Amazon S3 (https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-export-snapshot.html)
@@ -91,8 +92,8 @@ type StartExportTaskInput struct {
 	// This member is required.
 	SourceArn *string
 
-	// The data to be exported from the snapshot or cluster. If this parameter is not
-	// provided, all of the data is exported. Valid values are the following:
+	// The data to be exported from the snapshot or cluster. If this parameter isn't
+	// provided, all of the data is exported. Valid Values:
 	//   - database - Export all the data from a specified database.
 	//   - database.table table-name - Export a table of the snapshot or cluster. This
 	//   format is valid only for RDS for MySQL, RDS for MariaDB, and Aurora MySQL.
@@ -111,10 +112,10 @@ type StartExportTaskInput struct {
 }
 
 // Contains the details of a snapshot or cluster export to Amazon S3. This data
-// type is used as a response element in the DescribeExportTasks action.
+// type is used as a response element in the DescribeExportTasks operation.
 type StartExportTaskOutput struct {
 
-	// The data exported from the snapshot or cluster. Valid values are the following:
+	// The data exported from the snapshot or cluster. Valid Values:
 	//   - database - Export all the data from a specified database.
 	//   - database.table table-name - Export a table of the snapshot or cluster. This
 	//   format is valid only for RDS for MySQL, RDS for MariaDB, and Aurora MySQL.
@@ -143,15 +144,15 @@ type StartExportTaskOutput struct {
 	KmsKeyId *string
 
 	// The progress of the snapshot or cluster export task as a percentage.
-	PercentProgress int32
+	PercentProgress *int32
 
-	// The Amazon S3 bucket that the snapshot or cluster is exported to.
+	// The Amazon S3 bucket where the snapshot or cluster is exported to.
 	S3Bucket *string
 
 	// The Amazon S3 bucket prefix that is the file name and path of the exported data.
 	S3Prefix *string
 
-	// The time that the snapshot was created.
+	// The time when the snapshot was created.
 	SnapshotTime *time.Time
 
 	// The Amazon Resource Name (ARN) of the snapshot or cluster exported to Amazon S3.
@@ -169,14 +170,14 @@ type StartExportTaskOutput struct {
 	//   - STARTING
 	Status *string
 
-	// The time that the snapshot or cluster export task ended.
+	// The time when the snapshot or cluster export task ended.
 	TaskEndTime *time.Time
 
-	// The time that the snapshot or cluster export task started.
+	// The time when the snapshot or cluster export task started.
 	TaskStartTime *time.Time
 
 	// The total amount of data exported, in gigabytes.
-	TotalExtractedDataInGB int32
+	TotalExtractedDataInGB *int32
 
 	// A warning about the snapshot or cluster export task.
 	WarningMessage *string
@@ -188,12 +189,22 @@ type StartExportTaskOutput struct {
 }
 
 func (c *Client) addOperationStartExportTaskMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpStartExportTask{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpStartExportTask{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "StartExportTask"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -214,9 +225,6 @@ func (c *Client) addOperationStartExportTaskMiddlewares(stack *middleware.Stack,
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -230,6 +238,9 @@ func (c *Client) addOperationStartExportTaskMiddlewares(stack *middleware.Stack,
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpStartExportTaskValidationMiddleware(stack); err != nil {
@@ -250,6 +261,9 @@ func (c *Client) addOperationStartExportTaskMiddlewares(stack *middleware.Stack,
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -257,7 +271,6 @@ func newServiceMetadataMiddleware_opStartExportTask(region string) *awsmiddlewar
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "StartExportTask",
 	}
 }

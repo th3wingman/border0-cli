@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -40,10 +41,10 @@ type ModifyDBInstanceInput struct {
 	DBInstanceIdentifier *string
 
 	// The new amount of storage in gibibytes (GiB) to allocate for the DB instance.
-	// For RDS for MariaDB, RDS for MySQL, RDS for Oracle, and RDS for PostgreSQL, the
-	// value supplied must be at least 10% greater than the current value. Values that
-	// are not at least 10% greater than the existing value are rounded up so that they
-	// are 10% greater than the current value. For the valid values for allocated
+	// For RDS for Db2, MariaDB, RDS for MySQL, RDS for Oracle, and RDS for PostgreSQL,
+	// the value supplied must be at least 10% greater than the current value. Values
+	// that are not at least 10% greater than the existing value are rounded up so that
+	// they are 10% greater than the current value. For the valid values for allocated
 	// storage for each engine, see CreateDBInstance .
 	AllocatedStorage *int32
 
@@ -53,7 +54,7 @@ type ModifyDBInstanceInput struct {
 	//   - Major version upgrades must be allowed when specifying a value for the
 	//   EngineVersion parameter that's a different major version than the DB
 	//   instance's current version.
-	AllowMajorVersionUpgrade bool
+	AllowMajorVersionUpgrade *bool
 
 	// Specifies whether the modifications in this request and any pending
 	// modifications are asynchronously applied as soon as possible, regardless of the
@@ -65,7 +66,7 @@ type ModifyDBInstanceInput struct {
 	// in the Amazon RDS User Guide to see the impact of enabling or disabling
 	// ApplyImmediately for each modified parameter and to determine when the changes
 	// are applied.
-	ApplyImmediately bool
+	ApplyImmediately *bool
 
 	// Specifies whether minor version upgrades are applied automatically to the DB
 	// instance during the maintenance window. An outage occurs when all the following
@@ -150,7 +151,12 @@ type ModifyDBInstanceInput struct {
 	// and DB instance class support for RDS Custom for SQL Server (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/custom-reqs-limits-MS.html#custom-reqs-limits.instancesMS)
 	// . If you modify the DB instance class, an outage occurs during the change. The
 	// change is applied during the next maintenance window, unless you specify
-	// ApplyImmediately in your request. Default: Uses existing setting
+	// ApplyImmediately in your request. Default: Uses existing setting Constraints:
+	//   - If you are modifying the DB instance class and upgrading the engine version
+	//   at the same time, the currently running engine version must be supported on the
+	//   specified DB instance class. Otherwise, the operation returns an error. In this
+	//   case, first run the operation to upgrade the engine version, and then run it
+	//   again to modify the DB instance class.
 	DBInstanceClass *string
 
 	// The name of the DB parameter group to apply to the DB instance. Changing this
@@ -172,6 +178,7 @@ type ModifyDBInstanceInput struct {
 	// parameter. This setting doesn't apply to RDS Custom DB instances. Valid Values:
 	// 1150-65535 Default:
 	//   - Amazon Aurora - 3306
+	//   - RDS for Db2 - 50000
 	//   - RDS for MariaDB - 3306
 	//   - RDS for Microsoft SQL Server - 1433
 	//   - RDS for MySQL - 3306
@@ -201,6 +208,9 @@ type ModifyDBInstanceInput struct {
 	// Example: mydbsubnetgroup
 	DBSubnetGroupName *string
 
+	// Indicates whether the DB instance has a dedicated log volume (DLV) enabled.
+	DedicatedLogVolume *bool
+
 	// Specifies whether the DB instance has deletion protection enabled. The database
 	// can't be deleted when deletion protection is enabled. By default, deletion
 	// protection isn't enabled. For more information, see Deleting a DB Instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_DeleteInstance.html)
@@ -212,7 +222,7 @@ type ModifyDBInstanceInput struct {
 
 	// The Active Directory directory ID to move the DB instance to. Specify none to
 	// remove the instance from its current domain. You must create the domain before
-	// this operation. Currently, you can create only MySQL, Microsoft SQL Server,
+	// this operation. Currently, you can create only Db2, MySQL, Microsoft SQL Server,
 	// Oracle, and PostgreSQL DB instances in an Active Directory Domain. For more
 	// information, see Kerberos Authentication (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/kerberos-authentication.html)
 	// in the Amazon RDS User Guide. This setting doesn't apply to RDS Custom DB
@@ -308,7 +318,12 @@ type ModifyDBInstanceInput struct {
 	// you're modifying is acting as a read replica, the engine version that you
 	// specify must be the same or higher than the version that the source DB instance
 	// or cluster is running. In RDS Custom for Oracle, this parameter is supported for
-	// read replicas only if they are in the PATCH_DB_FAILURE lifecycle.
+	// read replicas only if they are in the PATCH_DB_FAILURE lifecycle. Constraints:
+	//   - If you are upgrading the engine version and modifying the DB instance class
+	//   at the same time, the currently running engine version must be supported on the
+	//   specified DB instance class. Otherwise, the operation returns an error. In this
+	//   case, first run the operation to upgrade the engine version, and then run it
+	//   again to modify the DB instance class.
 	EngineVersion *string
 
 	// The new Provisioned IOPS (I/O operations per second) value for the RDS
@@ -338,6 +353,7 @@ type ModifyDBInstanceInput struct {
 
 	// The license model for the DB instance. This setting doesn't apply to Amazon
 	// Aurora or RDS Custom DB instances. Valid Values:
+	//   - RDS for Db2 - bring-your-own-license
 	//   - RDS for MariaDB - general-public-license
 	//   - RDS for Microsoft SQL Server - license-included
 	//   - RDS for MySQL - general-public-license
@@ -365,7 +381,7 @@ type ModifyDBInstanceInput struct {
 	// the time of the request and the completion of the request, the
 	// MasterUserPassword element exists in the PendingModifiedValues element of the
 	// operation response. Amazon RDS API operations never return the password, so this
-	// action provides a way to regain access to a primary instance user if the
+	// operation provides a way to regain access to a primary instance user if the
 	// password is lost. This includes restoring privileges that might have been
 	// accidentally revoked. This setting doesn't apply to the following DB instances:
 	//   - Amazon Aurora (The password for the master user is managed by the DB
@@ -373,8 +389,11 @@ type ModifyDBInstanceInput struct {
 	//   - RDS Custom
 	// Default: Uses existing setting Constraints:
 	//   - Can't be specified if ManageMasterUserPassword is turned on.
-	//   - Can include any printable ASCII character except "/", """, or "@".
+	//   - Can include any printable ASCII character except "/", """, or "@". For RDS
+	//   for Oracle, can't include the "&" (ampersand) or the "'" (single quotes)
+	//   character.
 	// Length Constraints:
+	//   - RDS for Db2 - Must contain from 8 to 255 characters.
 	//   - RDS for MariaDB - Must contain from 8 to 41 characters.
 	//   - RDS for Microsoft SQL Server - Must contain from 8 to 128 characters.
 	//   - RDS for MySQL - Must contain from 8 to 41 characters.
@@ -432,6 +451,18 @@ type ModifyDBInstanceInput struct {
 	// maintenance window unless the ApplyImmediately parameter is enabled for this
 	// request. This setting doesn't apply to RDS Custom DB instances.
 	MultiAZ *bool
+
+	// Specifies whether the to convert your DB instance from the single-tenant
+	// conﬁguration to the multi-tenant conﬁguration. This parameter is supported only
+	// for RDS for Oracle CDB instances. During the conversion, RDS creates an initial
+	// tenant database and associates the DB name, master user name, character set, and
+	// national character set metadata with this database. The tags associated with the
+	// instance also propagate to the initial tenant database. You can add more tenant
+	// databases to your DB instance by using the CreateTenantDatabase operation. The
+	// conversion to the multi-tenant configuration is permanent and irreversible, so
+	// you can't later convert back to the single-tenant configuration. When you
+	// specify this parameter, you must also specify ApplyImmediately .
+	MultiTenant *bool
 
 	// The network type of the DB instance. The network type is determined by the
 	// DBSubnetGroup specified for the DB instance. A DBSubnetGroup can support only
@@ -632,12 +663,22 @@ type ModifyDBInstanceOutput struct {
 }
 
 func (c *Client) addOperationModifyDBInstanceMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpModifyDBInstance{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpModifyDBInstance{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyDBInstance"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -658,9 +699,6 @@ func (c *Client) addOperationModifyDBInstanceMiddlewares(stack *middleware.Stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -674,6 +712,9 @@ func (c *Client) addOperationModifyDBInstanceMiddlewares(stack *middleware.Stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpModifyDBInstanceValidationMiddleware(stack); err != nil {
@@ -694,6 +735,9 @@ func (c *Client) addOperationModifyDBInstanceMiddlewares(stack *middleware.Stack
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -701,7 +745,6 @@ func newServiceMetadataMiddleware_opModifyDBInstance(region string) *awsmiddlewa
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ModifyDBInstance",
 	}
 }

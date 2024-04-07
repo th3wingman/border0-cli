@@ -74,14 +74,15 @@ type CreateVolumeInput struct {
 	// For gp2 volumes, this represents the baseline performance of the volume and the
 	// rate at which the volume accumulates I/O credits for bursting. The following are
 	// the supported values for each volume type:
-	//   - gp3 : 3,000-16,000 IOPS
-	//   - io1 : 100-64,000 IOPS
-	//   - io2 : 100-64,000 IOPS
-	// io1 and io2 volumes support up to 64,000 IOPS only on Instances built on the
+	//   - gp3 : 3,000 - 16,000 IOPS
+	//   - io1 : 100 - 64,000 IOPS
+	//   - io2 : 100 - 256,000 IOPS
+	// For io2 volumes, you can achieve up to 256,000 IOPS on instances built on the
 	// Nitro System (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html#ec2-nitro-instances)
-	// . Other instance families support performance up to 32,000 IOPS. This parameter
-	// is required for io1 and io2 volumes. The default for gp3 volumes is 3,000 IOPS.
-	// This parameter is not supported for gp2 , st1 , sc1 , or standard volumes.
+	// . On other instances, you can achieve performance up to 32,000 IOPS. This
+	// parameter is required for io1 and io2 volumes. The default for gp3 volumes is
+	// 3,000 IOPS. This parameter is not supported for gp2 , st1 , sc1 , or standard
+	// volumes.
 	Iops *int32
 
 	// The identifier of the Key Management Service (KMS) KMS key to use for Amazon
@@ -114,10 +115,11 @@ type CreateVolumeInput struct {
 	// volume size. If you specify a snapshot, the default is the snapshot size. You
 	// can specify a volume size that is equal to or larger than the snapshot size. The
 	// following are the supported volumes sizes for each volume type:
-	//   - gp2 and gp3 : 1-16,384
-	//   - io1 and io2 : 4-16,384
-	//   - st1 and sc1 : 125-16,384
-	//   - standard : 1-1,024
+	//   - gp2 and gp3 : 1 - 16,384 GiB
+	//   - io1 : 4 - 16,384 GiB
+	//   - io2 : 4 - 65,536 GiB
+	//   - st1 and sc1 : 125 - 16,384 GiB
+	//   - standard : 1 - 1024 GiB
 	Size *int32
 
 	// The snapshot from which to create the volume. You must specify either a
@@ -186,6 +188,9 @@ type CreateVolumeOutput struct {
 	// The snapshot from which the volume was created, if applicable.
 	SnapshotId *string
 
+	// Reserved for future use.
+	SseType types.SSEType
+
 	// The volume state.
 	State types.VolumeState
 
@@ -208,12 +213,22 @@ type CreateVolumeOutput struct {
 }
 
 func (c *Client) addOperationCreateVolumeMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateVolume{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpCreateVolume{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateVolume"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -234,9 +249,6 @@ func (c *Client) addOperationCreateVolumeMiddlewares(stack *middleware.Stack, op
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -250,6 +262,9 @@ func (c *Client) addOperationCreateVolumeMiddlewares(stack *middleware.Stack, op
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opCreateVolumeMiddleware(stack, options); err != nil {
@@ -271,6 +286,9 @@ func (c *Client) addOperationCreateVolumeMiddlewares(stack *middleware.Stack, op
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -313,7 +331,6 @@ func newServiceMetadataMiddleware_opCreateVolume(region string) *awsmiddleware.R
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "CreateVolume",
 	}
 }

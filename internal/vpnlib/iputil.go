@@ -7,7 +7,7 @@ import (
 
 const (
 	ipv4HeaderLengthBytes = 20
-	subnetMaxSize         = 30
+	ipv6HeaderLengthBytes = 40
 )
 
 func cidrToUsableIPs(cidr string) ([]string, uint8, error) {
@@ -17,9 +17,6 @@ func cidrToUsableIPs(cidr string) ([]string, uint8, error) {
 	}
 
 	subnetSize, _ := ipnet.Mask.Size()
-	if subnetSize > subnetMaxSize {
-		return nil, 0, fmt.Errorf("invalid cidr range, must have at least 2 usable addresses (i.e. /30 or less), got %d", subnetSize)
-	}
 
 	var ips []string
 	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); incIp(ip) {
@@ -53,7 +50,18 @@ func validateIPv4(packet []byte) error {
 	}
 	ipVersion := (packet[0] & 0xF0) >> 4
 	if ipVersion != 4 {
-		return fmt.Errorf("packet header advertises non IPv4")
+		return fmt.Errorf("packet header advertises non IPv4, version: %d", ipVersion)
+	}
+	return nil
+}
+
+func validateIPv6(packet []byte) error {
+	if len(packet) < ipv6HeaderLengthBytes {
+		return fmt.Errorf("packet too short for IPv6")
+	}
+	ipVersion := (packet[0] & 0xF0) >> 4
+	if ipVersion != 6 {
+		return fmt.Errorf("packet header advertises non IPv6, version: %d", ipVersion)
 	}
 	return nil
 }
@@ -97,4 +105,22 @@ func GetLocalInterfacesForIp(ipAddress string) ([]string, error) {
 	}
 	return networkInterfaces, nil
 
+}
+
+// IsIPInCIDR checks if an IP address is in a CIDR range.
+func IsIPInCIDR(ipStr, cidrStr string) (bool, error) {
+	// Parse the IP address.
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false, fmt.Errorf("invalid IP address: %s", ipStr)
+	}
+
+	// Parse the CIDR prefix.
+	_, cidr, err := net.ParseCIDR(cidrStr)
+	if err != nil {
+		return false, fmt.Errorf("invalid CIDR notation: %s", cidrStr)
+	}
+
+	// Use the Contains method to check if the CIDR contains the IP.
+	return cidr.Contains(ip), nil
 }

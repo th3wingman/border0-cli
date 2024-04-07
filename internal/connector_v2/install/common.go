@@ -12,6 +12,13 @@ import (
 	"github.com/borderzero/border0-go/types/service"
 )
 
+func maxString(s string, max int) string {
+	if len(s) > max {
+		return s[:max]
+	}
+	return s
+}
+
 func getUniqueConnectorName(ctx context.Context, version, prefix string) (string, error) {
 	border0Client := border0.NewAPI(border0.WithVersion(version))
 

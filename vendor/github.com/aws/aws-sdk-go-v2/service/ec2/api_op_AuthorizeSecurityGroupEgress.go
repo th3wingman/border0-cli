@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -22,7 +23,10 @@ import (
 // for the type or code to mean all types or all codes. Rule changes are propagated
 // to affected instances as quickly as possible. However, a small delay might
 // occur. For information about VPC security group quotas, see Amazon VPC quotas (https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html)
-// .
+// . If you want to reference a security group across VPCs attached to a transit
+// gateway using the security group referencing feature (https://docs.aws.amazon.com/vpc/latest/tgw/tgw-transit-gateways.html#create-tgw)
+// , note that you can only reference security groups for ingress rules. You cannot
+// reference a security group for egress rules.
 func (c *Client) AuthorizeSecurityGroupEgress(ctx context.Context, params *AuthorizeSecurityGroupEgressInput, optFns ...func(*Options)) (*AuthorizeSecurityGroupEgressOutput, error) {
 	if params == nil {
 		params = &AuthorizeSecurityGroupEgressInput{}
@@ -97,12 +101,22 @@ type AuthorizeSecurityGroupEgressOutput struct {
 }
 
 func (c *Client) addOperationAuthorizeSecurityGroupEgressMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpAuthorizeSecurityGroupEgress{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpAuthorizeSecurityGroupEgress{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "AuthorizeSecurityGroupEgress"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -123,9 +137,6 @@ func (c *Client) addOperationAuthorizeSecurityGroupEgressMiddlewares(stack *midd
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -139,6 +150,9 @@ func (c *Client) addOperationAuthorizeSecurityGroupEgressMiddlewares(stack *midd
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpAuthorizeSecurityGroupEgressValidationMiddleware(stack); err != nil {
@@ -159,6 +173,9 @@ func (c *Client) addOperationAuthorizeSecurityGroupEgressMiddlewares(stack *midd
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -166,7 +183,6 @@ func newServiceMetadataMiddleware_opAuthorizeSecurityGroupEgress(region string) 
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "AuthorizeSecurityGroupEgress",
 	}
 }

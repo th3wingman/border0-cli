@@ -8,12 +8,12 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/gob"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"os"
-	"os/user"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +31,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/ssh"
 	sshConfig "github.com/borderzero/border0-cli/internal/ssh/config"
 	"github.com/borderzero/border0-cli/internal/ssh/server"
+	b0Util "github.com/borderzero/border0-cli/internal/util"
+	"github.com/borderzero/border0-cli/internal/vpnlib"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/types/connector"
 	"github.com/borderzero/border0-go/types/service"
@@ -55,22 +57,28 @@ const (
 	backoffMaxInterval = 1 * time.Hour
 	serviceConfigPath  = "/etc/border0/"
 	sshHostKeyFile     = "ssh_host_ecdsa_key"
+
+	initOpConstBackoffInterval = 500 * time.Millisecond
+	initOpConstBackoffRetries  = 2 // 3 attempts total
 )
 
 type ConnectorService struct {
-	config              *config.Configuration
-	logger              *zap.Logger
-	backoff             *backoff.ExponentialBackOff
-	version             string
-	context             context.Context
-	stream              pb.ConnectorService_ControlStreamClient
-	heartbeatInterval   int
-	plugins             map[string]plugin.Plugin
-	sockets             map[string]*border0.Socket
-	requests            sync.Map
-	organization        *models.Organization
-	discoveryResultChan chan *plugin.PluginDiscoveryResults
-	sshPrivateHostKey   *gossh.Signer
+	config                   *config.Configuration
+	logger                   *zap.Logger
+	backoff                  *backoff.ExponentialBackOff
+	version                  string
+	context                  context.Context
+	stream                   pb.ConnectorService_ControlStreamClient
+	heartbeatInterval        int
+	plugins                  map[string]plugin.Plugin
+	sockets                  map[string]*border0.Socket
+	requests                 sync.Map
+	organization             *models.Organization
+	discoveryResultChan      chan *plugin.PluginDiscoveryResults
+	sshPrivateHostKey        *gossh.Signer
+	sshPrivateHostKeyLock    sync.Mutex
+	connectorCertificateLock sync.Mutex
+	connectorCertificate     *tls.Certificate
 }
 
 func NewConnectorService(
@@ -156,20 +164,28 @@ func (c *ConnectorService) controlStream() error {
 	go c.heartbeat(ctx)
 	go c.uploadConnectorMetadata(ctx)
 
+	fatalErrChan := make(chan error)
+	msgChan := make(chan struct {
+		response *pb.ControlStreamReponse
+		error    error
+	})
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				msg, err := stream.Recv()
+				msgChan <- struct {
+					response *pb.ControlStreamReponse
+					error    error
+				}{msg, err}
+			}
+		}
+	}()
+
 	for {
-		msgChan := make(chan struct {
-			response *pb.ControlStreamReponse
-			error    error
-		})
-
-		go func() {
-			msg, err := stream.Recv()
-			msgChan <- struct {
-				response *pb.ControlStreamReponse
-				error    error
-			}{msg, err}
-		}()
-
 		select {
 		case <-ctx.Done():
 			err := stream.CloseSend()
@@ -178,6 +194,8 @@ func (c *ConnectorService) controlStream() error {
 			}
 
 			return nil
+		case err := <-fatalErrChan:
+			return err
 		case msg := <-msgChan:
 			if msg.error != nil {
 				statusErr, ok := status.FromError(msg.error)
@@ -189,89 +207,123 @@ func (c *ConnectorService) controlStream() error {
 				return msg.error
 			}
 
-			switch r := msg.response.GetRequestType().(type) {
-			case *pb.ControlStreamReponse_ConnectorConfig:
-				if err := c.handleConnectorConfig(r.ConnectorConfig); err != nil {
-					c.logger.Error("Failed to handle connector config", zap.Error(err))
-				}
-			case *pb.ControlStreamReponse_Init:
-				if err := c.handleInit(r.Init); err != nil {
-					c.logger.Error("Failed to handle init", zap.Error(err))
-					return fmt.Errorf("failed to handle init: %w", err)
-				}
-			case *pb.ControlStreamReponse_UpdateConfig:
-				switch t := r.UpdateConfig.GetConfigType().(type) {
-				case *pb.UpdateConfig_PluginConfig:
-					if err := c.handlePluginConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetPluginConfig()); err != nil {
-						c.logger.Error("Failed to handle plugin config", zap.Error(err))
-						return fmt.Errorf("failed to handle plugin config: %w", err)
+			go func() {
+				switch r := msg.response.GetRequestType().(type) {
+				case *pb.ControlStreamReponse_ConnectorConfig:
+					if err := c.handleConnectorConfig(r.ConnectorConfig); err != nil {
+						c.logger.Error("failed to handle connector config", zap.Error(err))
 					}
-				case *pb.UpdateConfig_SocketConfig:
-					if err := c.handleSocketConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetSocketConfig()); err != nil {
-						c.logger.Error("Failed to handle socket config", zap.Error(err))
-						return fmt.Errorf("failed to handle socket config: %w", err)
+				case *pb.ControlStreamReponse_Init:
+					if err := c.handleInit(r.Init); err != nil {
+						c.logger.Error("failed to handle init", zap.Error(err))
+						fatalErrChan <- fmt.Errorf("failed to handle init: %w", err)
+					}
+				case *pb.ControlStreamReponse_UpdateConfig:
+					switch t := r.UpdateConfig.GetConfigType().(type) {
+					case *pb.UpdateConfig_PluginConfig:
+						retryFunc := func() error {
+							if err := c.handlePluginConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetPluginConfig()); err != nil {
+								return err
+							}
+							return nil
+						}
+						backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+						if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+							c.logger.Error(
+								fmt.Sprintf("failed to handle plugin %s (%d attempts)", r.UpdateConfig.GetAction().String(), initOpConstBackoffRetries+1),
+								zap.String("plugin_id", r.UpdateConfig.GetPluginConfig().GetId()),
+								zap.Error(err),
+							)
+						}
+					case *pb.UpdateConfig_SocketConfig:
+						retryFunc := func() error {
+							if err := c.handleSocketConfig(r.UpdateConfig.GetAction(), r.UpdateConfig.GetSocketConfig()); err != nil {
+								return err
+							}
+							return nil
+						}
+						backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+						if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+							c.logger.Error(
+								fmt.Sprintf("failed to handle socket %s (%d attempts)", r.UpdateConfig.GetAction().String(), initOpConstBackoffRetries+1),
+								zap.String("socket_id", r.UpdateConfig.GetSocketConfig().GetId()),
+								zap.Error(err),
+							)
+						}
+					default:
+						c.logger.Error("unknown config type", zap.Any("type", t))
+					}
+				case *pb.ControlStreamReponse_TunnelCertificateSignResponse:
+					if v, ok := c.requests.Load(r.TunnelCertificateSignResponse.GetRequestId()); ok {
+						responseChan, ok := v.(chan *pb.ControlStreamReponse)
+						if !ok {
+							c.logger.Error("failed to cast response channel", zap.String("request_id", r.TunnelCertificateSignResponse.GetRequestId()))
+						}
+						select {
+						case responseChan <- msg.response:
+						default:
+							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.TunnelCertificateSignResponse.GetRequestId()))
+						}
+					} else {
+						c.logger.Error("unknown request id", zap.String("request_id", r.TunnelCertificateSignResponse.GetRequestId()))
+					}
+				case *pb.ControlStreamReponse_SshCertificateSignResponse:
+					if v, ok := c.requests.Load(r.SshCertificateSignResponse.GetRequestId()); ok {
+						responseChan, ok := v.(chan *pb.ControlStreamReponse)
+						if !ok {
+							c.logger.Error("failed to cast response channel", zap.String("request_id", r.SshCertificateSignResponse.GetRequestId()))
+						}
+						select {
+						case responseChan <- msg.response:
+						default:
+							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.SshCertificateSignResponse.GetRequestId()))
+						}
+					} else {
+						c.logger.Error("unknown request id", zap.String("request_id", r.SshCertificateSignResponse.GetRequestId()))
+					}
+				case *pb.ControlStreamReponse_Heartbeat:
+				case *pb.ControlStreamReponse_Stop:
+					c.logger.Info("stopping connector as requested by server")
+					fatalErrChan <- backoff.Permanent(nil)
+				case *pb.ControlStreamReponse_Disconnect:
+					c.logger.Info("disconnecting connector as requested by server")
+					err := stream.CloseSend()
+					if err != nil {
+						fatalErrChan <- fmt.Errorf("failed to close control stream: %w", err)
+					}
+					fatalErrChan <- fmt.Errorf("connector was disconnected by server")
+				case *pb.ControlStreamReponse_Authorize:
+					if v, ok := c.requests.Load(r.Authorize.GetRequestId()); ok {
+						responseChan, ok := v.(chan *pb.ControlStreamReponse)
+						if !ok {
+							c.logger.Error("failed to cast response channel", zap.String("request_id", r.Authorize.GetRequestId()))
+						}
+						select {
+						case responseChan <- msg.response:
+						default:
+							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.Authorize.GetRequestId()))
+						}
+					} else {
+						c.logger.Error("unknown request id", zap.String("request_id", r.Authorize.RequestId))
+					}
+				case *pb.ControlStreamReponse_CertifcateSignResponse:
+					if v, ok := c.requests.Load(r.CertifcateSignResponse.GetRequestId()); ok {
+						responseChan, ok := v.(chan *pb.ControlStreamReponse)
+						if !ok {
+							c.logger.Error("failed to cast response channel", zap.String("request_id", r.CertifcateSignResponse.GetRequestId()))
+						}
+						select {
+						case responseChan <- msg.response:
+						default:
+							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.CertifcateSignResponse.RequestId))
+						}
+					} else {
+						c.logger.Error("unknown request id", zap.String("request_id", r.CertifcateSignResponse.GetRequestId()))
 					}
 				default:
-					c.logger.Error("unknown config type", zap.Any("type", t))
+					c.logger.Error("unknown message type", zap.Any("type", r))
 				}
-			case *pb.ControlStreamReponse_TunnelCertificateSignResponse:
-				if v, ok := c.requests.Load(r.TunnelCertificateSignResponse.RequestId); ok {
-					responseChan, ok := v.(chan *pb.ControlStreamReponse)
-					if !ok {
-						c.logger.Error("failed to cast response channel", zap.String("request_id", r.TunnelCertificateSignResponse.RequestId))
-					}
-					select {
-					case responseChan <- msg.response:
-					default:
-						c.logger.Error("failed to send response to request channel", zap.String("request_id", r.TunnelCertificateSignResponse.RequestId))
-					}
-				} else {
-					c.logger.Error("unknown request id", zap.String("request_id", r.TunnelCertificateSignResponse.RequestId))
-				}
-			case *pb.ControlStreamReponse_SshCertificateSignResponse:
-				if v, ok := c.requests.Load(r.SshCertificateSignResponse.RequestId); ok {
-					responseChan, ok := v.(chan *pb.ControlStreamReponse)
-					if !ok {
-						c.logger.Error("failed to cast response channel", zap.String("request_id", r.SshCertificateSignResponse.RequestId))
-					}
-					select {
-					case responseChan <- msg.response:
-					default:
-						c.logger.Error("failed to send response to request channel", zap.String("request_id", r.SshCertificateSignResponse.RequestId))
-					}
-				} else {
-					c.logger.Error("unknown request id", zap.String("request_id", r.SshCertificateSignResponse.RequestId))
-				}
-			case *pb.ControlStreamReponse_Heartbeat:
-			case *pb.ControlStreamReponse_Stop:
-				c.logger.Info("stopping connector as requested by server")
-				return backoff.Permanent(nil)
-			case *pb.ControlStreamReponse_Disconnect:
-				c.logger.Info("disconnecting connector as requested by server")
-				err := stream.CloseSend()
-				if err != nil {
-					return fmt.Errorf("failed to close control stream: %w", err)
-				}
-
-				return fmt.Errorf("connector was disconnected by server")
-			case *pb.ControlStreamReponse_Authorize:
-				if v, ok := c.requests.Load(r.Authorize.RequestId); ok {
-					responseChan, ok := v.(chan *pb.ControlStreamReponse)
-					if !ok {
-						c.logger.Error("failed to cast response channel", zap.String("request_id", r.Authorize.RequestId))
-					}
-					select {
-					case responseChan <- msg.response:
-					default:
-						c.logger.Error("failed to send response to request channel", zap.String("request_id", r.Authorize.RequestId))
-					}
-				} else {
-					c.logger.Error("unknown request id", zap.String("request_id", r.Authorize.RequestId))
-				}
-
-			default:
-				c.logger.Error("unknown message type", zap.Any("type", r))
-			}
+			}()
 		}
 	}
 }
@@ -334,46 +386,98 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		Certificates: certificates,
 	}
 
-	knownPlugins := set.New[string]()
+	initMessagePlugins := set.New[string]()
 
 	for _, config := range pluginConfig {
+		initMessagePlugins.Add(config.GetId())
+
 		var action pb.Action
 		if _, ok := c.plugins[config.GetId()]; ok {
 			action = pb.Action_UPDATE
 		} else {
 			action = pb.Action_CREATE
 		}
-		if err := c.handlePluginConfig(action, config); err != nil {
-			return fmt.Errorf("failed to handle plugin config: %w", err)
+
+		retryFunc := func() error {
+			if err := c.handlePluginConfig(action, config); err != nil {
+				return fmt.Errorf("failed to handle plugin configuration: %w", err)
+			}
+			return nil
 		}
-		knownPlugins.Add(config.GetId())
+		backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+		if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+			c.logger.Error(
+				fmt.Sprintf("failed to initialize/update plugin during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+				zap.String("plugin_id", config.GetId()),
+				zap.Error(err),
+			)
+		}
 	}
 	for id := range c.plugins {
-		if !knownPlugins.Has(id) {
-			if err := c.handlePluginConfig(pb.Action_DELETE, &pb.PluginConfig{Id: id}); err != nil {
-				return fmt.Errorf("failed to handle plugin config: %w", err)
+		if !initMessagePlugins.Has(id) {
+			retryFunc := func() error {
+				if err := c.handlePluginConfig(pb.Action_DELETE, &pb.PluginConfig{Id: id}); err != nil {
+					return fmt.Errorf("failed to handle plugin config: %w", err)
+				}
+				return nil
+			}
+			backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+			if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+				c.logger.Error(
+					fmt.Sprintf("failed to remove plugin during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+					zap.String("plugin_id", id),
+					zap.Error(err),
+				)
 			}
 		}
 	}
 
-	knownSockets := set.New[string]()
+	initMessageSocket := set.New[string]()
 
 	for _, config := range socketConfg {
+		initMessageSocket.Add(config.GetId())
+
 		var action pb.Action
 		if _, ok := c.sockets[config.GetId()]; ok {
 			action = pb.Action_UPDATE
 		} else {
 			action = pb.Action_CREATE
 		}
-		if err := c.handleSocketConfig(action, config); err != nil {
-			return fmt.Errorf("failed to handle socket config: %w", err)
+
+		retryFunc := func() error {
+			if err := c.handleSocketConfig(action, config); err != nil {
+				return fmt.Errorf("failed to handle socket configuration: %w", err)
+			}
+			return nil
 		}
-		knownSockets.Add(config.GetId())
+		backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+		if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+			c.logger.Error(
+				fmt.Sprintf("failed to initialize/update socket during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+				zap.String("plugin_id", config.GetId()),
+				zap.Error(err),
+			)
+		}
 	}
 	for id := range c.sockets {
-		if !knownSockets.Has(id) {
-			if err := c.handleSocketConfig(pb.Action_DELETE, &pb.SocketConfig{Id: id}); err != nil {
-				return fmt.Errorf("failed to handle socket config: %w", err)
+		if !initMessageSocket.Has(id) {
+			retryFunc := func() error {
+				if err := c.handleSocketConfig(pb.Action_DELETE, &pb.SocketConfig{Id: id}); err != nil {
+					return fmt.Errorf("failed to handle socket configuration: %w", err)
+				}
+				return nil
+			}
+			backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(initOpConstBackoffInterval), initOpConstBackoffRetries)
+
+			if err := backoff.Retry(retryFunc, backoffPolicy); err != nil {
+				c.logger.Error(
+					fmt.Sprintf("failed to remove socket during connector initialization (%d attempts)", initOpConstBackoffRetries+1),
+					zap.String("plugin_id", id),
+					zap.Error(err),
+				)
 			}
 		}
 	}
@@ -391,7 +495,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 	switch action {
 	case pb.Action_CREATE:
-		c.logger.Info("new plugin", zap.String("plugin", config.GetId()))
+		c.logger.Info("initializing plugin", zap.String("plugin", config.GetId()))
 
 		if _, ok := c.plugins[config.GetId()]; ok {
 			return fmt.Errorf("plugin already exists")
@@ -406,7 +510,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 		c.plugins[config.GetId()] = p
 	case pb.Action_UPDATE:
-		c.logger.Info("update plugin", zap.String("plugin", config.GetId()))
+		c.logger.Info("updating plugin", zap.String("plugin", config.GetId()))
 
 		p, ok := c.plugins[config.GetId()]
 		if !ok {
@@ -426,7 +530,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 		c.plugins[config.GetId()] = p
 	case pb.Action_DELETE:
-		c.logger.Info("delete plugin", zap.String("plugin", config.GetId()))
+		c.logger.Info("removing plugin", zap.String("plugin", config.GetId()))
 
 		p, ok := c.plugins[config.GetId()]
 		if !ok {
@@ -448,7 +552,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.SocketConfig) error {
 	switch action {
 	case pb.Action_CREATE:
-		c.logger.Info("new socket", zap.String("socket", config.GetId()))
+		c.logger.Info("initializing socket", zap.String("socket", config.GetId()))
 
 		if _, ok := c.sockets[config.GetId()]; ok {
 			return fmt.Errorf("socket already exists")
@@ -461,7 +565,7 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 
 		c.sockets[config.GetId()] = socket
 	case pb.Action_UPDATE:
-		c.logger.Info("update socket", zap.String("socket", config.GetId()))
+		c.logger.Info("updating socket", zap.String("socket", config.GetId()))
 
 		socket, ok := c.sockets[config.GetId()]
 		if !ok {
@@ -493,7 +597,7 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 
 		c.sockets[config.GetId()] = socket
 	case pb.Action_DELETE:
-		c.logger.Info("delete socket", zap.String("socket", config.GetId()))
+		c.logger.Info("removing socket", zap.String("socket", config.GetId()))
 
 		socket, ok := c.sockets[config.GetId()]
 		if !ok {
@@ -538,7 +642,16 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 		return nil, fmt.Errorf("failed to build upstream data: %w", err)
 	}
 
-	socket, err := border0.NewSocketFromConnectorAPI(c.context, c, *s, c.organization, c.logger.With(zap.String("socket_id", s.SocketID)))
+	var certificate *tls.Certificate
+	if s.EndToEndEncryptionEnabled {
+		var err error
+		certificate, err = c.Certificate()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get connector certificate: %w", err)
+		}
+	}
+
+	socket, err := border0.NewSocketFromConnectorAPI(c.context, c, *s, c.organization, c.logger.With(zap.String("socket_id", s.SocketID)), certificate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create socket: %w", err)
 	}
@@ -579,6 +692,53 @@ func (c *ConnectorService) GetUserID() (string, error) {
 	return "", fmt.Errorf("failed to get user id")
 }
 
+func (c *ConnectorService) connectorIDFromToken() (string, error) {
+	token, _ := jwt.Parse(c.config.Token, nil)
+	if token == nil {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	connectorId, connectorIdPresent := claims["connector_id"]
+	if connectorIdPresent {
+		connectorIdStr, ok := connectorId.(string)
+		if !ok {
+			return "", fmt.Errorf("failed to parse token")
+		}
+		return connectorIdStr, nil
+	}
+
+	return "", fmt.Errorf("failed to get connector id")
+}
+
+func (c *ConnectorService) orgIDFromToken() (string, error) {
+	token, _ := jwt.Parse(c.config.Token, nil)
+	if token == nil {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	orgId, ok := claims["org_id"]
+	if !ok {
+		return "", fmt.Errorf("failed to get org id")
+	}
+
+	orgIdStr, ok := orgId.(string)
+	if !ok {
+		return "", fmt.Errorf("failed to parse token")
+	}
+
+	return orgIdStr, nil
+}
+
 func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publicKey []byte) (string, string, error) {
 	requestId := uuid.New().String()
 	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
@@ -597,7 +757,7 @@ func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publ
 	c.requests.Store(requestId, recChan)
 
 	select {
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		return "", "", fmt.Errorf("timeout waiting for tunnel certificate sign response")
 	case r := <-recChan:
 		response := r.GetTunnelCertificateSignResponse()
@@ -627,7 +787,7 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 
 	var handlerConfig *sqlauthproxy.Config
 	if socket.SocketType == "database" {
-		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(logger, *socket.Socket)
+		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(logger, *socket.Socket, c)
 		if err != nil {
 			logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
 			return
@@ -676,6 +836,23 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 	case handlerConfig != nil:
 		if err := sqlauthproxy.Serve(l, *handlerConfig); err != nil {
 			logger.Error("sql proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+		}
+	case socket.SocketType == service.ServiceTypeVpn:
+		// options defined locally (not in socket config).
+		// these may move to socket config gradually.
+		localServerOpts := []vpnlib.ServerOption{
+			vpnlib.WithServerVerboseLogs(os.Getenv("VPN_VERBOSE_LOGS") == "true"),
+		}
+
+		if err := vpnlib.RunServer(
+			socket.GetContext(),
+			logger,
+			l,
+			socket.Socket.ConnectorLocalData.DHCPPoolSubnet,
+			socket.Socket.ConnectorLocalData.AdvertisedRoutes,
+			localServerOpts...,
+		); err != nil {
+			logger.Error("vpn service failed", zap.String("socket", socket.SocketID), zap.Error(err))
 		}
 	default:
 		if err := border0.Serve(logger, l, socket.Socket.TargetHostname, socket.Socket.TargetPort); err != nil {
@@ -766,85 +943,134 @@ func hashStruct(data interface{}) (string, error) {
 }
 
 func (c *ConnectorService) hostkey() (*gossh.Signer, error) {
+	c.sshPrivateHostKeyLock.Lock()
+	defer c.sshPrivateHostKeyLock.Unlock()
+
 	if c.sshPrivateHostKey != nil {
 		return c.sshPrivateHostKey, nil
 	}
 
-	var keyFilePath string
-	if _, err := os.Stat(serviceConfigPath + sshHostKeyFile); err == nil {
-		keyFilePath = serviceConfigPath + sshHostKeyFile
-	} else {
-		u, err := user.Current()
-		if err == nil {
-			if _, err := os.Stat(u.HomeDir + "/.border0/" + sshHostKeyFile); err == nil {
-				keyFilePath = u.HomeDir + "/.border0/" + sshHostKeyFile
-			}
-		}
-	}
-
-	if keyFilePath != "" {
-		keyBytes, err := os.ReadFile(keyFilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read host key %s: %w", keyFilePath, err)
-		}
-
-		privateKey, err := gossh.ParsePrivateKey(keyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse host key: %w", err)
-		}
-
-		c.sshPrivateHostKey = &privateKey
-		return c.sshPrivateHostKey, nil
-	}
-
-	_, privKey, err := ed25519.GenerateKey(rand.Reader)
+	hostkeySigner, err := b0Util.Hostkey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate host key: %w", err)
-	}
-
-	sshPrivKey, err := gossh.NewSignerFromKey(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert ed25519 key to ssh key: %w", err)
-	}
-
-	c.sshPrivateHostKey = &sshPrivKey
-
-	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal private key to PKCS#8: %w", err)
-	}
-
-	privKeyPEM := &pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: pkcs8Bytes,
-	}
-
-	serviceConfigPathErr := storeHostkey(pem.EncodeToMemory(privKeyPEM), serviceConfigPath, sshHostKeyFile)
-	if serviceConfigPathErr != nil {
-		u, err := user.Current()
-		if err != nil {
-			return nil, fmt.Errorf("failed to store the ssh hostkey file %w %w", err, serviceConfigPathErr)
-		}
-
-		err = storeHostkey(pem.EncodeToMemory(privKeyPEM), u.HomeDir+"/.border0/", sshHostKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to store the ssh hostkey file %w %w", err, serviceConfigPathErr)
+		if hostkeySigner == nil {
+			return nil, fmt.Errorf("failed to get hostkey: %s", err)
+		} else {
+			c.logger.Warn("failed to store hostkey", zap.Error(err))
 		}
 	}
+
+	c.sshPrivateHostKey = hostkeySigner
 
 	return c.sshPrivateHostKey, nil
 }
 
-func storeHostkey(key []byte, path, filename string) error {
-	if _, err := os.Stat(path); err == nil {
-		if err := os.MkdirAll(path, 0700); err != nil {
-			return fmt.Errorf("failed to create directory %s %w", path, err)
+func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
+	c.connectorCertificateLock.Lock()
+	defer c.connectorCertificateLock.Unlock()
+
+	if c.connectorCertificate != nil {
+		return c.connectorCertificate, nil
+	}
+
+	var connectorID string
+	if c.config.ConnectorId != "" {
+		connectorID = c.config.ConnectorId
+	} else {
+		var err error
+		connectorID, err = c.connectorIDFromToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get connector id: %w", err)
 		}
 	}
 
-	if err := os.WriteFile(path+filename, key, 0600); err != nil {
-		return fmt.Errorf("failed to write host key: %w", err)
+	orgID, err := c.orgIDFromToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get org id: %w", err)
 	}
 
-	return nil
+	c.connectorCertificate, err = b0Util.GetEndToEndEncryptionCertificate(orgID, connectorID)
+	if err != nil {
+		c.logger.Warn("failed to get end to end encryption certificate", zap.Error(err))
+	}
+
+	if c.connectorCertificate != nil {
+		return c.connectorCertificate, nil
+	}
+
+	_, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	csrTemplate := x509.CertificateRequest{
+		Subject:            pkix.Name{CommonName: "border0"},
+		SignatureAlgorithm: x509.PureEd25519,
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, privKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create certificate request: %w", err)
+	}
+
+	csrPem := pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	}
+
+	requestId := uuid.New().String()
+	recChan := make(chan *pb.ControlStreamReponse)
+	c.requests.Store(requestId, recChan)
+	defer c.requests.Delete(requestId)
+
+	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
+		RequestType: &pb.ControlStreamRequest_CertifcateSignRequest{
+			CertifcateSignRequest: &pb.CertifcateSignRequest{
+				RequestId:                 requestId,
+				CertificateSigningRequest: pem.EncodeToMemory(&csrPem),
+			},
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("failed to send connector certificate sign request: %w", err)
+	}
+
+	var certificate []byte
+	select {
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("timeout waiting for certificate sign response")
+	case r := <-recChan:
+		response := r.GetCertifcateSignResponse()
+		if response == nil {
+			return nil, fmt.Errorf("invalid response")
+		}
+
+		if response.GetRequestId() == "" {
+			return nil, fmt.Errorf("invalid response")
+		}
+
+		c.requests.Delete(response.GetRequestId())
+		certificate = response.GetCertificate()
+	}
+
+	privKeyBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal private key: %w", err)
+	}
+
+	privKeyPem := &pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: privKeyBytes,
+	}
+
+	cert, err := tls.X509KeyPair(certificate, pem.EncodeToMemory(privKeyPem))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	c.connectorCertificate = &cert
+
+	if err := b0Util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), certificate, orgID, connectorID); err != nil {
+		c.logger.Warn("failed to store the end to end encryption certificate", zap.Error(err))
+	}
+
+	return c.connectorCertificate, nil
 }

@@ -12,10 +12,8 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// This API action is currently in limited preview only. If you are interested in
-// using this feature, contact your account manager. Associates a branch network
-// interface with a trunk network interface. Before you create the association, run
-// the create-network-interface (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateNetworkInterface.html)
+// Associates a branch network interface with a trunk network interface. Before
+// you create the association, run the create-network-interface (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateNetworkInterface.html)
 // command and set --interface-type to trunk . You must also create a network
 // interface for each branch network interface that you want to associate with the
 // trunk network interface.
@@ -84,12 +82,22 @@ type AssociateTrunkInterfaceOutput struct {
 }
 
 func (c *Client) addOperationAssociateTrunkInterfaceMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpAssociateTrunkInterface{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpAssociateTrunkInterface{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "AssociateTrunkInterface"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -110,9 +118,6 @@ func (c *Client) addOperationAssociateTrunkInterfaceMiddlewares(stack *middlewar
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -126,6 +131,9 @@ func (c *Client) addOperationAssociateTrunkInterfaceMiddlewares(stack *middlewar
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opAssociateTrunkInterfaceMiddleware(stack, options); err != nil {
@@ -147,6 +155,9 @@ func (c *Client) addOperationAssociateTrunkInterfaceMiddlewares(stack *middlewar
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -189,7 +200,6 @@ func newServiceMetadataMiddleware_opAssociateTrunkInterface(region string) *awsm
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "AssociateTrunkInterface",
 	}
 }

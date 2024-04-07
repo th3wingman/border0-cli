@@ -82,13 +82,12 @@ type CreateSecretInput struct {
 	// identifier for the new version. If you use the Amazon Web Services CLI or one of
 	// the Amazon Web Services SDKs to call this operation, then you can leave this
 	// parameter empty. The CLI or SDK generates a random UUID for you and includes it
-	// as the value for this parameter in the request. If you don't use the SDK and
-	// instead generate a raw HTTP request to the Secrets Manager service endpoint,
-	// then you must generate a ClientRequestToken yourself for the new version and
-	// include the value in the request. This value helps ensure idempotency. Secrets
-	// Manager uses this value to prevent the accidental creation of duplicate versions
-	// if there are failures and retries during a rotation. We recommend that you
-	// generate a UUID-type (https://wikipedia.org/wiki/Universally_unique_identifier)
+	// as the value for this parameter in the request. If you generate a raw HTTP
+	// request to the Secrets Manager service endpoint, then you must generate a
+	// ClientRequestToken and include it in the request. This value helps ensure
+	// idempotency. Secrets Manager uses this value to prevent the accidental creation
+	// of duplicate versions if there are failures and retries during a rotation. We
+	// recommend that you generate a UUID-type (https://wikipedia.org/wiki/Universally_unique_identifier)
 	// value to ensure uniqueness of your versions within the specified secret.
 	//   - If the ClientRequestToken value isn't already associated with a version of
 	//   the secret then a new version of the secret is created.
@@ -152,19 +151,9 @@ type CreateSecretInput struct {
 	// line tool environments, see Using JSON for Parameters (https://docs.aws.amazon.com/cli/latest/userguide/cli-using-param.html#cli-using-param-json)
 	// . If your command-line tool or SDK requires quotation marks around the
 	// parameter, you should use single quotes to avoid confusion with the double
-	// quotes required in the JSON text. The following restrictions apply to tags:
-	//   - Maximum number of tags per secret: 50
-	//   - Maximum key length: 127 Unicode characters in UTF-8
-	//   - Maximum value length: 255 Unicode characters in UTF-8
-	//   - Tag keys and values are case sensitive.
-	//   - Do not use the aws: prefix in your tag names or values because Amazon Web
-	//   Services reserves it for Amazon Web Services use. You can't edit or delete tag
-	//   names or values with this prefix. Tags with this prefix do not count against
-	//   your tags per secret limit.
-	//   - If you use your tagging schema across multiple services and resources,
-	//   other services might have restrictions on allowed characters. Generally allowed
-	//   characters: letters, spaces, and numbers representable in UTF-8, plus the
-	//   following special characters: + - = . _ : / @.
+	// quotes required in the JSON text. For tag quotas and naming restrictions, see
+	// Service quotas for Tagging (https://docs.aws.amazon.com/general/latest/gr/arg.html#taged-reference-quotas)
+	// in the Amazon Web Services General Reference guide.
 	Tags []types.Tag
 
 	noSmithyDocumentSerde
@@ -198,12 +187,22 @@ type CreateSecretOutput struct {
 }
 
 func (c *Client) addOperationCreateSecretMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateSecret{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpCreateSecret{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateSecret"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -224,22 +223,22 @@ func (c *Client) addOperationCreateSecretMiddlewares(stack *middleware.Stack, op
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
 	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opCreateSecretMiddleware(stack, options); err != nil {
@@ -261,6 +260,9 @@ func (c *Client) addOperationCreateSecretMiddlewares(stack *middleware.Stack, op
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -303,7 +305,6 @@ func newServiceMetadataMiddleware_opCreateSecret(region string) *awsmiddleware.R
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "secretsmanager",
 		OperationName: "CreateSecret",
 	}
 }

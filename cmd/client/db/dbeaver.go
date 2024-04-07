@@ -61,8 +61,8 @@ var dbeaverCmd = &cobra.Command{
 
 		connectionName := hostname
 
-		if info.ConnectorAuthenticationEnabled {
-			info.Port, err = client.StartConnectorAuthListener(fmt.Sprintf("%s:%d", hostname, info.Port), info.SetupTLSCertificate(), 0)
+		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 			if err != nil {
 				return fmt.Errorf("could not start listener: %w", err)
 			}
@@ -87,6 +87,18 @@ var dbeaverCmd = &cobra.Command{
 		keyStorePath := filepath.Join(home, ".border0", orgID+".jks")
 		client.WriteKeyStore(keyStore, keyStorePath, keyStorePassword)
 
+		var driver string
+		switch pickedHost.DatabaseType {
+		case "mysql":
+			driver = "mariadb"
+		case "mssql":
+			driver = "microsoft"
+		case "postgres":
+			driver = "postgresql"
+		default:
+			driver = "mariadb"
+		}
+
 		// for more about jdbc driver properties, see:
 		// https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-connp-props-security.html
 		// also see this page for connection parameters:
@@ -97,7 +109,7 @@ var dbeaverCmd = &cobra.Command{
 			"database=" + dbName,
 			"prop.clientCertificateKeyStoreUrl=file:" + keyStorePath,
 			"prop.clientCertificateKeyStorePassword=" + string(keyStorePassword),
-			"driver=mariadb",
+			"driver=" + driver,
 			"user=placeholder",
 			"savePassword=true", // does not ask user for a password on connection
 			"openConsole=true",  // opens the SQL console for this database (also sets connect to true)
@@ -136,7 +148,7 @@ var dbeaverCmd = &cobra.Command{
 			err = client.ExecCommand("dbeaver", "-con", conn)
 		}
 
-		if info.ConnectorAuthenticationEnabled {
+		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
 			ch := make(chan os.Signal, 1)
 			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 			<-ch

@@ -20,6 +20,8 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseService(socket *models
 		return u.buildUpstreamDataForDatabaseServiceAwsRds(socket, config.AwsRds)
 	case service.DatabaseServiceTypeGcpCloudSql:
 		return u.buildUpstreamDataForDatabaseServiceGcpCloudSql(socket, config.GcpCloudSql)
+	case service.DatabaseServiceTypeAzureSql:
+		return u.buildUpstreamDataForDatabaseServiceAzureSql(socket, config.AzureSql)
 	}
 
 	return fmt.Errorf("unsupported database service type: %s", config.DatabaseServiceType)
@@ -58,6 +60,21 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseServiceStandard(socket
 			socket.ConnectorLocalData.UpstreamCACertBlock = []byte(u.fetchVariableFromSource(config.TlsAuth.CaCertificate))
 		}
 		socket.ConnectorLocalData.UpstreamTLS = pointer.To(true)
+	case service.DatabaseAuthenticationTypeKerberos:
+		if config.Kerberos == nil {
+			return fmt.Errorf("got database service with no Kerberos authentication configuration")
+		}
+
+		socket.ConnectorLocalData.Kerberos = true
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.Kerberos.Username)
+		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.Kerberos.Password)
+	case service.DatabaseAuthenticationTypeSqlAuthentication:
+		if config.SqlAuthentication == nil {
+			return fmt.Errorf("got database service with no SqlAuthentication authentication configuration")
+		}
+
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.SqlAuthentication.Username)
+		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.SqlAuthentication.Password)
 	}
 
 	return nil
@@ -110,66 +127,18 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseServiceGcpCloudSql(soc
 		return fmt.Errorf("got database service with no Google Cloud SQL database service configuration")
 	}
 
-	if config.CloudSqlConnectorEnabled {
-		return u.buildUpstreamDataForDatabaseServiceGcpCloudSqlConnector(socket, config.Connector)
-	}
-
-	return u.buildUpstreamDataForDatabaseServiceGcpCloudSqlStandard(socket, config.Standard)
-}
-
-func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseServiceGcpCloudSqlConnector(socket *models.Socket, config *service.GcpCloudSqlConnectorConfiguration) error {
-	if config == nil {
-		return fmt.Errorf("got database service with no Google Cloud SQL connector configuration")
-	}
-
-	socket.UpstreamType = config.DatabaseProtocol
-	socket.ConnectorLocalData.CloudSQLConnector = true
-
-	switch config.AuthenticationType {
-	case service.DatabaseAuthenticationTypeUsernameAndPassword:
-		if config.UsernameAndPasswordAuth == nil {
-			return fmt.Errorf("got database service with no username and password authentication configuration")
-		}
-		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.UsernameAndPasswordAuth.Username)
-		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.UsernameAndPasswordAuth.Password)
-		socket.ConnectorLocalData.CloudSQLInstance = u.fetchVariableFromSource(config.UsernameAndPasswordAuth.InstanceId)
-		socket.ConnectorLocalData.GoogleCredentialsJSON = []byte(u.fetchVariableFromSource(config.UsernameAndPasswordAuth.GcpCredentialsJson))
-	case service.DatabaseAuthenticationTypeIam:
-		if config.IamAuth == nil {
-			return fmt.Errorf("got database service with no IAM authentication configuration")
-		}
-		socket.ConnectorLocalData.CloudSQLIAMAuth = true
-		socket.ConnectorLocalData.CloudSQLInstance = u.fetchVariableFromSource(config.IamAuth.InstanceId)
-		socket.ConnectorLocalData.GoogleCredentialsJSON = []byte(u.fetchVariableFromSource(config.IamAuth.GcpCredentialsJson))
-	}
-
-	return nil
-}
-
-func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseServiceGcpCloudSqlStandard(socket *models.Socket, config *service.GcpCloudSqlStandardConfiguration) error {
-	if config == nil {
-		return fmt.Errorf("got database service with no Google Cloud SQL standard configuration")
-	}
-
 	hostname, port := u.fetchVariableFromSource(config.Hostname), int(config.Port)
-
 	socket.UpstreamType = config.DatabaseProtocol
 	socket.ConnectorData.TargetHostname = hostname
 	socket.ConnectorData.Port = port
 	socket.TargetHostname = hostname
 	socket.TargetPort = port
 
-	switch config.AuthenticationType {
-	case service.DatabaseAuthenticationTypeUsernameAndPassword:
-		if config.UsernameAndPasswordAuth == nil {
-			return fmt.Errorf("got database service with no username and password authentication configuration")
-		}
+	switch {
+	case config.UsernameAndPasswordAuth != nil:
 		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.UsernameAndPasswordAuth.Username)
 		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.UsernameAndPasswordAuth.Password)
-	case service.DatabaseAuthenticationTypeTls:
-		if config.TlsAuth == nil {
-			return fmt.Errorf("got database service with no TLS authentication configuration")
-		}
+	case config.TlsAuth != nil:
 		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.TlsAuth.Username)
 		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.TlsAuth.Password)
 		socket.ConnectorLocalData.UpstreamCertBlock = []byte(u.fetchVariableFromSource(config.TlsAuth.Certificate))
@@ -177,6 +146,49 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseServiceGcpCloudSqlStan
 		if config.TlsAuth.CaCertificate != "" {
 			socket.ConnectorLocalData.UpstreamCACertBlock = []byte(u.fetchVariableFromSource(config.TlsAuth.CaCertificate))
 		}
+	case config.GcpCloudSQLConnectorAuth != nil:
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.GcpCloudSQLConnectorAuth.Username)
+		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.GcpCloudSQLConnectorAuth.Password)
+		socket.ConnectorLocalData.CloudSQLInstance = u.fetchVariableFromSource(config.GcpCloudSQLConnectorAuth.InstanceId)
+		socket.ConnectorLocalData.GoogleCredentialsJSON = []byte(u.fetchVariableFromSource(config.GcpCloudSQLConnectorAuth.GcpCredentialsJson))
+		socket.ConnectorLocalData.CloudSQLConnector = true
+	case config.GcpCloudSQLConnectorIAMAuth != nil:
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.GcpCloudSQLConnectorIAMAuth.Username)
+		socket.ConnectorLocalData.CloudSQLInstance = u.fetchVariableFromSource(config.GcpCloudSQLConnectorIAMAuth.InstanceId)
+		socket.ConnectorLocalData.GoogleCredentialsJSON = []byte(u.fetchVariableFromSource(config.GcpCloudSQLConnectorIAMAuth.GcpCredentialsJson))
+		socket.ConnectorLocalData.CloudSQLConnector = true
+		socket.ConnectorLocalData.CloudSQLIAMAuth = true
+	}
+
+	return nil
+}
+
+func (u *UpstreamDataBuilder) buildUpstreamDataForDatabaseServiceAzureSql(socket *models.Socket, config *service.AzureSqlDatabaseServiceConfiguration) error {
+	if config == nil {
+		return fmt.Errorf("got database service with no Microsoft Azure SQL database service configuration")
+	}
+
+	hostname, port := u.fetchVariableFromSource(config.Hostname), int(config.Port)
+	socket.UpstreamType = config.DatabaseProtocol
+	socket.ConnectorData.TargetHostname = hostname
+	socket.ConnectorData.Port = port
+	socket.TargetHostname = hostname
+	socket.TargetPort = port
+
+	switch {
+	case config.AzureActiveDirectoryIntegrated != nil:
+		socket.ConnectorLocalData.AzureAD = true
+	case config.AzureActiveDirectoryPassword != nil:
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.AzureActiveDirectoryPassword.Username)
+		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.AzureActiveDirectoryPassword.Password)
+		socket.ConnectorLocalData.AzureAD = true
+	case config.Kerberos != nil:
+		socket.ConnectorLocalData.Kerberos = true
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.Kerberos.Username)
+		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.Kerberos.Password)
+	case config.SqlAuthentication != nil:
+		socket.ConnectorLocalData.UpstreamUsername = u.fetchVariableFromSource(config.SqlAuthentication.Username)
+		socket.ConnectorLocalData.UpstreamPassword = u.fetchVariableFromSource(config.SqlAuthentication.Password)
 	}
 
 	return nil

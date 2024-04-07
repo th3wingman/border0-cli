@@ -3,12 +3,13 @@ package sqlclientproxy
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
@@ -46,23 +47,30 @@ func (p *dummyProvider) GetCredential(username string) (password string, found b
 	return "", true, nil
 }
 
-func newMysqlClientProxy(logger *zap.Logger, port int, resource models.ClientResource) (*mysqlClientProxy, error) {
+func newMysqlClientProxy(logger *zap.Logger, port int, resource models.ClientResource, useWsProxy bool) (*mysqlClientProxy, error) {
 	info, err := client.GetResourceInfo(logger, resource.Hostname())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource info")
 	}
 
+	systemCertPool, err := x509.SystemCertPool()
+	if err != nil {
+		log.Fatalf("failed to get system cert pool: %v", err.Error())
+	}
+
 	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{info.SetupTLSCertificate()},
-		InsecureSkipVerify: true,
+		Certificates: []tls.Certificate{info.SetupTLSCertificate()},
+		ServerName:   resource.Hostname(),
+		RootCAs:      systemCertPool,
 	}
 
 	return &mysqlClientProxy{
 		sqlClientProxy: sqlClientProxy{
-			port:      port,
-			info:      info,
-			resource:  resource,
-			tlsConfig: tlsConfig,
+			port:       port,
+			info:       info,
+			resource:   resource,
+			tlsConfig:  tlsConfig,
+			useWsProxy: useWsProxy,
 		},
 		server: server.NewDefaultServer(),
 	}, nil
@@ -122,8 +130,13 @@ func (p *mysqlClientProxy) handleConnection(ctx context.Context, clientConn net.
 
 	defer proxyConn.Close()
 
+	var tlsConfig *tls.Config
+	if !p.info.EndToEndEncryptionEnabled {
+		tlsConfig = p.tlsConfig
+	}
+
 	serverConn, err := mysqlClient.ConnectWithDialer(ctx, "tcp", fmt.Sprintf("%s:%d", p.resource.Hostname(), p.info.Port), proxyConn.GetUser(), "", "", p.Dialer, func(c *mysqlClient.Conn) {
-		c.SetTLSConfig(p.tlsConfig)
+		c.SetTLSConfig(tlsConfig)
 	})
 	if err != nil {
 		fmt.Println("failed to connect to socket:", err)
@@ -144,9 +157,5 @@ func (p *mysqlClientProxy) handleConnection(ctx context.Context, clientConn net.
 }
 
 func (p *mysqlClientProxy) Dialer(ctx context.Context, network, addr string) (net.Conn, error) {
-	if p.info.ConnectorAuthenticationEnabled {
-		return client.ConnectorAuthConnect(addr, p.tlsConfig)
-	} else {
-		return net.DialTimeout("tcp", addr, 5*time.Second)
-	}
+	return client.Connect(addr, false, p.tlsConfig, p.tlsConfig.Certificates[0], p.info.CaCertificate, p.info.ConnectorAuthenticationEnabled, p.info.EndToEndEncryptionEnabled, p.useWsProxy)
 }

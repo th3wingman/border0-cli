@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/borderzero/border0-cli/client/preference"
@@ -13,9 +14,10 @@ import (
 )
 
 var (
-	hostname string
-	local    bool
-	port     int
+	hostname   string
+	local      bool
+	port       int
+	useWsProxy bool
 )
 
 func AddCommandsTo(client *cobra.Command) {
@@ -27,6 +29,8 @@ func AddCommandsTo(client *cobra.Command) {
 	addOneCommandTo(psqlCmd, client)
 	addOneCommandTo(pgcliCmd, client)
 	addOneCommandTo(dataGripCmd, client)
+	addOneCommandTo(sqlcmdCmd, client)
+	addOneCommandTo(ssmsCmd, client)
 
 	dbCmd.Flags().BoolVarP(&local, "local", "l", false, "start a local listener")
 	dbCmd.Flags().IntVarP(&port, "port", "p", 0, "local listener port")
@@ -34,6 +38,8 @@ func AddCommandsTo(client *cobra.Command) {
 
 func addOneCommandTo(cmdToAdd, cmdAddedTo *cobra.Command) {
 	cmdToAdd.Flags().StringVarP(&hostname, "host", "", "", "Socket target host")
+	cmdToAdd.Flags().BoolVarP(&useWsProxy, "wsproxy", "w", false, "Use websocket proxy")
+
 	cmdAddedTo.AddCommand(cmdToAdd)
 }
 
@@ -56,7 +62,7 @@ var dbCmd = &cobra.Command{
 		hostname = pickedHost.Hostname()
 
 		if local {
-			proxy, err := sqlclientproxy.NewSqlClientProxy(logger.Logger, port, pickedHost)
+			proxy, err := sqlclientproxy.NewSqlClientProxy(logger.Logger, port, pickedHost, useWsProxy)
 			if err != nil {
 				return fmt.Errorf("failed to start local listener: %w", err)
 			}
@@ -86,11 +92,17 @@ var dbCmd = &cobra.Command{
 			dbClients           = []string{"local listener"}
 			dbClientsMySQL      = []string{"mysql", "mysqlworkbench", "mycli", "dbeaver", "datagrip"}
 			dbClientsPostgreSQL = []string{"psql", "pgcli", "datagrip"}
+			dbClientsMssql      = []string{"sqlcmd", "dbeaver", "datagrip"}
 		)
 
 		switch pickedHost.DatabaseType {
 		case "mysql":
 			dbClients = append(dbClients, dbClientsMySQL...)
+		case "mssql":
+			dbClients = append(dbClients, dbClientsMssql...)
+			if runtime.GOOS == "windows" {
+				dbClients = append(dbClients, "ssms (SQL Server Management Studio)")
+			}
 		case "postgres":
 			dbClients = append(dbClients, dbClientsPostgreSQL...)
 		default:
@@ -114,7 +126,7 @@ var dbCmd = &cobra.Command{
 		}
 
 		if dbClient == "local listener" {
-			proxy, err := sqlclientproxy.NewSqlClientProxy(logger.Logger, port, pickedHost)
+			proxy, err := sqlclientproxy.NewSqlClientProxy(logger.Logger, port, pickedHost, useWsProxy)
 			if err != nil {
 				return fmt.Errorf("failed to start local listener: %w", err)
 			}
@@ -125,6 +137,10 @@ var dbCmd = &cobra.Command{
 		dbName, err = client.EnterDBName(dbName, suggestedDBName)
 		if err != nil {
 			return err
+		}
+
+		if dbClient == "ssms (SQL Server Management Studio)" {
+			dbClient = "ssms"
 		}
 
 		cmdToCall := "db:" + dbClient

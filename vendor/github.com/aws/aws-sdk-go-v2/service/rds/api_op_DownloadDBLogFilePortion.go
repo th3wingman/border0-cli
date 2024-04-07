@@ -64,7 +64,7 @@ type DownloadDBLogFilePortionInput struct {
 	//   for the Marker parameter in your first request. Include the Marker value
 	//   returned in the response as the Marker value for the next request, continuing
 	//   until the AdditionalDataPending response element returns false.
-	NumberOfLines int32
+	NumberOfLines *int32
 
 	noSmithyDocumentSerde
 }
@@ -72,8 +72,8 @@ type DownloadDBLogFilePortionInput struct {
 // This data type is used as a response element to DownloadDBLogFilePortion .
 type DownloadDBLogFilePortionOutput struct {
 
-	// Boolean value that if true, indicates there is more data to be downloaded.
-	AdditionalDataPending bool
+	// A Boolean value that, if true, indicates there is more data to be downloaded.
+	AdditionalDataPending *bool
 
 	// Entries from the specified log file.
 	LogFileData *string
@@ -88,12 +88,22 @@ type DownloadDBLogFilePortionOutput struct {
 }
 
 func (c *Client) addOperationDownloadDBLogFilePortionMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDownloadDBLogFilePortion{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDownloadDBLogFilePortion{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DownloadDBLogFilePortion"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -114,9 +124,6 @@ func (c *Client) addOperationDownloadDBLogFilePortionMiddlewares(stack *middlewa
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -130,6 +137,9 @@ func (c *Client) addOperationDownloadDBLogFilePortionMiddlewares(stack *middlewa
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDownloadDBLogFilePortionValidationMiddleware(stack); err != nil {
@@ -148,6 +158,9 @@ func (c *Client) addOperationDownloadDBLogFilePortionMiddlewares(stack *middlewa
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -205,8 +218,8 @@ func NewDownloadDBLogFilePortionPaginator(client DownloadDBLogFilePortionAPIClie
 	}
 
 	options := DownloadDBLogFilePortionPaginatorOptions{}
-	if params.NumberOfLines != 0 {
-		options.Limit = params.NumberOfLines
+	if params.NumberOfLines != nil {
+		options.Limit = *params.NumberOfLines
 	}
 
 	for _, fn := range optFns {
@@ -236,7 +249,11 @@ func (p *DownloadDBLogFilePortionPaginator) NextPage(ctx context.Context, optFns
 	params := *p.params
 	params.Marker = p.nextToken
 
-	params.NumberOfLines = p.options.Limit
+	var limit *int32
+	if p.options.Limit > 0 {
+		limit = &p.options.Limit
+	}
+	params.NumberOfLines = limit
 
 	result, err := p.client.DownloadDBLogFilePortion(ctx, &params, optFns...)
 	if err != nil {
@@ -261,7 +278,6 @@ func newServiceMetadataMiddleware_opDownloadDBLogFilePortion(region string) *aws
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DownloadDBLogFilePortion",
 	}
 }

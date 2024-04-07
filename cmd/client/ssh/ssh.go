@@ -1,15 +1,11 @@
 package ssh
 
 import (
-	"context"
 	"crypto/tls"
-	"encoding/base64"
-	"encoding/json"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log"
-	"net"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -23,13 +19,12 @@ import (
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
-	"nhooyr.io/websocket"
 )
 
 var (
 	hostname     string
 	sshLoginName string
-	wsProxy      string
+	useWsProxy   bool
 )
 
 type HostDB struct {
@@ -48,8 +43,7 @@ func AddCommandsTo(client *cobra.Command) {
 	sshCmd.Flags().StringVarP(&hostname, "host", "", "", "The ssh border0 target host")
 	sshCmd.Flags().StringVarP(&sshLoginName, "username", "u", "", "Specifies the user to log in as on the remote machine(deprecated)")
 	sshCmd.Flags().StringVarP(&sshLoginName, "login", "l", "", "Same as username, specifies the user login to use on remote machine")
-	sshCmd.Flags().StringVarP(&wsProxy, "wsproxy", "w", "", "websocket proxy")
-	sshCmd.Flag("wsproxy").Hidden = true
+	sshCmd.Flags().BoolVarP(&useWsProxy, "wsproxy", "w", false, "Use websocket proxy")
 
 	client.AddCommand(keySignCmd)
 	keySignCmd.Flags().StringVarP(&hostname, "host", "", "", "The border0 target host")
@@ -135,57 +129,23 @@ var sshCmd = &cobra.Command{
 			PrivateKey:  info.PrivateKey,
 		}
 
+		systemCertPool, err := x509.SystemCertPool()
+		if err != nil {
+			return fmt.Errorf("failed to load system cert pool: %w", err)
+		}
+
 		tlsConfig := tls.Config{
-			Certificates:       []tls.Certificate{certificate},
-			InsecureSkipVerify: true,
+			Certificates: []tls.Certificate{certificate},
+			ServerName:   hostname,
+			RootCAs:      systemCertPool,
 		}
 
-		var conn net.Conn
-
-		if wsProxy != "" {
-			destination := struct {
-				DNSName string `json:"dnsname"`
-				Port    int    `json:"port"`
-			}{
-				DNSName: hostname,
-				Port:    info.Port,
+		conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+		if err != nil {
+			if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
+				return fmt.Errorf("failed to connect: %s. You may not be authorized for this socket. Speak to your Border0 administrator", err)
 			}
-			destinationJson, err := json.Marshal(&destination)
-			if err != nil {
-				return fmt.Errorf("failed to marshal destination: %w", err)
-			}
-
-			parsedURL, err := url.Parse(wsProxy)
-			if err != nil {
-				return fmt.Errorf("failed to parse wsproxy url: %w", err)
-			}
-			parsedURL.RawQuery = url.Values{
-				"dst": []string{base64.StdEncoding.EncodeToString(destinationJson)},
-			}.Encode()
-
-			wsURL := parsedURL.String()
-
-			ctx := context.Background()
-			wsConn, _, err := websocket.Dial(ctx, wsURL, nil)
-			if err != nil {
-				return fmt.Errorf("failed to perform WebSocket handshake on %s: %w", wsURL, err)
-			}
-			defer wsConn.Close(websocket.StatusInternalError, "the sky is falling")
-			wsNetConn := websocket.NetConn(ctx, wsConn, websocket.MessageBinary)
-
-			conn = tls.Client(wsNetConn, &tlsConfig)
-		} else {
-			conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig)
-			if err != nil {
-				return fmt.Errorf("failed to connect to %s:%d: %w", hostname, info.Port, err)
-			}
-		}
-
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
-			conn, err = client.ConnectorAuthConnectWithConnV2(conn, &tlsConfig, info.ConnectorAuthenticationEnabled)
-			if err != nil {
-				return fmt.Errorf("failed to connect: %w", err)
-			}
+			return fmt.Errorf("failed to connect: %w", err)
 		}
 
 		home, err := util.GetUserHomeDir()

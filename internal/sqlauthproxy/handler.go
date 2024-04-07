@@ -2,13 +2,20 @@ package sqlauthproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/cloudsql"
 	"github.com/borderzero/border0-go/types/common"
 	"go.uber.org/zap"
+)
+
+const (
+	authTTL = 1 * time.Minute
 )
 
 type handler interface {
@@ -16,23 +23,28 @@ type handler interface {
 }
 
 type Config struct {
-	Logger            *zap.Logger
-	Hostname          string
-	Port              int
-	RdsIam            bool
-	Username          string
-	Password          string
-	UpstreamType      string
-	UpstreamCAFile    string
-	UpstreamCertFile  string
-	UpstreamKeyFile   string
-	UpstreamCABlock   []byte
-	UpstreamCertBlock []byte
-	UpstreamKeyBlock  []byte
-	UpstreamTLS       bool
-	AwsRegion         string
-	AwsCredentials    *common.AwsCredentials
-	DialerFunc        func(context.Context, string, string) (net.Conn, error)
+	Logger               *zap.Logger
+	Hostname             string
+	Port                 int
+	RdsIam               bool
+	AzureAD              bool
+	Kerberos             bool
+	Username             string
+	Password             string
+	UpstreamType         string
+	UpstreamCAFile       string
+	UpstreamCertFile     string
+	UpstreamKeyFile      string
+	UpstreamCABlock      []byte
+	UpstreamCertBlock    []byte
+	UpstreamKeyBlock     []byte
+	UpstreamTLS          bool
+	AwsRegion            string
+	AwsCredentials       *common.AwsCredentials
+	DialerFunc           func(context.Context, string, string) (net.Conn, error)
+	E2eEncryptionEnabled bool
+	Socket               models.Socket
+	Border0API           border0.Border0API
 }
 
 func Serve(l net.Listener, config Config) error {
@@ -43,48 +55,62 @@ func Serve(l net.Listener, config Config) error {
 	case "postgres":
 		handler, err = newPostgresHandler(config)
 		if err != nil {
-			return fmt.Errorf("sqlauthproxy: %s", err)
+			return err
+		}
+	case "mssql":
+		handler, err = newMssqlHandler(config)
+		if err != nil {
+			return err
 		}
 	default:
 		handler, err = newMysqlHandler(config)
 		if err != nil {
-			return fmt.Errorf("sqlauthproxy: %s", err)
+			return err
 		}
 	}
 
 	for {
 		rconn, err := l.Accept()
 		if err != nil {
-			return fmt.Errorf("sqlauthproxy: failed to accept connection: %s", err)
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			config.Logger.Error("failed to accept connection", zap.Error(err))
+			continue
 		}
 
 		go handler.handleClient(rconn)
 	}
 }
 
-func BuildHandlerConfig(logger *zap.Logger, socket models.Socket) (*Config, error) {
+func BuildHandlerConfig(logger *zap.Logger, socket models.Socket, border0API border0.Border0API) (*Config, error) {
 	upstreamTLS := true
 	if socket.ConnectorLocalData.UpstreamTLS != nil {
 		upstreamTLS = *socket.ConnectorLocalData.UpstreamTLS
 	}
 
 	handlerConfig := &Config{
-		Logger:            logger,
-		Hostname:          socket.ConnectorData.TargetHostname,
-		Port:              socket.ConnectorData.Port,
-		RdsIam:            socket.ConnectorLocalData.RdsIAMAuth,
-		Username:          socket.ConnectorLocalData.UpstreamUsername,
-		Password:          socket.ConnectorLocalData.UpstreamPassword,
-		UpstreamType:      socket.UpstreamType,
-		AwsRegion:         socket.ConnectorLocalData.AWSRegion,
-		AwsCredentials:    socket.ConnectorLocalData.AwsCredentials,
-		UpstreamCAFile:    socket.ConnectorLocalData.UpstreamCACertFile,
-		UpstreamCertFile:  socket.ConnectorLocalData.UpstreamCertFile,
-		UpstreamKeyFile:   socket.ConnectorLocalData.UpstreamKeyFile,
-		UpstreamCABlock:   socket.ConnectorLocalData.UpstreamCACertBlock,
-		UpstreamCertBlock: socket.ConnectorLocalData.UpstreamCertBlock,
-		UpstreamKeyBlock:  socket.ConnectorLocalData.UpstreamKeyBlock,
-		UpstreamTLS:       upstreamTLS,
+		Logger:               logger,
+		Hostname:             socket.ConnectorData.TargetHostname,
+		Port:                 socket.ConnectorData.Port,
+		RdsIam:               socket.ConnectorLocalData.RdsIAMAuth,
+		Username:             socket.ConnectorLocalData.UpstreamUsername,
+		Password:             socket.ConnectorLocalData.UpstreamPassword,
+		UpstreamType:         socket.UpstreamType,
+		AwsRegion:            socket.ConnectorLocalData.AWSRegion,
+		AwsCredentials:       socket.ConnectorLocalData.AwsCredentials,
+		UpstreamCAFile:       socket.ConnectorLocalData.UpstreamCACertFile,
+		UpstreamCertFile:     socket.ConnectorLocalData.UpstreamCertFile,
+		UpstreamKeyFile:      socket.ConnectorLocalData.UpstreamKeyFile,
+		UpstreamCABlock:      socket.ConnectorLocalData.UpstreamCACertBlock,
+		UpstreamCertBlock:    socket.ConnectorLocalData.UpstreamCertBlock,
+		UpstreamKeyBlock:     socket.ConnectorLocalData.UpstreamKeyBlock,
+		UpstreamTLS:          upstreamTLS,
+		E2eEncryptionEnabled: socket.EndToEndEncryptionEnabled,
+		Socket:               socket,
+		Border0API:           border0API,
+		AzureAD:              socket.ConnectorLocalData.AzureAD,
+		Kerberos:             socket.ConnectorLocalData.Kerberos,
 	}
 
 	if socket.ConnectorLocalData.CloudSQLConnector {

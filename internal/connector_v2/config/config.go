@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/borderzero/border0-cli/internal/files"
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-cli/lib/varsource"
 	"gopkg.in/yaml.v3"
@@ -198,5 +199,21 @@ func unmarshalConfiguration(path string, config *Configuration) error {
 		return fmt.Errorf("failed to decode config file data as yaml: %v", err)
 	}
 	// success!
+	return nil
+}
+
+// SetBorder0Token sets the connector token in the environment variable BORDER0_TOKEN
+func SetBorder0Token(token string) error {
+	return os.Setenv(envNameToken, token)
+}
+
+func WriteToFile(path string, config *Configuration) error {
+	yamlBytes, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal configuration to yaml: %w", err)
+	}
+	if err := files.WriteStringToFile(path, string(yamlBytes)); err != nil {
+		return fmt.Errorf("failed to write connector token to file %s: %w", path, err)
+	}
 	return nil
 }

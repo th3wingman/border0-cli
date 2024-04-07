@@ -17,19 +17,24 @@ package cmd
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
+	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
@@ -43,9 +48,10 @@ import (
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-cli/internal/vpnlib"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/songgao/water"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+
+	gossh "golang.org/x/crypto/ssh"
 )
 
 // socketCmd represents the socket command
@@ -142,8 +148,8 @@ var socketCreateCmd = &cobra.Command{
 
 		var upstream_cert, upstream_key, upstream_ca *string
 		if socketType == "database" {
-			if upstreamType != "mysql" && upstreamType != "postgres" && upstreamType != "" {
-				log.Fatalf("error: --upstream_type should be mysql or postgres, defaults to mysql")
+			if upstreamType != "mysql" && upstreamType != "postgres" && upstreamType != "mssql" && upstreamType != "" {
+				log.Fatalf("error: --upstream_type should be mysql, mssql or postgres, defaults to mysql")
 			}
 
 			if upstream_cert_file != "" {
@@ -201,7 +207,7 @@ var socketCreateCmd = &cobra.Command{
 			UpstreamKey:                    upstream_key,
 			UpstreamCa:                     upstream_ca,
 		}
-		err = client.WithVersion(version).Request("POST", "socket", &s, newSocket)
+		err = client.WithVersion(internal.Version).Request("POST", "socket", &s, newSocket)
 		if err != nil {
 			log.Fatalf(fmt.Sprintf("Error: %v", err))
 		}
@@ -294,7 +300,7 @@ var socketConnectProxyCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		border0API := api.NewAPI(api.WithVersion(version))
+		border0API := api.NewAPI(api.WithVersion(internal.Version))
 
 		if socketID == "" && (len(args) == 0) {
 			return fmt.Errorf("error: no socket provided")
@@ -308,7 +314,88 @@ var socketConnectProxyCmd = &cobra.Command{
 			log.Fatalf("error: %v", err)
 		}
 
-		socket.WithVersion(version)
+		if socket.Socket.ConnectorLocalData == nil {
+			socket.Socket.ConnectorLocalData = &models.ConnectorLocalData{}
+		}
+
+		if socket.Socket.ConnectorData == nil {
+			socket.Socket.ConnectorData = &models.ConnectorData{}
+		}
+
+		socket.WithVersion(internal.Version)
+
+		if proxyHost != "" {
+			if err := socket.WithProxy(proxyHost); err != nil {
+				log.Fatalf("error: %v", err)
+			}
+		}
+
+		if socket.EndToEndEncryptionEnabled {
+			certificate, err := util.GetEndToEndEncryptionCertificate(socket.Organization.ID, "")
+			if err != nil {
+				log.Printf("failed to get connector certificate: %s", err)
+			}
+
+			if certificate == nil {
+				_, privKey, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					return fmt.Errorf("failed to generate private key: %w", err)
+				}
+
+				csrTemplate := x509.CertificateRequest{
+					Subject:            pkix.Name{CommonName: "border0"},
+					SignatureAlgorithm: x509.PureEd25519,
+				}
+
+				csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, privKey)
+				if err != nil {
+					return fmt.Errorf("failed to create certificate request: %w", err)
+				}
+
+				csrPem := pem.Block{
+					Type:  "CERTIFICATE REQUEST",
+					Bytes: csrBytes,
+				}
+
+				var name string
+				hostname, err := os.Hostname()
+				if err != nil {
+					name = "border0-cli"
+				} else {
+					name = hostname
+				}
+
+				cert, err := border0API.ServerOrgCertificate(ctx, name, pem.EncodeToMemory(&csrPem))
+				if err != nil {
+					return fmt.Errorf("failed to get certificate: %w", err)
+				}
+
+				privKeyBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+				if err != nil {
+					return fmt.Errorf("failed to marshal private key: %w", err)
+				}
+
+				privKeyPem := &pem.Block{
+					Type:  "PRIVATE KEY",
+					Bytes: privKeyBytes,
+				}
+
+				tlsCert, err := tls.X509KeyPair(cert, pem.EncodeToMemory(privKeyPem))
+				if err != nil {
+					return fmt.Errorf("failed to parse certificate: %w", err)
+				}
+
+				certificate = &tlsCert
+
+				if err := util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), cert, orgID, ""); err != nil {
+					log.Printf("failed to store certificate: %s", err)
+				}
+			}
+
+			socket.WithCertificate(certificate)
+		}
+
+		SetRlimit()
 
 		border0API.StartRefreshAccessTokenJob(ctx)
 
@@ -344,133 +431,131 @@ var socketConnectVpnCmd = &cobra.Command{
 	Short:             "Connect a VPN socket (TLS under-the-hood)",
 	ValidArgsFunction: AutocompleteSocket,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logger := logger.Logger
+
+		if !util.RunningAsAdministrator() {
+			return errors.New("command must be ran as system administrator in order to connect vpn sockets")
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		border0API := api.NewAPI(api.WithVersion(version))
+		border0API := api.NewAPI(api.WithVersion(internal.Version))
 
 		if socketID == "" && (len(args) == 0) {
-			return fmt.Errorf("error: no socket provided")
+			return fmt.Errorf("no socket provided")
 		}
 		if len(args) > 0 {
 			socketID = args[0]
 		}
 
-		socket, err := border0.NewSocket(ctx, border0API, socketID, logger.Logger)
+		socket, err := border0.NewSocket(ctx, border0API, socketID, logger)
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			return fmt.Errorf("failed to create socket %v", err)
 		}
 
-		socket.WithVersion(version)
+		if socket.Socket.ConnectorLocalData == nil {
+			socket.Socket.ConnectorLocalData = &models.ConnectorLocalData{}
+		}
+
+		if socket.Socket.ConnectorData == nil {
+			socket.Socket.ConnectorData = &models.ConnectorData{}
+		}
+
+		socket.WithVersion(internal.Version)
+
+		if proxyHost != "" {
+			if err := socket.WithProxy(proxyHost); err != nil {
+				return fmt.Errorf("failed to set proxy host: %s", err)
+			}
+		}
+
+		if socket.EndToEndEncryptionEnabled {
+			certificate, err := util.GetEndToEndEncryptionCertificate(socket.Organization.ID, "")
+			if err != nil {
+				return fmt.Errorf("failed to get connector certificate: %s", err)
+			}
+
+			if certificate == nil {
+				_, privKey, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					return fmt.Errorf("failed to generate private key: %w", err)
+				}
+
+				csrTemplate := x509.CertificateRequest{
+					Subject:            pkix.Name{CommonName: "border0"},
+					SignatureAlgorithm: x509.PureEd25519,
+				}
+
+				csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, privKey)
+				if err != nil {
+					return fmt.Errorf("failed to create certificate request: %w", err)
+				}
+
+				csrPem := pem.Block{
+					Type:  "CERTIFICATE REQUEST",
+					Bytes: csrBytes,
+				}
+
+				var name string
+				hostname, err := os.Hostname()
+				if err != nil {
+					name = "border0-cli"
+				} else {
+					name = hostname
+				}
+
+				cert, err := border0API.ServerOrgCertificate(ctx, name, pem.EncodeToMemory(&csrPem))
+				if err != nil {
+					return fmt.Errorf("failed to get certificate: %w", err)
+				}
+
+				privKeyBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+				if err != nil {
+					return fmt.Errorf("failed to marshal private key: %w", err)
+				}
+
+				privKeyPem := &pem.Block{
+					Type:  "PRIVATE KEY",
+					Bytes: privKeyBytes,
+				}
+
+				tlsCert, err := tls.X509KeyPair(cert, pem.EncodeToMemory(privKeyPem))
+				if err != nil {
+					return fmt.Errorf("failed to parse certificate: %w", err)
+				}
+
+				certificate = &tlsCert
+
+				if err := util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), cert, orgID, ""); err != nil {
+					logger.Warn("failed to store certificate", zap.Error(err))
+				}
+			}
+
+			socket.WithCertificate(certificate)
+		}
+
+		SetRlimit()
 
 		border0API.StartRefreshAccessTokenJob(ctx)
 
 		l, err := socket.Listen()
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			return fmt.Errorf("failed to listen for connections over socket: %v", err)
 		}
-
 		defer l.Close()
 
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
+
 		go func() {
-			for {
-				<-c
-				os.Exit(0)
-			}
+			<-c
+			fmt.Println("shutdown signal received")
+			cancel()
 		}()
 
-		// Create an IP pool that will be used to assign IPs to clients
-		ipPool, err := vpnlib.NewIPPool(vpnSubnet)
-		if err != nil {
-			log.Fatalf("Failed to create IP Pool: %v", err)
-		}
-		subnetSize := ipPool.GetSubnetSize()
-		serverIp := ipPool.GetServerIp()
-
-		// create the connection map
-		cm := vpnlib.NewConnectionMap()
-
-		iface, err := water.New(water.Config{DeviceType: water.TUN})
-		if err != nil {
-			return fmt.Errorf("failed to create TUN iface: %v", err)
-		}
-		defer iface.Close()
-		logger.Logger.Info("Started VPN server", zap.String("interface", iface.Name()), zap.String("server_ip", serverIp), zap.String(" vpn_subnet ", vpnSubnet))
-
-		if err = vpnlib.AddServerIp(iface.Name(), serverIp, subnetSize); err != nil {
-			return fmt.Errorf("failed to add server IP to interface: %v", err)
-		}
-
-		if runtime.GOOS != "linux" {
-			// On linux the routes are added to the interface when creating the interface and adding the IP
-			if err = vpnlib.AddRoutesToIface(iface.Name(), []string{vpnSubnet}); err != nil {
-				logger.Logger.Warn("failed to add routes to interface", zap.Error(err))
-			}
-		}
-
-		// Now start the Tun to Conn goroutine
-		// This will listen for packets on the TUN interface and forward them to the right connection
-		go vpnlib.TunToConnCopy(iface, cm, false, nil)
-
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				fmt.Printf("Failed to accept new vpn connection: %v\n", err)
-				continue
-			}
-
-			// dispatch new connection handler
-			go func() {
-				defer conn.Close()
-
-				// get an ip for the new client
-				clientIp, err := ipPool.Allocate()
-				if err != nil {
-					fmt.Printf("Failed to allocate client IP: %v\n", err)
-					return
-				}
-				defer ipPool.Release(clientIp)
-
-				fmt.Printf("New client connected allocated IP: %s\n", clientIp)
-
-				// attach the connection to the client ip
-				cm.Set(clientIp, conn)
-				defer cm.Delete(clientIp)
-
-				// define control message
-				controlMessage := &vpnlib.ControlMessage{
-					ClientIp:   clientIp,
-					ServerIp:   serverIp,
-					SubnetSize: uint8(subnetSize),
-					Routes:     routes,
-				}
-				controlMessageBytes, err := controlMessage.Build()
-				if err != nil {
-					fmt.Printf("failed to build control message: %v\n", err)
-					return
-				}
-
-				// write configuration message
-				n, err := conn.Write(controlMessageBytes)
-				if err != nil {
-					fmt.Printf("failed to write control message to net conn: %v\n", err)
-					return
-				}
-				if n < len(controlMessageBytes) {
-					fmt.Printf("failed to write entire control message bytes (is %d, wrote %d)\n", controlMessageBytes, n)
-					return
-				}
-
-				if err = vpnlib.ConnToTunCopy(conn, iface); err != nil {
-					if !errors.Is(err, io.EOF) {
-						fmt.Printf("failed to forward between tls conn and TUN iface: %v\n", err)
-					}
-					return
-				}
-			}()
-		}
+		// blocks until context done
+		return vpnlib.RunServer(ctx, logger, l, vpnSubnet, routes)
 	},
 }
 
@@ -482,7 +567,7 @@ var socketConnectCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		border0API := api.NewAPI(api.WithVersion(version))
+		border0API := api.NewAPI(api.WithVersion(internal.Version))
 
 		if socketID == "" && (len(args) == 0) {
 			return fmt.Errorf("error: no socket provided")
@@ -497,16 +582,85 @@ var socketConnectCmd = &cobra.Command{
 			log.Fatalf("error: %v", err)
 		}
 
-		if socket.EndToEndEncryptionEnabled {
-			return fmt.Errorf("error: end to end encryption is only supported with the connector")
+		if socket.Socket.ConnectorLocalData == nil {
+			socket.Socket.ConnectorLocalData = &models.ConnectorLocalData{}
 		}
 
-		socket.WithVersion(version)
+		if socket.Socket.ConnectorData == nil {
+			socket.Socket.ConnectorData = &models.ConnectorData{}
+		}
+
+		socket.WithVersion(internal.Version)
 
 		if proxyHost != "" {
 			if err := socket.WithProxy(proxyHost); err != nil {
 				log.Fatalf("error: %v", err)
 			}
+		}
+
+		if socket.EndToEndEncryptionEnabled {
+			certificate, err := util.GetEndToEndEncryptionCertificate(socket.Organization.ID, "")
+			if err != nil {
+				log.Printf("failed to get connector certificate: %s", err)
+			}
+
+			if certificate == nil {
+				_, privKey, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					return fmt.Errorf("failed to generate private key: %w", err)
+				}
+
+				csrTemplate := x509.CertificateRequest{
+					Subject:            pkix.Name{CommonName: "border0"},
+					SignatureAlgorithm: x509.PureEd25519,
+				}
+
+				csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, privKey)
+				if err != nil {
+					return fmt.Errorf("failed to create certificate request: %w", err)
+				}
+
+				csrPem := pem.Block{
+					Type:  "CERTIFICATE REQUEST",
+					Bytes: csrBytes,
+				}
+
+				var name string
+				hostname, err := os.Hostname()
+				if err != nil {
+					name = "border0-cli"
+				} else {
+					name = hostname
+				}
+
+				cert, err := border0API.ServerOrgCertificate(ctx, name, pem.EncodeToMemory(&csrPem))
+				if err != nil {
+					return fmt.Errorf("failed to get certificate: %w", err)
+				}
+
+				privKeyBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+				if err != nil {
+					return fmt.Errorf("failed to marshal private key: %w", err)
+				}
+
+				privKeyPem := &pem.Block{
+					Type:  "PRIVATE KEY",
+					Bytes: privKeyBytes,
+				}
+
+				tlsCert, err := tls.X509KeyPair(cert, pem.EncodeToMemory(privKeyPem))
+				if err != nil {
+					return fmt.Errorf("failed to parse certificate: %w", err)
+				}
+
+				certificate = &tlsCert
+
+				if err := util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), cert, orgID, ""); err != nil {
+					log.Printf("failed to store certificate: %s", err)
+				}
+			}
+
+			socket.WithCertificate(certificate)
 		}
 
 		SetRlimit()
@@ -537,20 +691,25 @@ var socketConnectCmd = &cobra.Command{
 
 		var sqlAuthProxy bool
 		var handlerConfig sqlauthproxy.Config
-		if socket.SocketType == "database" && (upstream_username != "" || upstream_password != "" || rdsIAM || upstream_cert_file != "" || upstream_key_file != "") {
+		if socket.SocketType == "database" && (upstream_username != "" || upstream_password != "" || rdsIAM || upstream_cert_file != "" || upstream_key_file != "" || socket.EndToEndEncryptionEnabled) {
 			handlerConfig = sqlauthproxy.Config{
-				Hostname:         hostname,
-				Port:             port,
-				RdsIam:           rdsIAM,
-				Username:         upstream_username,
-				Password:         upstream_password,
-				UpstreamType:     socket.UpstreamType,
-				AwsRegion:        awsRegion,
-				UpstreamCAFile:   upstream_ca_file,
-				UpstreamCertFile: upstream_cert_file,
-				UpstreamKeyFile:  upstream_key_file,
-				UpstreamTLS:      upstream_tls,
-				Logger:           logger.Logger,
+				Hostname:             hostname,
+				Port:                 port,
+				RdsIam:               rdsIAM,
+				Username:             upstream_username,
+				Password:             upstream_password,
+				UpstreamType:         socket.UpstreamType,
+				AwsRegion:            awsRegion,
+				UpstreamCAFile:       upstream_ca_file,
+				UpstreamCertFile:     upstream_cert_file,
+				UpstreamKeyFile:      upstream_key_file,
+				UpstreamTLS:          upstream_tls,
+				Logger:               logger.Logger,
+				E2eEncryptionEnabled: socket.EndToEndEncryptionEnabled,
+				Socket:               *socket.Socket,
+				Border0API:           border0API,
+				AzureAD:              azureAD,
+				Kerberos:             kerberos,
 			}
 
 			if cloudSqlConnector {
@@ -571,19 +730,46 @@ var socketConnectCmd = &cobra.Command{
 		var sshProxyConfig config.ProxyConfig
 
 		if socket.SocketType == "ssh" && (upstream_username != "" || upstream_password != "" || upstream_identify_file != "" || awsEc2InstanceId != "" || socket.UpstreamType == "aws-ssm" || socket.UpstreamType == "aws-ec2connect" || awsEc2InstanceConnect || socket.EndToEndEncryptionEnabled) {
+			sshProxyConfig = config.ProxyConfig{
+				Logger:             logger.Logger,
+				Recording:          socket.RecordingEnabled,
+				EndToEndEncryption: socket.EndToEndEncryptionEnabled,
+				Socket:             socket.Socket,
+				Border0API:         border0API,
+			}
+
+			if socket.EndToEndEncryptionEnabled {
+				hostkeySigner, err := util.Hostkey()
+				if err != nil {
+					if hostkeySigner == nil {
+						return fmt.Errorf("failed to get hostkey: %s", err)
+					} else {
+						logger.Logger.Warn("failed to store hostkey", zap.Error(err))
+					}
+				}
+
+				sshProxyConfig.Hostkey = hostkeySigner
+
+				if orgSshCA, ok := socket.Organization.Certificates["ssh_public_key"]; ok {
+					orgCa, _, _, _, err := gossh.ParseAuthorizedKey([]byte(orgSshCA))
+					if err != nil {
+						return fmt.Errorf("failed to parse org ssh ca: %s", err)
+					}
+
+					sshProxyConfig.OrgSshCA = orgCa
+				}
+			}
+
 			switch {
 			case socket.UpstreamType == "aws-ssm":
 				if awsECSCluster == "" && awsEc2InstanceId == "" {
 					return fmt.Errorf("aws_ecs_cluster flag or aws ec2 instance id is required for aws-ssm upstream services")
 				}
 
-				sshProxyConfig = config.ProxyConfig{
-					AwsSSMTarget:    awsEc2InstanceId,
-					AWSRegion:       awsRegion,
-					AWSProfile:      awsProfile,
-					AwsUpstreamType: "aws-ssm",
-					Logger:          logger.Logger,
-				}
+				sshProxyConfig.AwsSSMTarget = awsEc2InstanceId
+				sshProxyConfig.AWSRegion = awsRegion
+				sshProxyConfig.AWSProfile = awsProfile
+				sshProxyConfig.AwsUpstreamType = "aws-ssm"
 
 				if awsECSCluster != "" {
 					sshProxyConfig.ECSSSMProxy = &config.ECSSSMProxy{
@@ -598,44 +784,40 @@ var socketConnectCmd = &cobra.Command{
 					return fmt.Errorf("aws ec2 instance id is required for EC2 Instance Connect based upstream services")
 				}
 
-				sshProxyConfig = config.ProxyConfig{
-					AwsEC2InstanceId: awsEc2InstanceId,
-					AWSRegion:        awsRegion,
-					AWSProfile:       awsProfile,
-					Hostname:         hostname,
-					Port:             port,
-					Username:         upstream_username,
-					AwsUpstreamType:  "aws-ec2connect",
-					Logger:           logger.Logger,
-				}
+				sshProxyConfig.AwsEC2InstanceId = awsEc2InstanceId
+				sshProxyConfig.AWSRegion = awsRegion
+				sshProxyConfig.AWSProfile = awsProfile
+				sshProxyConfig.Hostname = hostname
+				sshProxyConfig.Port = port
+				sshProxyConfig.Username = upstream_username
+				sshProxyConfig.AwsUpstreamType = "aws-ec2connect"
 
 			default:
 				if awsECSCluster != "" || awsEc2InstanceId != "" {
 					return fmt.Errorf("aws_ecs_cluster flag or aws ec2 instance id is defined but socket is not configured with aws-ssm upstream type")
 				}
 
-				sshProxyConfig = config.ProxyConfig{
-					Hostname:           hostname,
-					Port:               port,
-					Username:           upstream_username,
-					Password:           upstream_password,
-					IdentityFile:       upstream_identify_file,
-					EndToEndEncryption: socket.EndToEndEncryptionEnabled,
-					Recording:          socket.RecordingEnabled,
-					Logger:             logger.Logger,
-				}
+				sshProxyConfig.Hostname = hostname
+				sshProxyConfig.Port = port
+				sshProxyConfig.Username = upstream_username
+				sshProxyConfig.Password = upstream_password
+				sshProxyConfig.IdentityFile = upstream_identify_file
+			}
+
+			if localssh {
+				sshProxyConfig.Socket.SSHServer = true
 			}
 			sshAuthProxy = true
-		}
-
-		if socket.SocketType != "database" && cloudSqlConnector {
-			cloudSqlConnector = false
 		}
 
 		if socket.SocketType == "ssh" && !localssh && !sshAuthProxy {
 			if port < 1 {
 				port = 22
 			}
+		}
+
+		if socket.SocketType != "database" && cloudSqlConnector {
+			cloudSqlConnector = false
 		}
 
 		border0API.StartRefreshAccessTokenJob(ctx)
@@ -661,7 +843,7 @@ var socketConnectCmd = &cobra.Command{
 			if err := http.StartLocalHTTPServer(httpserver_dir, l); err != nil {
 				return err
 			}
-		case localssh:
+		case localssh && !socket.EndToEndEncryptionEnabled:
 			opts := []server.Option{}
 			if socket.UpstreamUsername != "" {
 				opts = append(opts, server.WithUsername(socket.UpstreamUsername))
@@ -770,7 +952,7 @@ func init() {
 	socketCreateCmd.Flags().StringVarP(&upstream_username, "upstream_username", "j", "", "Upstream username used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_password, "upstream_password", "k", "", "Upstream password used to connect to upstream database")
 	socketCreateCmd.Flags().StringVarP(&upstream_http_hostname, "upstream_http_hostname", "", "", "Upstream http hostname")
-	socketCreateCmd.Flags().StringVarP(&upstream_type, "upstream_type", "", "", "Upstream type: http, https for http sockets or mysql, postgres for database sockets and aws-ssm for ssh sockets")
+	socketCreateCmd.Flags().StringVarP(&upstream_type, "upstream_type", "", "", "Upstream type: http, https for http sockets or mysql, mssql, postgres for database sockets and aws-ssm for ssh sockets")
 	socketCreateCmd.Flags().StringVarP(&socketType, "type", "t", "http", "Socket type: http, https, ssh, tls, database")
 	socketCreateCmd.Flags().BoolVarP(&connectorAuthEnabled, "connector_auth", "c", false, "Enables connector authentication")
 	socketCreateCmd.Flags().StringVarP(&orgCustomDomain, "domain", "o", "", "Use custom domain for socket")
@@ -869,6 +1051,8 @@ func init() {
 	socketConnectCmd.Flags().StringSliceVarP(&awsECSServices, "aws_ecs_service", "", []string{}, "If specified, the list will only show service that has the specified service names")
 	socketConnectCmd.Flags().StringSliceVarP(&awsECSTasks, "aws_ecs_task", "", []string{}, "If specified, the list will only show tasks that starts with the specified task names")
 	socketConnectCmd.Flags().StringSliceVarP(&awsECSContainers, "aws_ecs_container", "", []string{}, "If specified, the list will only show containers that has the specified container names")
+	socketConnectCmd.Flags().BoolVarP(&azureAD, "azure_ad", "", false, "Use Azure Active Directory authentication")
+	socketConnectCmd.Flags().BoolVarP(&kerberos, "kerberos", "", false, "Use Kerberos authentication")
 
 	socketConnectCmd.RegisterFlagCompletionFunc("socket_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp

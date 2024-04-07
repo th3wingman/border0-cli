@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -67,6 +68,9 @@ type CreateBlueGreenDeploymentInput struct {
 	// group that is different from the one associated with the source DB cluster.
 	TargetDBClusterParameterGroupName *string
 
+	// Specify the DB instance class for the databases in the green environment.
+	TargetDBInstanceClass *string
+
 	// The DB parameter group associated with the DB instance in the green
 	// environment. To test parameter changes, specify a DB parameter group that is
 	// different from the one associated with the source DB instance.
@@ -75,6 +79,13 @@ type CreateBlueGreenDeploymentInput struct {
 	// The engine version of the database in the green environment. Specify the engine
 	// version to upgrade to in the green environment.
 	TargetEngineVersion *string
+
+	// Whether to upgrade the storage file system configuration on the green database.
+	// This option migrates the green DB instance from the older 32-bit file system to
+	// the preferred configuration. For more information, see Upgrading the storage
+	// file system for a DB instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIOPS.StorageTypes.html#USER_PIOPS.UpgradeFileSystem)
+	// .
+	UpgradeTargetStorageConfig *bool
 
 	noSmithyDocumentSerde
 }
@@ -95,12 +106,22 @@ type CreateBlueGreenDeploymentOutput struct {
 }
 
 func (c *Client) addOperationCreateBlueGreenDeploymentMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateBlueGreenDeployment{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCreateBlueGreenDeployment{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateBlueGreenDeployment"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -121,9 +142,6 @@ func (c *Client) addOperationCreateBlueGreenDeploymentMiddlewares(stack *middlew
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -137,6 +155,9 @@ func (c *Client) addOperationCreateBlueGreenDeploymentMiddlewares(stack *middlew
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateBlueGreenDeploymentValidationMiddleware(stack); err != nil {
@@ -157,6 +178,9 @@ func (c *Client) addOperationCreateBlueGreenDeploymentMiddlewares(stack *middlew
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -164,7 +188,6 @@ func newServiceMetadataMiddleware_opCreateBlueGreenDeployment(region string) *aw
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CreateBlueGreenDeployment",
 	}
 }

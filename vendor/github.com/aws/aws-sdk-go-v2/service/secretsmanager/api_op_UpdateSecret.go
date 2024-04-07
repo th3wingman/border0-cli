@@ -37,9 +37,11 @@ import (
 // . Required permissions: secretsmanager:UpdateSecret . For more information, see
 // IAM policy actions for Secrets Manager (https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_iam-permissions.html#reference_iam-permissions_actions)
 // and Authentication and access control in Secrets Manager (https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access.html)
-// . If you use a customer managed key, you must also have kms:GenerateDataKey and
-// kms:Decrypt permissions on the key. For more information, see  Secret
-// encryption and decryption (https://docs.aws.amazon.com/secretsmanager/latest/userguide/security-encryption.html)
+// . If you use a customer managed key, you must also have kms:GenerateDataKey ,
+// kms:Encrypt , and kms:Decrypt permissions on the key. If you change the KMS key
+// and you don't have kms:Encrypt permission to the new key, Secrets Manager does
+// not re-ecrypt existing secret versions with the new key. For more information,
+// see Secret encryption and decryption (https://docs.aws.amazon.com/secretsmanager/latest/userguide/security-encryption.html)
 // .
 func (c *Client) UpdateSecret(ctx context.Context, params *UpdateSecretInput, optFns ...func(*Options)) (*UpdateSecretOutput, error) {
 	if params == nil {
@@ -70,10 +72,13 @@ type UpdateSecretInput struct {
 	// the new version. If you use the Amazon Web Services CLI or one of the Amazon Web
 	// Services SDKs to call this operation, then you can leave this parameter empty.
 	// The CLI or SDK generates a random UUID for you and includes it as the value for
-	// this parameter in the request. If you don't use the SDK and instead generate a
-	// raw HTTP request to the Secrets Manager service endpoint, then you must generate
-	// a ClientRequestToken yourself for the new version and include the value in the
-	// request. This value becomes the VersionId of the new version.
+	// this parameter in the request. If you generate a raw HTTP request to the Secrets
+	// Manager service endpoint, then you must generate a ClientRequestToken and
+	// include it in the request. This value helps ensure idempotency. Secrets Manager
+	// uses this value to prevent the accidental creation of duplicate versions if
+	// there are failures and retries during a rotation. We recommend that you generate
+	// a UUID-type (https://wikipedia.org/wiki/Universally_unique_identifier) value to
+	// ensure uniqueness of your versions within the specified secret.
 	ClientRequestToken *string
 
 	// The description of the secret.
@@ -81,8 +86,10 @@ type UpdateSecretInput struct {
 
 	// The ARN, key ID, or alias of the KMS key that Secrets Manager uses to encrypt
 	// new secret versions as well as any existing versions with the staging labels
-	// AWSCURRENT , AWSPENDING , or AWSPREVIOUS . For more information about versions
-	// and staging labels, see Concepts: Version (https://docs.aws.amazon.com/secretsmanager/latest/userguide/getting-started.html#term_version)
+	// AWSCURRENT , AWSPENDING , or AWSPREVIOUS . If you don't have kms:Encrypt
+	// permission to the new key, Secrets Manager does not re-ecrypt existing secret
+	// versions with the new key. For more information about versions and staging
+	// labels, see Concepts: Version (https://docs.aws.amazon.com/secretsmanager/latest/userguide/getting-started.html#term_version)
 	// . A key alias is always prefixed by alias/ , for example
 	// alias/aws/secretsmanager . For more information, see About aliases (https://docs.aws.amazon.com/kms/latest/developerguide/alias-about.html)
 	// . If you set this to an empty string, Secrets Manager uses the Amazon Web
@@ -133,12 +140,22 @@ type UpdateSecretOutput struct {
 }
 
 func (c *Client) addOperationUpdateSecretMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpUpdateSecret{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpUpdateSecret{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "UpdateSecret"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -159,22 +176,22 @@ func (c *Client) addOperationUpdateSecretMiddlewares(stack *middleware.Stack, op
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
 	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opUpdateSecretMiddleware(stack, options); err != nil {
@@ -196,6 +213,9 @@ func (c *Client) addOperationUpdateSecretMiddlewares(stack *middleware.Stack, op
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -238,7 +258,6 @@ func newServiceMetadataMiddleware_opUpdateSecret(region string) *awsmiddleware.R
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "secretsmanager",
 		OperationName: "UpdateSecret",
 	}
 }

@@ -7,6 +7,9 @@ const (
 	// ResourceTypeAwsEcsService is the resource type for AWS ECS services.
 	ResourceTypeAwsEcsService = "aws_ecs_service"
 
+	// ResourceTypeAwsEksCluster is the resource type for AWS EKS clusters.
+	ResourceTypeAwsEksCluster = "aws_eks_cluster"
+
 	// ResourceTypeAwsRdsInstnace is the resource type for AWS RDS instances.
 	ResourceTypeAwsRdsInstance = "aws_rds_instance"
 
@@ -110,6 +113,23 @@ type AwsEcsServiceDetails struct {
 	// add any new fields as needed here
 }
 
+// AwsEksClusterDetails represents the details of a discovered AWS EKS cluster.
+type AwsEksClusterDetails struct {
+	AwsBaseDetails // extends
+
+	Tags map[string]string `json:"tags"`
+
+	ClusterName       string `json:"cluster_name"`
+	KubernetesVersion string `json:"kubernetes_version"`
+	Endpoint          string `json:"endpoint"`
+
+	VpcId string `json:"vpc_id"`
+
+	EndpointReachable *bool `json:"endpoint_reachable,omitempty"`
+
+	// add any new fields as needed here
+}
+
 // AwsRdsInstanceDetails represents the details of a discovered AWS RDS instance.
 type AwsRdsInstanceDetails struct {
 	AwsBaseDetails // extends
@@ -124,6 +144,7 @@ type AwsRdsInstanceDetails struct {
 	DBSubnetGroupName    string `json:"db_subnet_group_name"`
 	EndpointAddress      string `json:"endpoint_address"`
 	EndpointPort         int32  `json:"endpoint_port"`
+	NetworkReachable     *bool  `json:"network_reachable,omitempty"`
 
 	// add any new fields as needed here
 }
@@ -230,6 +251,7 @@ type Resource struct {
 
 	AwsEc2InstanceDetails          *AwsEc2InstanceDetails          `json:"aws_ec2_instance_details,omitempty"`
 	AwsEcsServiceDetails           *AwsEcsServiceDetails           `json:"aws_ecs_service_details,omitempty"`
+	AwsEksClusterDetails           *AwsEksClusterDetails           `json:"aws_eks_cluster_details,omitempty"`
 	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
 	KubernetesServiceDetails       *KubernetesServiceDetails       `json:"kubernetes_service_details,omitempty"`
 	DockerContainerDetails         *DockerContainerDetails         `json:"docker_container_details,omitempty"`

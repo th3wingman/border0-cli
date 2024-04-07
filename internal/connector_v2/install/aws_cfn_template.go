@@ -75,6 +75,16 @@ Resources:
                   - 'ecs:ListTaskDefinitions'
                   - 'ecs:ListTasks'
                 Resource: '*'
+        # EKS ReadOnly Policy for EKS discovery
+        - PolicyName: AmazonEKSReadOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'eks:ListClusters'
+                  - 'eks:DescribeCluster'
+                Resource: '*'
         # SSM Parameter ReadOnly access to the SSM parameter of the connector's token.
         - PolicyName: AccessToBorder0TokenSsmParameter
           PolicyDocument:

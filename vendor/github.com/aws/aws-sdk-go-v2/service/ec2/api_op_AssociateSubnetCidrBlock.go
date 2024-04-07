@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -12,8 +13,7 @@ import (
 )
 
 // Associates a CIDR block with your subnet. You can only associate a single IPv6
-// CIDR block with your subnet. An IPv6 CIDR block must have a prefix length of
-// /64.
+// CIDR block with your subnet.
 func (c *Client) AssociateSubnetCidrBlock(ctx context.Context, params *AssociateSubnetCidrBlockInput, optFns ...func(*Options)) (*AssociateSubnetCidrBlockOutput, error) {
 	if params == nil {
 		params = &AssociateSubnetCidrBlockInput{}
@@ -31,15 +31,19 @@ func (c *Client) AssociateSubnetCidrBlock(ctx context.Context, params *Associate
 
 type AssociateSubnetCidrBlockInput struct {
 
-	// The IPv6 CIDR block for your subnet. The subnet must have a /64 prefix length.
-	//
-	// This member is required.
-	Ipv6CidrBlock *string
-
 	// The ID of your subnet.
 	//
 	// This member is required.
 	SubnetId *string
+
+	// The IPv6 CIDR block for your subnet.
+	Ipv6CidrBlock *string
+
+	// An IPv6 IPAM pool ID.
+	Ipv6IpamPoolId *string
+
+	// An IPv6 netmask length.
+	Ipv6NetmaskLength *int32
 
 	noSmithyDocumentSerde
 }
@@ -59,12 +63,22 @@ type AssociateSubnetCidrBlockOutput struct {
 }
 
 func (c *Client) addOperationAssociateSubnetCidrBlockMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpAssociateSubnetCidrBlock{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpAssociateSubnetCidrBlock{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "AssociateSubnetCidrBlock"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -85,9 +99,6 @@ func (c *Client) addOperationAssociateSubnetCidrBlockMiddlewares(stack *middlewa
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -101,6 +112,9 @@ func (c *Client) addOperationAssociateSubnetCidrBlockMiddlewares(stack *middlewa
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpAssociateSubnetCidrBlockValidationMiddleware(stack); err != nil {
@@ -121,6 +135,9 @@ func (c *Client) addOperationAssociateSubnetCidrBlockMiddlewares(stack *middlewa
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -128,7 +145,6 @@ func newServiceMetadataMiddleware_opAssociateSubnetCidrBlock(region string) *aws
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "AssociateSubnetCidrBlock",
 	}
 }

@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -12,7 +13,7 @@ import (
 )
 
 // Starts an Amazon RDS DB instance that was stopped using the Amazon Web Services
-// console, the stop-db-instance CLI command, or the StopDBInstance action. For
+// console, the stop-db-instance CLI command, or the StopDBInstance operation. For
 // more information, see Starting an Amazon RDS DB instance That Was Previously
 // Stopped (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StartInstance.html)
 // in the Amazon RDS User Guide. This command doesn't apply to RDS Custom, Aurora
@@ -60,12 +61,22 @@ type StartDBInstanceOutput struct {
 }
 
 func (c *Client) addOperationStartDBInstanceMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpStartDBInstance{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpStartDBInstance{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "StartDBInstance"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -86,9 +97,6 @@ func (c *Client) addOperationStartDBInstanceMiddlewares(stack *middleware.Stack,
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -102,6 +110,9 @@ func (c *Client) addOperationStartDBInstanceMiddlewares(stack *middleware.Stack,
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpStartDBInstanceValidationMiddleware(stack); err != nil {
@@ -122,6 +133,9 @@ func (c *Client) addOperationStartDBInstanceMiddlewares(stack *middleware.Stack,
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -129,7 +143,6 @@ func newServiceMetadataMiddleware_opStartDBInstance(region string) *awsmiddlewar
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "StartDBInstance",
 	}
 }

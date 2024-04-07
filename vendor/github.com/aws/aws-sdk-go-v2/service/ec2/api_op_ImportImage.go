@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -42,7 +43,9 @@ type ImportImageInput struct {
 	// The architecture of the virtual machine. Valid values: i386 | x86_64
 	Architecture *string
 
-	// The boot mode of the virtual machine.
+	// The boot mode of the virtual machine. The uefi-preferred boot mode isn't
+	// supported for importing images. For more information, see Boot modes (https://docs.aws.amazon.com/vm-import/latest/userguide/prerequisites.html#vmimport-boot-modes)
+	// in the VM Import/Export User Guide.
 	BootMode types.BootModeValues
 
 	// The client-specific data.
@@ -185,12 +188,22 @@ type ImportImageOutput struct {
 }
 
 func (c *Client) addOperationImportImageMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpImportImage{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpImportImage{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ImportImage"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -211,9 +224,6 @@ func (c *Client) addOperationImportImageMiddlewares(stack *middleware.Stack, opt
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -227,6 +237,9 @@ func (c *Client) addOperationImportImageMiddlewares(stack *middleware.Stack, opt
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opImportImage(options.Region), middleware.Before); err != nil {
@@ -244,6 +257,9 @@ func (c *Client) addOperationImportImageMiddlewares(stack *middleware.Stack, opt
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -251,7 +267,6 @@ func newServiceMetadataMiddleware_opImportImage(region string) *awsmiddleware.Re
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "ImportImage",
 	}
 }

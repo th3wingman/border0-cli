@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -53,9 +54,8 @@ type ModifyCertificatesInput struct {
 	// DescribeCertificates API operation.
 	CertificateIdentifier *string
 
-	// A value that indicates whether to remove the override for the default
-	// certificate. If the override is removed, the default certificate is the system
-	// default.
+	// Specifies whether to remove the override for the default certificate. If the
+	// override is removed, the default certificate is the system default.
 	RemoveCustomerOverride *bool
 
 	noSmithyDocumentSerde
@@ -77,12 +77,22 @@ type ModifyCertificatesOutput struct {
 }
 
 func (c *Client) addOperationModifyCertificatesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpModifyCertificates{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpModifyCertificates{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyCertificates"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -103,9 +113,6 @@ func (c *Client) addOperationModifyCertificatesMiddlewares(stack *middleware.Sta
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -119,6 +126,9 @@ func (c *Client) addOperationModifyCertificatesMiddlewares(stack *middleware.Sta
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opModifyCertificates(options.Region), middleware.Before); err != nil {
@@ -136,6 +146,9 @@ func (c *Client) addOperationModifyCertificatesMiddlewares(stack *middleware.Sta
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -143,7 +156,6 @@ func newServiceMetadataMiddleware_opModifyCertificates(region string) *awsmiddle
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ModifyCertificates",
 	}
 }

@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -41,10 +42,10 @@ type CancelExportTaskInput struct {
 }
 
 // Contains the details of a snapshot or cluster export to Amazon S3. This data
-// type is used as a response element in the DescribeExportTasks action.
+// type is used as a response element in the DescribeExportTasks operation.
 type CancelExportTaskOutput struct {
 
-	// The data exported from the snapshot or cluster. Valid values are the following:
+	// The data exported from the snapshot or cluster. Valid Values:
 	//   - database - Export all the data from a specified database.
 	//   - database.table table-name - Export a table of the snapshot or cluster. This
 	//   format is valid only for RDS for MySQL, RDS for MariaDB, and Aurora MySQL.
@@ -73,15 +74,15 @@ type CancelExportTaskOutput struct {
 	KmsKeyId *string
 
 	// The progress of the snapshot or cluster export task as a percentage.
-	PercentProgress int32
+	PercentProgress *int32
 
-	// The Amazon S3 bucket that the snapshot or cluster is exported to.
+	// The Amazon S3 bucket where the snapshot or cluster is exported to.
 	S3Bucket *string
 
 	// The Amazon S3 bucket prefix that is the file name and path of the exported data.
 	S3Prefix *string
 
-	// The time that the snapshot was created.
+	// The time when the snapshot was created.
 	SnapshotTime *time.Time
 
 	// The Amazon Resource Name (ARN) of the snapshot or cluster exported to Amazon S3.
@@ -99,14 +100,14 @@ type CancelExportTaskOutput struct {
 	//   - STARTING
 	Status *string
 
-	// The time that the snapshot or cluster export task ended.
+	// The time when the snapshot or cluster export task ended.
 	TaskEndTime *time.Time
 
-	// The time that the snapshot or cluster export task started.
+	// The time when the snapshot or cluster export task started.
 	TaskStartTime *time.Time
 
 	// The total amount of data exported, in gigabytes.
-	TotalExtractedDataInGB int32
+	TotalExtractedDataInGB *int32
 
 	// A warning about the snapshot or cluster export task.
 	WarningMessage *string
@@ -118,12 +119,22 @@ type CancelExportTaskOutput struct {
 }
 
 func (c *Client) addOperationCancelExportTaskMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCancelExportTask{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpCancelExportTask{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CancelExportTask"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -144,9 +155,6 @@ func (c *Client) addOperationCancelExportTaskMiddlewares(stack *middleware.Stack
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -160,6 +168,9 @@ func (c *Client) addOperationCancelExportTaskMiddlewares(stack *middleware.Stack
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCancelExportTaskValidationMiddleware(stack); err != nil {
@@ -180,6 +191,9 @@ func (c *Client) addOperationCancelExportTaskMiddlewares(stack *middleware.Stack
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -187,7 +201,6 @@ func newServiceMetadataMiddleware_opCancelExportTask(region string) *awsmiddlewa
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "CancelExportTask",
 	}
 }

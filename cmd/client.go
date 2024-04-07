@@ -23,7 +23,9 @@ import (
 
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/cmd/client/db"
-	clientTls "github.com/borderzero/border0-cli/cmd/client/tls"
+	"github.com/borderzero/border0-cli/cmd/client/rdp"
+	"github.com/borderzero/border0-cli/cmd/client/tcp"
+	"github.com/borderzero/border0-cli/cmd/client/vnc"
 	"github.com/borderzero/border0-cli/cmd/logger"
 
 	"github.com/borderzero/border0-cli/cmd/client/hosts"
@@ -50,7 +52,7 @@ var clientCertFetchCmd = &cobra.Command{
 	Short: "Fetch Client certificate",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if crtPath, keyPath, ok := client.IsClientCertValid(); !ok {
-			crtPath, keyPath, err := client.FetchCertAndReturnPaths(logger.Logger, hostname)
+			crtPath, keyPath, _, err := client.FetchCertAndReturnPaths(logger.Logger, hostname)
 			if err != nil {
 				return err
 			}
@@ -118,12 +120,12 @@ var clientLoginStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check login status, see if token is still valid",
 	Run: func(cmd *cobra.Command, args []string) {
-		valid, _, email, err := client.IsExistingClientTokenValid("")
+		valid, _, identity, err := client.IsExistingClientTokenValid("")
 		if !valid {
 			fmt.Println(err)
 			fmt.Println("Please login again: border0 client login")
 		} else {
-			fmt.Println("Token Valid, logged in as " + email)
+			fmt.Println("Token Valid, logged in as " + identity)
 		}
 	},
 }
@@ -139,13 +141,14 @@ func init() {
 	clientCmd.AddCommand(clientLoginCmd)
 	clientLoginCmd.Flags().StringVarP(&orgID, "org", "", "", "The border0 organization domain name (without .border0.io)")
 	clientLoginCmd.Flags().IntVarP(&port, "port", "p", 0, "Port number")
-
 	clientLoginCmd.AddCommand(clientLoginStatusCmd)
 
 	db.AddCommandsTo(clientCmd)
 	hosts.AddCommandsTo(clientCmd)
 	ssh.AddCommandsTo(clientCmd)
-	clientTls.AddCommandsTo(clientCmd)
+	tcp.AddCommandsTo(clientCmd)
+	rdp.AddCommandsTo(clientCmd)
+	vnc.AddCommandsTo(clientCmd)
 	vpn.AddCommandsTo(clientCmd)
 	httpproxy.AddCommandsTo(clientCmd)
 }

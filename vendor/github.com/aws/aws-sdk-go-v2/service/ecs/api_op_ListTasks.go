@@ -15,8 +15,7 @@ import (
 // Returns a list of tasks. You can filter the results by cluster, task definition
 // family, container instance, launch type, what IAM principal started the task, or
 // by the desired status of the task. Recently stopped tasks might appear in the
-// returned results. Currently, stopped tasks appear in the returned results for at
-// least one hour.
+// returned results.
 func (c *Client) ListTasks(ctx context.Context, params *ListTasksInput, optFns ...func(*Options)) (*ListTasksOutput, error) {
 	if params == nil {
 		params = &ListTasksInput{}
@@ -109,12 +108,22 @@ type ListTasksOutput struct {
 }
 
 func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpListTasks{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsjson11_deserializeOpListTasks{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ListTasks"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -135,9 +144,6 @@ func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, optio
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -153,6 +159,9 @@ func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, optio
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListTasks(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -166,6 +175,9 @@ func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, optio
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -270,7 +282,6 @@ func newServiceMetadataMiddleware_opListTasks(region string) *awsmiddleware.Regi
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ecs",
 		OperationName: "ListTasks",
 	}
 }

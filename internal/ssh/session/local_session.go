@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
 	"github.com/borderzero/border0-cli/internal/ssh/server"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	gliderlabs_ssh "github.com/gliderlabs/ssh"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
@@ -24,11 +28,14 @@ type localSessionHandler struct {
 	config *config.ProxyConfig
 }
 
+// ensure localSessionHandler implements SessionHandler.
+var _ SessionHandler = (*localSessionHandler)(nil)
+
 type localSession struct {
-	logger             *zap.Logger
 	config             *config.ProxyConfig
-	sessionKey         *string
-	userEmail          *string
+	metadata           *border0.E2EEncryptionMetadata
+	sshServerConfig    *ssh.ServerConfig
+	logger             *zap.Logger
 	username           string
 	downstreamSshConn  *ssh.ServerConn
 	downstreamSshChans <-chan ssh.NewChannel
@@ -45,7 +52,7 @@ type localChannel struct {
 	winch             chan gliderlabs_ssh.Window
 }
 
-func NewLocalSession(logger *zap.Logger, config *config.ProxyConfig) *localSessionHandler {
+func NewLocalSessionHandler(logger *zap.Logger, config *config.ProxyConfig) *localSessionHandler {
 	return &localSessionHandler{
 		config: config,
 		logger: logger,
@@ -55,38 +62,62 @@ func NewLocalSession(logger *zap.Logger, config *config.ProxyConfig) *localSessi
 func (s *localSessionHandler) Proxy(conn net.Conn) {
 	defer conn.Close()
 
-	sshConn, chans, reqs, sessionKey, userEmail, err := newSSHServerConn(conn, s.config)
-	if err != nil {
-		s.logger.Error("failed to accept ssh connection", zap.Error(err))
-		return
+	session := &localSession{
+		logger:          s.logger,
+		config:          s.config,
+		sshServerConfig: s.config.SshServerConfig,
 	}
 
-	session := &localSession{
-		config:             s.config,
-		logger:             s.logger,
-		downstreamSshConn:  sshConn,
-		downstreamSshChans: chans,
-		downstreamSshReqs:  reqs,
+	if s.config.EndToEndEncryption {
+		e2EEncryptionConn, ok := conn.(border0.E2EEncryptionConn)
+		if !ok {
+			conn.Close()
+			s.logger.Error("failed to cast connection to e2eencryption")
+			return
+		}
+
+		if e2EEncryptionConn.Metadata == nil {
+			s.logger.Error("invalid e2e metadata")
+			return
+		}
+
+		session.metadata = e2EEncryptionConn.Metadata
+		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.config.OrgSshCA,
+			s.config.Border0API,
+			s.config.Socket,
+			e2EEncryptionConn.Metadata,
+		)
+	}
+
+	var err error
+	session.downstreamSshConn, session.downstreamSshChans, session.downstreamSshReqs, err = ssh.NewServerConn(conn, session.config.SshServerConfig)
+	if err != nil {
+		session.logger.Error("failed to accept ssh connection", zap.Error(err))
+		return
 	}
 
 	if s.config.Username != "" {
 		session.username = s.config.Username
 	} else {
-		session.username = sshConn.User()
+		session.username = session.downstreamSshConn.User()
 	}
 
-	if sessionKey != nil {
-		session.sessionKey = sessionKey
-		session.logger = session.logger.With(zap.String("session_key", *sessionKey))
-	}
-
-	if userEmail != nil {
-		session.userEmail = userEmail
+	if session.config.EndToEndEncryption {
+		if err := session.config.Border0API.UpdateSession(models.SessionUpdate{
+			SessionKey: session.metadata.SessionKey,
+			Socket:     session.config.Socket,
+			UserData:   ",sshuser=" + session.username,
+		}); err != nil {
+			session.logger.Error("failed to update session", zap.Error(err))
+			return
+		}
 	}
 
 	// we don't support global requests (yet)
 	// so we can disregard the reqs channel
-	go ssh.DiscardRequests(reqs)
+	go ssh.DiscardRequests(session.downstreamSshReqs)
 	if err := session.handleChannels(); err != nil {
 		s.logger.Error("failed to handle channels", zap.Error(err))
 		return
@@ -101,8 +132,8 @@ func (s *localSession) handleChannels() error {
 
 	for {
 		select {
-		case newChannel := <-s.downstreamSshChans:
-			if newChannel == nil {
+		case newChannel, ok := <-s.downstreamSshChans:
+			if !ok {
 				return nil
 			}
 
@@ -201,12 +232,12 @@ func (s *localSession) handleSessionChannel(ctx context.Context, newChannel ssh.
 				return
 			}
 
-			channel.handleRequest(req)
+			channel.handleRequest(ctx, req)
 		}
 	}
 }
 
-func (s *localChannel) handleRequest(req *ssh.Request) {
+func (s *localChannel) handleRequest(ctx context.Context, req *ssh.Request) {
 	switch req.Type {
 	case "env":
 		var env struct{ Key, Value string }
@@ -231,7 +262,7 @@ func (s *localChannel) handleRequest(req *ssh.Request) {
 		}
 
 		s.ptyTerm = string(req.Payload[4 : 4+length])
-		w, h := parseDims(req.Payload[length+4:])
+		w, h := common.ParseDims(req.Payload[length+4:])
 		s.window.Width = int(w)
 		s.window.Height = int(h)
 		s.winch = make(chan gliderlabs_ssh.Window, 1)
@@ -244,7 +275,7 @@ func (s *localChannel) handleRequest(req *ssh.Request) {
 			return
 		}
 
-		w, h := parseDims(req.Payload)
+		w, h := common.ParseDims(req.Payload)
 		s.window.Width = int(w)
 		s.window.Height = int(h)
 		s.winch <- s.window
@@ -259,7 +290,7 @@ func (s *localChannel) handleRequest(req *ssh.Request) {
 			req.Reply(false, nil)
 		}
 	case "exec", "shell":
-		go s.handleExec(req)
+		go s.handleExec(ctx, req)
 	default:
 		s.logger.Error("unknown request type", zap.String("request_type", req.Type))
 		req.Reply(false, nil)
@@ -279,7 +310,7 @@ func (c *localChannel) handleSftp(req *ssh.Request) {
 	if c.config.IsRecordingEnabled() {
 		pr, pw := io.Pipe()
 
-		r := NewRecording(c.logger, pr, *c.sessionKey, c.config.Border0API, c.window.Width, c.window.Height)
+		r := common.NewRecording(c.logger, pr, c.config.Socket.SocketID, c.metadata.SessionKey, c.config.Border0API, c.window.Width, c.window.Height)
 		if err := r.Record(); err != nil {
 			c.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -298,7 +329,7 @@ func (c *localChannel) handleSftp(req *ssh.Request) {
 	closeChannel(c.downstreamChannel, err)
 }
 
-func (c *localChannel) handleExec(req *ssh.Request) {
+func (c *localChannel) handleExec(ctx context.Context, req *ssh.Request) {
 	defer c.downstreamChannel.Close()
 
 	if req.WantReply {
@@ -316,7 +347,7 @@ func (c *localChannel) handleExec(req *ssh.Request) {
 		pwc := NewPipeWriteChannel(c.downstreamChannel)
 		c.downstreamChannel = pwc
 
-		r := NewRecording(c.logger, pwc.reader, *c.sessionKey, c.config.Border0API, c.window.Width, c.window.Height)
+		r := common.NewRecording(c.logger, pwc.reader, c.config.Socket.SocketID, c.metadata.SessionKey, c.config.Border0API, c.window.Width, c.window.Height)
 		if err := r.Record(); err != nil {
 			c.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -345,7 +376,7 @@ func (c *localChannel) handleExec(req *ssh.Request) {
 	cmd.Path = shell
 	cmd.Args = []string{shell}
 
-	c.logger.Info("new ssh session for", zap.String("user", *c.userEmail), zap.String("sshuser", c.username))
+	c.logger.Info("new ssh session for", zap.String("user", c.metadata.UserEmail), zap.String("sshuser", c.username))
 
 	uid, _ := strconv.ParseUint(user.Uid, 10, 32)
 	gid, _ := strconv.ParseUint(user.Gid, 10, 32)
@@ -355,6 +386,7 @@ func (c *localChannel) handleExec(req *ssh.Request) {
 		"HOME=" + user.HomeDir,
 		"USER=" + user.Username,
 		"SHELL=" + shell,
+		"PATH=" + os.Getenv("PATH"),
 	}
 
 	cmd.Env = append(cmd.Env, c.env...)
@@ -366,7 +398,7 @@ func (c *localChannel) handleExec(req *ssh.Request) {
 		}
 	}()
 
-	exitStatus := server.ExecCmd(c.downstreamChannel, command, c.ptyTerm, c.pty, c.winch, cmd, uid, gid, c.username)
+	exitStatus := server.ExecCmd(ctx, c.downstreamChannel, command, c.ptyTerm, c.pty, c.winch, cmd, uid, gid, c.username)
 	status := struct{ Status uint32 }{Status: uint32(exitStatus)}
 	c.downstreamChannel.SendRequest("exit-status", false, ssh.Marshal(&status))
 }

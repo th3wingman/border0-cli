@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
+	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/jedib0t/go-pretty/table"
@@ -33,8 +34,6 @@ import (
 const domainSuffix = "border0.io"
 
 var (
-	version                 string
-	date                    string
 	email                   string
 	mfaCode                 string
 	name                    string
@@ -47,6 +46,8 @@ var (
 	socketID                string
 	tunnelID                string
 	policyName              string
+	policyTestEmail         string
+	policyTestIpAddress     string
 	policyDescription       string
 	policyFile              string
 	identityFile            string //deprecated
@@ -94,14 +95,15 @@ var (
 	vpnSubnet               string   // used in the socket connect vpn command
 	routes                  []string // used in the socket connect vpn command
 	allowedProxyHosts       []string // used in the socket connect proxy command
-
+	azureAD                 bool
+	kerberos                bool
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:          "border0",
 	Short:        "border0 command line interface (CLI)",
-	Version:      version,
+	Version:      internal.Version,
 	SilenceUsage: true,
 }
 
@@ -124,7 +126,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.SetVersionTemplate(fmt.Sprintf("border0:\nversion: %s\ndate: %s\n", version, date))
+	rootCmd.SetVersionTemplate(fmt.Sprintf("border0:\nversion: %s\ndate: %s\n", internal.Version, internal.Date))
 }
 
 func splitLongLines(b string, maxLength int) string {

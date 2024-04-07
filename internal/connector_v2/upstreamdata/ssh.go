@@ -17,6 +17,8 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshService(s *models.Socket, c
 	switch config.SshServiceType {
 	case service.SshServiceTypeAwsEc2InstanceConnect:
 		return u.buildUpstreamDataForSshServiceAwsEc2Ic(s, config.AwsEc2ICSshServiceConfiguration)
+	case service.SshServiceTypeKubectlExec:
+		return u.buildUpstreamDataForSshServiceKubectlExec(s, config.KubectlExecSshServiceConfiguration)
 	case service.SshServiceTypeAwsSsm:
 		return u.buildUpstreamDataForSshServiceAwsSsm(s, config.AwsSsmSshServiceConfiguration)
 	case service.SshServiceTypeConnectorBuiltIn:
@@ -50,6 +52,37 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsEc2Ic(s *models.S
 		return fmt.Errorf("username provider \"%s\" is not supported", config.UsernameProvider)
 	}
 	return nil
+}
+
+func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceKubectlExec(s *models.Socket, config *service.KubectlExecSshServiceConfiguration) error {
+	if config == nil {
+		return fmt.Errorf("got kubectl exec ssh service with no kubectl exec ssh service configuration")
+	}
+
+	s.ConnectorLocalData.IsKubectlExec = true
+	s.ConnectorLocalData.K8sNamespaceAllowlist = config.NamespaceAllowlist
+	s.ConnectorLocalData.K8sNamespaceSelectorsAllowlist = config.NamespaceSelectorsAllowlist
+
+	switch config.KubectlExecTargetType {
+	case service.KubectlExecTargetTypeAwsEks:
+		if config.AwsEksKubectlExecTargetConfiguration == nil {
+			return errors.New("got a kubectl exec ssh service with an aws eks target but had empty eks target configuration")
+		}
+		s.ConnectorLocalData.IsAwsEks = true
+		s.ConnectorLocalData.AwsEksCluster = config.AwsEksKubectlExecTargetConfiguration.EksClusterName
+		s.AWSRegion = config.AwsEksKubectlExecTargetConfiguration.EksClusterRegion
+		s.ConnectorLocalData.AwsCredentials = config.AwsEksKubectlExecTargetConfiguration.AwsCredentials
+		return nil
+	case service.KubectlExecTargetTypeStandard:
+		// note: config.StandardKubectlExecTargetConfiguration may be nil
+		if config.StandardKubectlExecTargetConfiguration != nil {
+			s.ConnectorLocalData.K8sMasterUrl = config.StandardKubectlExecTargetConfiguration.MasterUrl
+			s.ConnectorLocalData.K8sKubeconfigPath = config.StandardKubectlExecTargetConfiguration.KubeconfigPath
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported kubectl exec target type: %s", config.KubectlExecTargetType)
+	}
 }
 
 func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsSsm(s *models.Socket, config *service.AwsSsmSshServiceConfiguration) error {

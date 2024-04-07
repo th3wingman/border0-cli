@@ -3,6 +3,7 @@ package sqlclientproxy
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -23,30 +24,44 @@ type postgresClientProxy struct {
 	upstreamConfig *pgconn.Config
 }
 
-func newPostgresClientProxy(logger *zap.Logger, port int, resource models.ClientResource) (*postgresClientProxy, error) {
+func newPostgresClientProxy(logger *zap.Logger, port int, resource models.ClientResource, useWsProxy bool) (*postgresClientProxy, error) {
 	info, err := client.GetResourceInfo(logger, resource.Hostname())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource info")
 	}
 
-	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{info.SetupTLSCertificate()},
-		InsecureSkipVerify: true,
+	systemCertPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system cert pool: %v", err.Error())
 	}
 
-	upstreamConfig, err := pgconn.ParseConfig(fmt.Sprintf("postgres://%s:%d/", resource.Hostname(), info.Port))
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{info.SetupTLSCertificate()},
+		RootCAs:      systemCertPool,
+		ServerName:   resource.Hostname(),
+	}
+
+	var sslmode string
+	if info.EndToEndEncryptionEnabled {
+		sslmode = "?sslmode=disable"
+	}
+
+	upstreamConfig, err := pgconn.ParseConfig(fmt.Sprintf("postgres://%s:%d/%s", resource.Hostname(), info.Port, sslmode))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse upstream config: %s", err)
 	}
 
-	upstreamConfig.TLSConfig = tlsConfig
+	if !info.EndToEndEncryptionEnabled {
+		upstreamConfig.TLSConfig = tlsConfig
+	}
 
 	return &postgresClientProxy{
 		sqlClientProxy: sqlClientProxy{
-			port:      port,
-			info:      info,
-			resource:  resource,
-			tlsConfig: tlsConfig,
+			port:       port,
+			info:       info,
+			resource:   resource,
+			tlsConfig:  tlsConfig,
+			useWsProxy: useWsProxy,
 		},
 		upstreamConfig: upstreamConfig,
 	}, nil
@@ -169,11 +184,7 @@ func (p *postgresClientProxy) handleClientStartup(c *pgproto3.Backend, conn net.
 }
 
 func (p *postgresClientProxy) Dialer(ctx context.Context, network, addr string) (net.Conn, error) {
-	if p.info.ConnectorAuthenticationEnabled {
-		return client.ConnectorAuthConnect(addr, p.tlsConfig)
-	} else {
-		return net.DialTimeout("tcp", addr, 5*time.Second)
-	}
+	return client.Connect(addr, false, p.tlsConfig, p.tlsConfig.Certificates[0], p.info.CaCertificate, p.info.ConnectorAuthenticationEnabled, p.info.EndToEndEncryptionEnabled, p.useWsProxy)
 }
 
 func (p *postgresClientProxy) handleClientAuthRequest(serverSession *pgproto3.Backend, serverParams map[string]string) error {

@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -11,8 +12,9 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Describes the VPCs on the other side of a VPC peering connection that are
-// referencing the security groups you've specified in this request.
+// Describes the VPCs on the other side of a VPC peering connection or the VPCs
+// attached to a transit gateway that are referencing the security groups you've
+// specified in this request.
 func (c *Client) DescribeSecurityGroupReferences(ctx context.Context, params *DescribeSecurityGroupReferencesInput, optFns ...func(*Options)) (*DescribeSecurityGroupReferencesOutput, error) {
 	if params == nil {
 		params = &DescribeSecurityGroupReferencesInput{}
@@ -56,12 +58,22 @@ type DescribeSecurityGroupReferencesOutput struct {
 }
 
 func (c *Client) addOperationDescribeSecurityGroupReferencesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeSecurityGroupReferences{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeSecurityGroupReferences{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeSecurityGroupReferences"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -82,9 +94,6 @@ func (c *Client) addOperationDescribeSecurityGroupReferencesMiddlewares(stack *m
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -98,6 +107,9 @@ func (c *Client) addOperationDescribeSecurityGroupReferencesMiddlewares(stack *m
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDescribeSecurityGroupReferencesValidationMiddleware(stack); err != nil {
@@ -118,6 +130,9 @@ func (c *Client) addOperationDescribeSecurityGroupReferencesMiddlewares(stack *m
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -125,7 +140,6 @@ func newServiceMetadataMiddleware_opDescribeSecurityGroupReferences(region strin
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeSecurityGroupReferences",
 	}
 }

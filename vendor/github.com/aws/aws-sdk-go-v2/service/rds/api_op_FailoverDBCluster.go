@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -44,9 +45,9 @@ func (c *Client) FailoverDBCluster(ctx context.Context, params *FailoverDBCluste
 
 type FailoverDBClusterInput struct {
 
-	// A DB cluster identifier to force a failover for. This parameter isn't
+	// The identifier of the DB cluster to force a failover for. This parameter isn't
 	// case-sensitive. Constraints:
-	//   - Must match the identifier of an existing DBCluster.
+	//   - Must match the identifier of an existing DB cluster.
 	//
 	// This member is required.
 	DBClusterIdentifier *string
@@ -85,12 +86,22 @@ type FailoverDBClusterOutput struct {
 }
 
 func (c *Client) addOperationFailoverDBClusterMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpFailoverDBCluster{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpFailoverDBCluster{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "FailoverDBCluster"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -111,9 +122,6 @@ func (c *Client) addOperationFailoverDBClusterMiddlewares(stack *middleware.Stac
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -127,6 +135,9 @@ func (c *Client) addOperationFailoverDBClusterMiddlewares(stack *middleware.Stac
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpFailoverDBClusterValidationMiddleware(stack); err != nil {
@@ -147,6 +158,9 @@ func (c *Client) addOperationFailoverDBClusterMiddlewares(stack *middleware.Stac
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -154,7 +168,6 @@ func newServiceMetadataMiddleware_opFailoverDBCluster(region string) *awsmiddlew
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "FailoverDBCluster",
 	}
 }

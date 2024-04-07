@@ -61,8 +61,8 @@ type DescribeSpotPriceHistoryInput struct {
 	//   - spot-price - The Spot price. The value must match exactly (or use wildcards;
 	//   greater than or less than comparison is not supported).
 	//   - timestamp - The time stamp of the Spot price history, in UTC format (for
-	//   example, YYYY-MM-DDTHH:MM:SSZ). You can use wildcards (* and ?). Greater than or
-	//   less than comparison is not supported.
+	//   example, ddd MMM dd HH:mm:ss UTC YYYY). You can use wildcards ( * and ? ).
+	//   Greater than or less than comparison is not supported.
 	Filters []types.Filter
 
 	// Filters the results by the specified instance types.
@@ -105,12 +105,22 @@ type DescribeSpotPriceHistoryOutput struct {
 }
 
 func (c *Client) addOperationDescribeSpotPriceHistoryMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeSpotPriceHistory{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeSpotPriceHistory{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeSpotPriceHistory"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -131,9 +141,6 @@ func (c *Client) addOperationDescribeSpotPriceHistoryMiddlewares(stack *middlewa
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -149,6 +156,9 @@ func (c *Client) addOperationDescribeSpotPriceHistoryMiddlewares(stack *middlewa
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeSpotPriceHistory(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -162,6 +172,9 @@ func (c *Client) addOperationDescribeSpotPriceHistoryMiddlewares(stack *middlewa
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -266,7 +279,6 @@ func newServiceMetadataMiddleware_opDescribeSpotPriceHistory(region string) *aws
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeSpotPriceHistory",
 	}
 }

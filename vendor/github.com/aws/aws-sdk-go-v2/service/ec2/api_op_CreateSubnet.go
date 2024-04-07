@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -21,13 +22,12 @@ import (
 // and a /16 netmask (65,536 IP addresses). Amazon Web Services reserves both the
 // first four and the last IPv4 address in each subnet's CIDR block. They're not
 // available for your use. If you've associated an IPv6 CIDR block with your VPC,
-// you can associate an IPv6 CIDR block with a subnet when you create it. The
-// allowed block size for an IPv6 subnet is a /64 netmask. If you add more than one
-// subnet to a VPC, they're set up in a star topology with a logical router in the
-// middle. When you stop an instance in a subnet, it retains its private IPv4
-// address. It's therefore possible to have a subnet with no running instances
-// (they're all stopped), but no remaining IP addresses available. For more
-// information, see Subnets (https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html)
+// you can associate an IPv6 CIDR block with a subnet when you create it. If you
+// add more than one subnet to a VPC, they're set up in a star topology with a
+// logical router in the middle. When you stop an instance in a subnet, it retains
+// its private IPv4 address. It's therefore possible to have a subnet with no
+// running instances (they're all stopped), but no remaining IP addresses
+// available. For more information, see Subnets (https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html)
 // in the Amazon VPC User Guide.
 func (c *Client) CreateSubnet(ctx context.Context, params *CreateSubnetInput, optFns ...func(*Options)) (*CreateSubnetOutput, error) {
 	if params == nil {
@@ -76,12 +76,24 @@ type CreateSubnetInput struct {
 	// UnauthorizedOperation .
 	DryRun *bool
 
-	// The IPv6 network range for the subnet, in CIDR notation. The subnet size must
-	// use a /64 prefix length. This parameter is required for an IPv6 only subnet.
+	// An IPv4 IPAM pool ID for the subnet.
+	Ipv4IpamPoolId *string
+
+	// An IPv4 netmask length for the subnet.
+	Ipv4NetmaskLength *int32
+
+	// The IPv6 network range for the subnet, in CIDR notation. This parameter is
+	// required for an IPv6 only subnet.
 	Ipv6CidrBlock *string
+
+	// An IPv6 IPAM pool ID for the subnet.
+	Ipv6IpamPoolId *string
 
 	// Indicates whether to create an IPv6 only subnet.
 	Ipv6Native *bool
+
+	// An IPv6 netmask length for the subnet.
+	Ipv6NetmaskLength *int32
 
 	// The Amazon Resource Name (ARN) of the Outpost. If you specify an Outpost ARN,
 	// you must also specify the Availability Zone of the Outpost subnet.
@@ -105,12 +117,22 @@ type CreateSubnetOutput struct {
 }
 
 func (c *Client) addOperationCreateSubnetMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateSubnet{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpCreateSubnet{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateSubnet"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -131,9 +153,6 @@ func (c *Client) addOperationCreateSubnetMiddlewares(stack *middleware.Stack, op
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -147,6 +166,9 @@ func (c *Client) addOperationCreateSubnetMiddlewares(stack *middleware.Stack, op
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpCreateSubnetValidationMiddleware(stack); err != nil {
@@ -167,6 +189,9 @@ func (c *Client) addOperationCreateSubnetMiddlewares(stack *middleware.Stack, op
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -174,7 +199,6 @@ func newServiceMetadataMiddleware_opCreateSubnet(region string) *awsmiddleware.R
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "CreateSubnet",
 	}
 }

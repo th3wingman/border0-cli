@@ -67,12 +67,22 @@ type DescribeTransitGatewayRouteTableAnnouncementsOutput struct {
 }
 
 func (c *Client) addOperationDescribeTransitGatewayRouteTableAnnouncementsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeTransitGatewayRouteTableAnnouncements{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeTransitGatewayRouteTableAnnouncements{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeTransitGatewayRouteTableAnnouncements"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -93,9 +103,6 @@ func (c *Client) addOperationDescribeTransitGatewayRouteTableAnnouncementsMiddle
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -111,6 +118,9 @@ func (c *Client) addOperationDescribeTransitGatewayRouteTableAnnouncementsMiddle
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeTransitGatewayRouteTableAnnouncements(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -124,6 +134,9 @@ func (c *Client) addOperationDescribeTransitGatewayRouteTableAnnouncementsMiddle
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -227,7 +240,6 @@ func newServiceMetadataMiddleware_opDescribeTransitGatewayRouteTableAnnouncement
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeTransitGatewayRouteTableAnnouncements",
 	}
 }

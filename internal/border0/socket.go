@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/cenkalti/backoff/v4"
@@ -53,14 +55,15 @@ type Border0API interface {
 	Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) ([]string, map[string][]string, error)
 	UpdateSession(updates models.SessionUpdate) error
 	SignSshOrgCertificate(ctx context.Context, socketID, sessionID, userEmail string, ticket []byte, publicKey []byte) ([]byte, error)
-	UploadRecording(content []byte, sessionKey, recordingID string) error
+	UploadRecording(content []byte, socketID, sessionKey, recordingID string) error
 }
 
 type E2EEncryptionMetadata struct {
-	ClientIP   string `json:"client_ip"`
-	UserEmail  string `json:"user_email"`
-	SessionKey string `json:"session_key"`
-	SshTicket  []byte `json:"ssh_ticket,omitempty"`
+	ClientIP       string   `json:"client_ip"`
+	UserEmail      string   `json:"user_email"`
+	SessionKey     string   `json:"session_key"`
+	SshTicket      []byte   `json:"ssh_ticket,omitempty"`
+	AllowedActions []string `json:"allowed_actions,omitempty"`
 }
 
 type E2EEncryptionConn struct {
@@ -94,6 +97,7 @@ type Socket struct {
 	RecordingEnabled                 bool
 	ConfigHash                       string
 	logger                           *zap.Logger
+	certificate                      *tls.Certificate
 }
 
 type connWithError struct {
@@ -129,7 +133,7 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string, logger 
 		return nil, err
 	}
 
-	sckContext, sckCancel := context.WithCancel(context.Background())
+	sckContext, sckCancel := context.WithCancel(ctx)
 
 	var upstreamUsername string
 	if socketFromApi.UpstreamUsername != nil {
@@ -151,13 +155,18 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string, logger 
 		acceptChan:                     make(chan connWithError),
 		RecordingEnabled:               socketFromApi.RecordingEnabled,
 		logger:                         logger,
+		Socket:                         socketFromApi,
 
 		context: sckContext,
 		cancel:  sckCancel,
 	}, nil
 }
 
-func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socket models.Socket, org *models.Organization, logger *zap.Logger) (*Socket, error) {
+func (s *Socket) GetContext() context.Context {
+	return s.context
+}
+
+func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socket models.Socket, org *models.Organization, logger *zap.Logger, certificate *tls.Certificate) (*Socket, error) {
 	newCtx, cancel := context.WithCancel(context.Background())
 
 	return &Socket{
@@ -175,6 +184,8 @@ func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socke
 		acceptChan:                     make(chan connWithError),
 		Socket:                         &socket,
 		logger:                         logger,
+		certificate:                    certificate,
+		version:                        internal.Version,
 
 		context: newCtx,
 		cancel:  cancel,
@@ -183,6 +194,10 @@ func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socke
 
 func (s *Socket) WithVersion(version string) {
 	s.version = version
+}
+
+func (s *Socket) WithCertificate(certificate *tls.Certificate) {
+	s.certificate = certificate
 }
 
 func (s *Socket) WithProxy(proxyHost string) error {
@@ -249,7 +264,7 @@ func (s *Socket) Listen() (net.Listener, error) {
 				default:
 				}
 				if err == io.EOF {
-					s.logger.Error("listener closed, reconnecting...")
+					s.logger.Info("listener closed, reconnecting...")
 					<-s.readyChan
 					continue
 				} else {
@@ -547,8 +562,14 @@ func (s *Socket) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("no listener")
 	}
 
-	r := <-s.acceptChan
-	return r.conn, r.err
+	for {
+		select {
+		case <-s.context.Done():
+			return nil, s.context.Err()
+		case r := <-s.acceptChan:
+			return r.conn, r.err
+		}
+	}
 }
 
 func (s *Socket) connecorAuthHandshake(conn net.Conn) {
@@ -558,14 +579,12 @@ func (s *Socket) connecorAuthHandshake(conn net.Conn) {
 	tlsConn, err := s.connectorAuthentication(ctx, conn)
 	if err != nil {
 		conn.Close()
-		s.logger.Error("failed to authenticate client", zap.Error(err))
 		s.acceptChan <- connWithError{nil, border0NetError(fmt.Sprintf("failed to authenticate client: %s", err))}
 		return
 	}
 
 	if tlsConn == nil {
 		conn.Close()
-		s.logger.Error("failed to authenticate client")
 		s.acceptChan <- connWithError{nil, border0NetError("failed to authenticate client")}
 		return
 	}
@@ -580,7 +599,7 @@ func (s *Socket) endToEndEncryptionHandshake(conn net.Conn) {
 	md, err := e2EEncryptionMetadata(ctx, conn)
 	if err != nil {
 		conn.Close()
-		s.logger.Error("failed to read metadata from net conn: %s", zap.Error(err))
+		s.logger.Error("failed to read metadata from net conn", zap.Error(err))
 		s.acceptChan <- connWithError{nil, border0NetError(fmt.Sprintf("failed to read metadata from net conn: %s", err))}
 		return
 	}
@@ -588,14 +607,12 @@ func (s *Socket) endToEndEncryptionHandshake(conn net.Conn) {
 	tlsConn, err := s.endToEndEncryptionAuthentication(ctx, conn, md)
 	if err != nil {
 		conn.Close()
-		s.logger.Error("failed to authenticate client", zap.Error(err))
 		s.acceptChan <- connWithError{nil, border0NetError(fmt.Sprintf("failed to authenticate client: %s", err))}
 		return
 	}
 
 	if tlsConn == nil {
 		conn.Close()
-		s.logger.Error("failed to authenticate client")
 		s.acceptChan <- connWithError{nil, border0NetError("failed to authenticate client")}
 		return
 	}
@@ -751,47 +768,52 @@ func (s *Socket) endToEndEncryptionAuthentication(ctx context.Context, conn net.
 		return nil, fmt.Errorf("unauthorized request for user")
 	}
 
-	s.logger.Info("end to end encryption authentication successful", zap.String("user", md.UserEmail), zap.String("clientIP", md.ClientIP))
+	md.AllowedActions = actions
+
 	return tlsConn, nil
 }
 
 func (s *Socket) generateConnectorAuthenticationTLSConfig() (*tls.Config, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate ecdsa key: %s", err)
-	}
+	if s.certificate == nil {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate ecdsa key: %s", err)
+		}
 
-	keyDer, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal ecdsa key: %s", err)
-	}
+		keyDer, err := x509.MarshalECPrivateKey(key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal ecdsa key: %s", err)
+		}
 
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName:   s.SocketID,
-			Organization: []string{connectorAuthenticationCertificateOrg},
-		},
-		IsCA:                  true,
-		NotBefore:             time.Now().Add(-1 * time.Minute),
-		NotAfter:              time.Now().Add(connectorAuthenticationCertificateTTL),
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-		DNSNames:              []string{s.SocketID},
-	}
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName:   s.SocketID,
+				Organization: []string{connectorAuthenticationCertificateOrg},
+			},
+			IsCA:                  true,
+			NotBefore:             time.Now().Add(-1 * time.Minute),
+			NotAfter:              time.Now().Add(connectorAuthenticationCertificateTTL),
+			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+			KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+			BasicConstraintsValid: true,
+			DNSNames:              []string{s.SocketID},
+		}
 
-	certDer, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate: %s", err)
-	}
+		certDer, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create certificate: %s", err)
+		}
 
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDer})
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer})
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDer})
+		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer})
 
-	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate: %s", err)
+		cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create certificate: %s", err)
+		}
+
+		s.certificate = &cert
 	}
 
 	caCertPool := x509.NewCertPool()
@@ -804,7 +826,7 @@ func (s *Socket) generateConnectorAuthenticationTLSConfig() (*tls.Config, error)
 	}
 
 	return &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		Certificates: []tls.Certificate{*s.certificate},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    caCertPool,
 	}, nil
@@ -833,6 +855,9 @@ func Serve(logger *zap.Logger, l net.Listener, hostname string, port int) error 
 	for {
 		rconn, err := l.Accept()
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			return fmt.Errorf("failed to accept connection: %s", err)
 		}
 

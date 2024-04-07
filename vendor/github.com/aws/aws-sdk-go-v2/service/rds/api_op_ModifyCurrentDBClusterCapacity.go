@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/smithy-go/middleware"
@@ -23,8 +24,8 @@ import (
 // with the default TimeoutAction , connections that prevent Aurora Serverless v1
 // from finding a scaling point might be dropped. For more information about
 // scaling points, see Autoscaling for Aurora Serverless v1 (https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless.how-it-works.html#aurora-serverless.how-it-works.auto-scaling)
-// in the Amazon Aurora User Guide. This action only applies to Aurora Serverless
-// v1 DB clusters.
+// in the Amazon Aurora User Guide. This operation only applies to Aurora
+// Serverless v1 DB clusters.
 func (c *Client) ModifyCurrentDBClusterCapacity(ctx context.Context, params *ModifyCurrentDBClusterCapacityInput, optFns ...func(*Options)) (*ModifyCurrentDBClusterCapacityOutput, error) {
 	if params == nil {
 		params = &ModifyCurrentDBClusterCapacityInput{}
@@ -98,12 +99,22 @@ type ModifyCurrentDBClusterCapacityOutput struct {
 }
 
 func (c *Client) addOperationModifyCurrentDBClusterCapacityMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpModifyCurrentDBClusterCapacity{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpModifyCurrentDBClusterCapacity{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyCurrentDBClusterCapacity"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -124,9 +135,6 @@ func (c *Client) addOperationModifyCurrentDBClusterCapacityMiddlewares(stack *mi
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -140,6 +148,9 @@ func (c *Client) addOperationModifyCurrentDBClusterCapacityMiddlewares(stack *mi
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpModifyCurrentDBClusterCapacityValidationMiddleware(stack); err != nil {
@@ -160,6 +171,9 @@ func (c *Client) addOperationModifyCurrentDBClusterCapacityMiddlewares(stack *mi
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -167,7 +181,6 @@ func newServiceMetadataMiddleware_opModifyCurrentDBClusterCapacity(region string
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ModifyCurrentDBClusterCapacity",
 	}
 }

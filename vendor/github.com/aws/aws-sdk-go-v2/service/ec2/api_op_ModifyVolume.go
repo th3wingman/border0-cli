@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -62,11 +63,14 @@ type ModifyVolumeInput struct {
 
 	// The target IOPS rate of the volume. This parameter is valid only for gp3 , io1 ,
 	// and io2 volumes. The following are the supported values for each volume type:
-	//   - gp3 : 3,000-16,000 IOPS
-	//   - io1 : 100-64,000 IOPS
-	//   - io2 : 100-64,000 IOPS
-	// Default: The existing value is retained if you keep the same volume type. If
-	// you change the volume type to io1 , io2 , or gp3 , the default is 3,000.
+	//   - gp3 : 3,000 - 16,000 IOPS
+	//   - io1 : 100 - 64,000 IOPS
+	//   - io2 : 100 - 256,000 IOPS
+	// For io2 volumes, you can achieve up to 256,000 IOPS on instances built on the
+	// Nitro System (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html#ec2-nitro-instances)
+	// . On other instances, you can achieve performance up to 32,000 IOPS. Default:
+	// The existing value is retained if you keep the same volume type. If you change
+	// the volume type to io1 , io2 , or gp3 , the default is 3,000.
 	Iops *int32
 
 	// Specifies whether to enable Amazon EBS Multi-Attach. If you enable
@@ -79,10 +83,11 @@ type ModifyVolumeInput struct {
 	// The target size of the volume, in GiB. The target volume size must be greater
 	// than or equal to the existing size of the volume. The following are the
 	// supported volumes sizes for each volume type:
-	//   - gp2 and gp3 : 1-16,384
-	//   - io1 and io2 : 4-16,384
-	//   - st1 and sc1 : 125-16,384
-	//   - standard : 1-1,024
+	//   - gp2 and gp3 : 1 - 16,384 GiB
+	//   - io1 : 4 - 16,384 GiB
+	//   - io2 : 4 - 65,536 GiB
+	//   - st1 and sc1 : 125 - 16,384 GiB
+	//   - standard : 1 - 1024 GiB
 	// Default: The existing size is retained.
 	Size *int32
 
@@ -113,12 +118,22 @@ type ModifyVolumeOutput struct {
 }
 
 func (c *Client) addOperationModifyVolumeMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyVolume{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpModifyVolume{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyVolume"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -139,9 +154,6 @@ func (c *Client) addOperationModifyVolumeMiddlewares(stack *middleware.Stack, op
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -155,6 +167,9 @@ func (c *Client) addOperationModifyVolumeMiddlewares(stack *middleware.Stack, op
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpModifyVolumeValidationMiddleware(stack); err != nil {
@@ -175,6 +190,9 @@ func (c *Client) addOperationModifyVolumeMiddlewares(stack *middleware.Stack, op
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -182,7 +200,6 @@ func newServiceMetadataMiddleware_opModifyVolume(region string) *awsmiddleware.R
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "ModifyVolume",
 	}
 }

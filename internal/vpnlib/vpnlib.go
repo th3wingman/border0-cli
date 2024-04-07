@@ -4,26 +4,29 @@
 package vpnlib
 
 import (
-	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 
-	"github.com/songgao/water"
+	"go.uber.org/zap"
 )
 
 const (
 	// controlMessageHeaderByteSize is the number of bytes used for the header of the control message.
 	controlMessageHeaderByteSize = 2
-	// headerByteSize is the number of bytes used for the header.
-	headerByteSize = 2
+	// border0HeaderByteSize is the number of bytes used for the header we use in each packet for reconstruction.
+	border0HeaderByteSize = 2
+	// VPN socket MTU size based off header size calculations and compliant with RFC 2460
+	border0MTUSize = "1380"
 )
 
 // ControlMessage represents a message used to tell clients
@@ -32,7 +35,7 @@ type ControlMessage struct {
 	ClientIp   string   `json:"client_ip"`
 	ServerIp   string   `json:"server_ip"`
 	SubnetSize uint8    `json:"subnet_size"`
-	Routes     []string `json:"routes"` // CIDRs
+	Routes     []string `json:"routes,omitempty"` // CIDRs
 }
 
 // Build encodes a control message to ready-to-send bytes.
@@ -84,20 +87,20 @@ func GetControlMessage(conn net.Conn) (*ControlMessage, error) {
 	return ctrlMessage, nil
 }
 
-func GetDefaultGateway() (net.IP, string, error) {
+func GetDefaultGateway(addressFamily int) (net.IP, string, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		return getDefaultGatewayDarwin()
+		return getDefaultGatewayDarwin(addressFamily)
 	case "linux":
-		return getDefaultGatewayLinux()
+		return getDefaultGatewayLinux(addressFamily)
 	case "windows":
-		return getDefaultGatewayWindows()
+		return getDefaultGatewayWindows(addressFamily)
 	default:
 		return nil, "", fmt.Errorf("runtime %s not supported", runtime.GOOS)
 	}
 }
 
-func getDefaultGatewayDarwin() (net.IP, string, error) {
+func getDefaultGatewayDarwin(addressFamily int) (net.IP, string, error) {
 	output, err := exec.Command("netstat", "-nr").Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get default route: %v", err)
@@ -109,7 +112,7 @@ func getDefaultGatewayDarwin() (net.IP, string, error) {
 			fields := strings.Fields(line)
 			if len(fields) >= 4 {
 				ip := net.ParseIP(fields[1])
-				if ip != nil {
+				if ip != nil && ((addressFamily == 4 && ip.To4() != nil) || (addressFamily == 6 && ip.To4() == nil)) {
 					return ip, fields[3], nil
 				}
 			}
@@ -118,7 +121,7 @@ func getDefaultGatewayDarwin() (net.IP, string, error) {
 	return nil, "", fmt.Errorf("default gateway not found")
 }
 
-func getDefaultGatewayLinux() (net.IP, string, error) {
+func getDefaultGatewayLinux(addressFamily int) (net.IP, string, error) {
 	output, err := exec.Command("ip", "route").Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get default route: %v", err)
@@ -139,7 +142,7 @@ func getDefaultGatewayLinux() (net.IP, string, error) {
 	return nil, "", fmt.Errorf("default gateway not found")
 }
 
-func getDefaultGatewayWindows() (net.IP, string, error) {
+func getDefaultGatewayWindows(addressFamily int) (net.IP, string, error) {
 	output, err := exec.Command("cmd", "/C", "route print 0.0.0.0").Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get default route: %v", err)
@@ -147,12 +150,13 @@ func getDefaultGatewayWindows() (net.IP, string, error) {
 
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "0.0.0.0") {
-			fields := strings.Fields(line)
+		trimmedLine := strings.TrimSpace(line) // Remove leading and trailing whitespace
+		if strings.HasPrefix(trimmedLine, "0.0.0.0") {
+			fields := strings.Fields(trimmedLine) // Splits the trimmed line
 			if len(fields) >= 5 {
-				ip := net.ParseIP(fields[3])
+				ip := net.ParseIP(fields[2])
 				if ip != nil {
-					return ip, fields[4], nil
+					return ip, fields[3], nil
 				}
 			}
 		}
@@ -194,14 +198,23 @@ func addRoutesViaGatewayLinux(gateway string, routes []string) error {
 
 func addRoutesViaGatewayWindows(gateway string, routes []string) error {
 	for _, route := range routes {
-		// Convert route in CIDR notation to network and mask.
-		_, ipNet, err := net.ParseCIDR(route)
-		if err != nil {
-			return fmt.Errorf("invalid CIDR notation %s: %v", route, err)
-		}
-		network := ipNet.IP.String()
-		mask := net.IP(ipNet.Mask).String()
+		var network, mask string
 
+		// Check if route is in CIDR notation
+		if _, ipNet, err := net.ParseCIDR(route); err == nil {
+			// CIDR notation
+			network = ipNet.IP.String()
+			mask = net.IP(ipNet.Mask).String()
+		} else if ip := net.ParseIP(route); ip != nil {
+			// Single IP Address
+			network = ip.String()
+			mask = "255.255.255.255" // Subnet mask for a single IP
+		} else {
+			// Invalid input
+			return fmt.Errorf("invalid route (not CIDR or IP) %s: %v", route, err)
+		}
+
+		// Execute the route add command
 		if err := exec.Command("route", "add", network, "mask", mask, gateway).Run(); err != nil {
 			return fmt.Errorf("error adding route %s via gateway %s: %v", route, gateway, err)
 		}
@@ -243,13 +256,22 @@ func deleteRoutesViaGatewayLinux(gateway string, routes []string) error {
 
 func deleteRoutesViaGatewayWindows(gateway string, routes []string) error {
 	for _, route := range routes {
-		// Convert route in CIDR notation to network and mask.
-		_, ipNet, err := net.ParseCIDR(route)
-		if err != nil {
-			return fmt.Errorf("invalid CIDR notation %s: %v", route, err)
+
+		var network, mask string
+
+		// Check if route is in CIDR notation
+		if _, ipNet, err := net.ParseCIDR(route); err == nil {
+			// CIDR notation
+			network = ipNet.IP.String()
+			mask = net.IP(ipNet.Mask).String()
+		} else if ip := net.ParseIP(route); ip != nil {
+			// Single IP Address
+			network = ip.String()
+			mask = "255.255.255.255" // Subnet mask for a single IP
+		} else {
+			// Invalid input
+			return fmt.Errorf("invalid route (not CIDR or IP) %s: %v", route, err)
 		}
-		network := ipNet.IP.String()
-		mask := net.IP(ipNet.Mask).String()
 
 		if err := exec.Command("route", "delete", network, "mask", mask, gateway).Run(); err != nil {
 			return fmt.Errorf("error deleting route %s via gateway %s: %v", route, gateway, err)
@@ -322,7 +344,7 @@ func AddServerIp(iface, localIp string, subnetSize uint8) error {
 }
 
 func AddServerIpDarwin(iface, localIp string, subnetSize uint8) error {
-	if err := exec.Command("ifconfig", iface, "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ifconfig", iface, "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting MTU for interface %s: %v", iface, err)
 	}
 	// calculate p2p ip address from localIP take one digit lower
@@ -343,7 +365,7 @@ func AddServerIpLinux(iface, localIp string, subnetSize uint8) error {
 	if err := exec.Command("ip", "addr", "add", serverIp, "dev", iface).Run(); err != nil {
 		return fmt.Errorf("error adding ip %s to interface %s: %v", localIp, iface, err)
 	}
-	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting link for interface %s: %v", iface, err)
 	}
 	return nil
@@ -357,14 +379,14 @@ func AddIpToIface(iface, localIp, remoteIp string, subnetSize uint8) error {
 	case "linux":
 		return addIpToIfaceLinux(iface, localIp, subnetSize)
 	case "windows":
-		return addIpToIfaceWindows(iface, localIp)
+		return addIpToIfaceWindows(iface, localIp, subnetSize)
 	default:
 		return fmt.Errorf("runtime %s not supported", runtime.GOOS)
 	}
 }
 
 func addIpToIfaceDarwin(iface, localIp, remoteIp string) error {
-	if err := exec.Command("ifconfig", iface, "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ifconfig", iface, "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting MTU for interface %s: %v", iface, err)
 	}
 
@@ -378,224 +400,234 @@ func addIpToIfaceLinux(iface, localIp string, subnetSize uint8) error {
 	if err := exec.Command("ip", "addr", "add", fmt.Sprintf("%s/%d", localIp, subnetSize), "dev", iface).Run(); err != nil {
 		return fmt.Errorf("error adding ip %s to interface %s: %v", localIp, iface, err)
 	}
-	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", "1200").Run(); err != nil {
+	if err := exec.Command("ip", "link", "set", "dev", iface, "up", "mtu", border0MTUSize).Run(); err != nil {
 		return fmt.Errorf("error setting link for interface %s: %v", iface, err)
 	}
 	return nil
 }
 
-func addIpToIfaceWindows(iface, localIp string) error {
-	if err := exec.Command("netsh", "interface", "ip", "set", "address", iface, "static", localIp).Run(); err != nil {
-		return fmt.Errorf("error adding ip %s to interface %s: %v", localIp, iface, err)
+func addIpToIfaceWindows(iface, localIp string, subnetSize uint8) error {
+	// Convert subnet size to subnet mask
+	var subnetMask net.IP = make(net.IP, net.IPv4len)
+	for i := uint8(0); i < subnetSize; i++ {
+		subnetMask[i/8] |= 1 << (7 - i%8)
+	}
+
+	if err := exec.Command("netsh", "interface", "ip", "set", "address", iface, "static", localIp, subnetMask.String()).Run(); err != nil {
+		return fmt.Errorf("error adding IP %s with subnet mask %s to interface %s: %v", localIp, subnetMask.String(), iface, err)
 	}
 	return nil
 }
 
-// GetDnsServers returns a list of all active resolvers used by the system
-func GetDnsServers() ([]string, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		return getDnsDarwin()
-	case "linux":
-		return getDnsLinux()
-	case "windows":
-		return getDnsWindows()
-	default:
-		return nil, fmt.Errorf("runtime %s not supported", runtime.GOOS)
-	}
-}
-
-func getDnsDarwin() ([]string, error) {
-	out, err := exec.Command("scutil", "--dns").Output()
-	if err != nil {
-		return nil, fmt.Errorf("error getting DNS servers: %v", err)
-	}
-
-	var servers []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.Contains(line, "nameserver") {
-			ip := strings.TrimSpace(strings.Split(line, ":")[1])
-			if net.ParseIP(ip) != nil {
-				servers = append(servers, ip)
-			}
-
-		}
-	}
-	return servers, nil
-}
-
-func getDnsLinux() ([]string, error) {
-	file, err := os.Open("/etc/resolv.conf")
-	if err != nil {
-		return nil, fmt.Errorf("error getting DNS servers: %v", err)
-	}
-	defer file.Close()
-
-	var servers []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "nameserver") {
-			ip := strings.TrimSpace(strings.Split(line, " ")[1])
-			if net.ParseIP(ip) != nil {
-				servers = append(servers, ip)
-			}
-
-		}
-	}
-	return servers, nil
-}
-
-func getDnsWindows() ([]string, error) {
-	out, err := exec.Command("powershell", "Get-DnsClientServerAddress", "-AddressFamily", "IPv4").Output()
-	if err != nil {
-		return nil, fmt.Errorf("error getting DNS servers: %v", err)
-	}
-
-	var servers []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.Contains(line, "ServerAddresses") {
-			for _, addr := range strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), ",") {
-				ip := strings.TrimSpace(addr)
-				if net.ParseIP(ip) != nil {
-					servers = append(servers, ip)
-				}
-			}
-		}
-	}
-	return servers, nil
-}
-
-// Start Tun to Conn thread
-
-func TunToConnCopy(iface *water.Interface, cm *ConnectionMap, returnOnErr bool, conn net.Conn) error {
+// TunToConnCopy reads packets and fowards them to the given connection. This
+// function is used by the VPN "clients" and must *not* be used by the server.
+// This function is *not* resilient to errors and will return upon encountering
+// a read/write error or if the context is cancelled.
+func TunToConnCopy(
+	ctx context.Context,
+	logger *zap.Logger,
+	source io.Reader,
+	conn net.Conn,
+) error {
 	packetBufferSize := 9000
 	packetbuffer := make([]byte, packetBufferSize)
-	sizeBuf := make([]byte, headerByteSize)
-	var recipientConn net.Conn
+	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
 
 	for {
-		// read one packet from the TUN iface
-		n, err := iface.Read(packetbuffer)
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				fmt.Printf("TUN iface closed, exiting\n")
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return err
 			}
-			// If error contails "file already closed" then we can return
-			// because the connection was closed
-			if strings.Contains(err.Error(), "file already closed") {
-				if returnOnErr {
-					return err
-				} else {
+			return nil
+		default:
+			// read one packet from the source
+			n, err := source.Read(packetbuffer)
+			if err != nil {
+				if !errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					return nil // source was closed, have to return
+				}
+				logger.Warn("failed to read packet", zap.Error(err))
+				continue
+			}
+			packet := packetbuffer[:n]
+
+			// Determine IP version
+			ipVersion := (packet[0] & 0xF0) >> 4
+			switch ipVersion {
+			case 4: // IPv4
+				if err := validateIPv4(packet); err != nil {
+					logger.Warn("received invalid IPv4 packet", zap.Error(err))
 					continue
 				}
-			}
-			fmt.Printf("Failed to read packet from the TUN iface: %v %s\n", err, err)
-			continue
-		}
-
-		// Identify the recipient IP from the packetBuffer
-		// with that IP, find the net conn in the connection map
-
-		packet := packetbuffer[:n] // assuming packetbuffer contains an IP packet
-		if err := validateIPv4(packet); err != nil {
-			fmt.Printf("Error: %v\n", err)
-			continue
-		}
-		_, dstIp := parseIpFromPacketHeader(packet)
-
-		// Check if conn is not nil
-		if conn == nil {
-			// we didnt get a net.Conn object, so we need to find it in the connection map
-			// This happens only on the server side
-			// Clients provide the conn object
-
-			// TODO: maybe we should use the net.IP object instead of string
-			// to avoid the string conversion, maybe it's not a big deal... not sure?
-			var exists bool
-
-			if recipientConn, exists = cm.Get(dstIp.String()); !exists {
-				//fmt.Printf("No connection exists for IP: %s\n", dstIp)
+			case 6: // IPv6
+				if err := validateIPv6(packet); err != nil {
+					logger.Warn("received invalid IPv6 packet", zap.Error(err))
+					continue
+				}
+			default:
+				// Unsupported IP version, skip packet
+				logger.Warn("unsupported IP version", zap.Uint8("version", ipVersion))
 				continue
 			}
-		} else {
-			recipientConn = conn
-		}
 
-		// compute the header to prepend to the packet before writing to net conn
+			// we produce a "border0 header" so that we can write a single packet
+			// across multiple connection writes (under the hood) if needed.
+			binary.BigEndian.PutUint16(b0HeaderBuffer, uint16(n))
 
-		binary.BigEndian.PutUint16(sizeBuf, uint16(n))
-
-		// write the encapsulated packet to the net conn
-
-		_, err = recipientConn.Write(append(sizeBuf, packetbuffer[:n]...))
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				recipientConn.Close()
-				cm.Delete(dstIp.String())
-
-				if returnOnErr {
+			_, err = conn.Write(append(b0HeaderBuffer, packetbuffer[:n]...))
+			if err != nil {
+				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 					return err
 				}
+				logger.Error("failed to write encapsulated packet to the net conn", zap.Error(err))
 			}
-			fmt.Printf("Failed to write encapsulated packet to the net conn: %v\n", err)
-			recipientConn.Close()
-			cm.Delete(dstIp.String())
-			if returnOnErr {
+		}
+
+	}
+}
+
+func ConnToTunCopy(ctx context.Context, logger *zap.Logger, conn net.Conn, peerAddress string, tun io.Writer) error {
+	b0HeaderBuffer := make([]byte, border0HeaderByteSize)
+
+	for {
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return err
-			} else {
+			}
+			return nil
+		default:
+			// read first ${headerByteSize} bytes from the connection
+			// to know how big the next incoming packet is.
+			// Make sure we read all the way to the end of the header using io.ReadFull()
+			headerN, err := io.ReadFull(conn, b0HeaderBuffer)
+			if err != nil {
+				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					logger.Info("connection closed by remote peer", zap.String("peer_ip", peerAddress))
+					return nil
+				}
+				if errors.Is(err, net.ErrClosed) {
+					return err // this means the local side closed the connection
+				}
+				// we return error here because we don't know how to
+				// proceed in the packet stream...
+				logger.Error("failed to read border0 header", zap.Error(err))
+				return err
+			}
+			if headerN < border0HeaderByteSize {
+				logger.Error("read less than border0HeaderByteSize bytes", zap.Int("bytes_read", headerN), zap.Int("bytes_expected", border0HeaderByteSize))
 				continue
 			}
+
+			// convert binary header to the size uint16
+			inboundPacketSize := binary.BigEndian.Uint16(b0HeaderBuffer)
+
+			// new empty buffer of the size of the packet we're about to read
+			packetBuffer := make([]byte, inboundPacketSize)
+
+			// read the one individual packet
+			packetN, err := io.ReadFull(conn, packetBuffer)
+			if err != nil {
+				logger.Error("failed to read packet from connection", zap.Error(err))
+				continue
+			}
+			if packetN < int(inboundPacketSize) {
+				logger.Error("read less than the advertized packet size", zap.Int("bytes_read", packetN), zap.Uint16("bytes_expected", inboundPacketSize))
+				continue
+			}
+			// write the packet to the TUN iface
+			if _, err = tun.Write(packetBuffer); err != nil {
+				logger.Error("failed to write inbound packet to local TUN interface", zap.Error(err))
+				continue
+			}
+
 		}
 	}
 }
 
-func ConnToTunCopy(conn net.Conn, iface *water.Interface) error {
-	headerBuffer := make([]byte, headerByteSize)
+func CheckIPForwardingEnabled() (bool, error) {
+	// Path to the ip_forward configuration
+	const path = "/proc/sys/net/ipv4/ip_forward"
 
-	for {
-		// read first ${headerByteSize} bytes from the connection
-		// to know how big the next incoming packet is.
-		// Make sure we read all the way to the end of the header using io.ReadFull()
-		headerN, err := io.ReadFull(conn, headerBuffer)
-		if err != nil {
-			if errors.Is(err, io.EOF) ||
-				errors.Is(err, io.ErrUnexpectedEOF) {
-				fmt.Println("Connection closed by remote host")
-				return err
-			} else {
-				fmt.Printf("Failed to read header: %v\n", err)
-				return err
+	// Read the contents of the file using os.ReadFile
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s: %v", path, err)
+	}
+
+	// The file should contain a single character: '1' or '0'
+	// TrimSpace is not shown here, but you could use strings.TrimSpace if needed
+	isEnabled := string(content[0]) == "1"
+
+	return isEnabled, nil
+}
+
+func GetDnsByPassRoutes(vpnIfaceName string, routes []string, addressFamily int) (map[string]bool, error) {
+
+	// make a map we'll use for DNS bypass routes
+	// This will contain a list of unique DNS servers for which we'll do bypass routes
+	dnsServersBypassRoutes := make(map[string]bool)
+
+	// Also get the DNS servers from the server.
+	// We may need to create bypass routes for these
+	currentDnsServers, err := GetDnsServers()
+	if err != nil {
+		return dnsServersBypassRoutes, fmt.Errorf("failed to get current DNS servers %v", err)
+	}
+	for _, route := range routes {
+
+		for _, dnsServer := range currentDnsServers {
+
+			// turn dnsserver into a net.IP
+			dnsIp := net.ParseIP(dnsServer)
+			// for now we only support ipv4
+			if addressFamily == 4 && dnsIp.To4() != nil {
+				match, _ := IsIPInCIDR(dnsServer, route)
+				if match {
+					if dnsIp.IsLoopback() {
+						// If it's loopback, dont; do anything
+						continue
+					} else if dnsIp.IsPrivate() {
+						networkInterfaces, err := GetLocalInterfacesForIp(dnsServer)
+						if err != nil {
+							log.Println("failed to check if IP is local", err)
+							continue
+						}
+						// if the map is not empty, then the IP is local
+						if len(networkInterfaces) > 0 {
+							// This is the case if the IP is on the same subnet as the local gateway, for example on the router
+							// However we should make sure it's not on the newly added tun VPN interface
+
+							// we should make sure the list of interfaces is not empty, and doesn't contain iface.Name()
+							// if it does, we should continue
+							// check the list to and if the interface found is not the same as  iface.Name()
+							// Which is the VPN tunnel, then it's a local network, and we should continue
+							// ie. no by pass route is needed, since the IP address is locally connected.
+
+							found := false
+							for _, name := range networkInterfaces {
+								if name != vpnIfaceName {
+									// network found, not adding bypass route
+									found = true
+								}
+							}
+							if !found {
+								// if we get here, then the IP is:
+								// 1) not loopback (systemd uses 127.0.0.53)
+								// 2) not on a local network (ie. not on the same subnet as any of the interfaces)
+								// 3) is RFC1918 (private) address
+								// So we should add a bypass route for it
+								// we use a map to make sure we only add each DNS server once
+								// Example case, in coffeee shop, my ip is 10.10.10.10,
+								// and the DNS server is 10.11.11.11 , ie different subnet, but wont work on vpn
+								dnsServersBypassRoutes[fmt.Sprintf("%s/%d", dnsIp.String(), 32)] = true
+							}
+						}
+					}
+				}
 			}
-
-		}
-		if headerN < headerByteSize {
-			fmt.Printf("Read less than headerByteSize bytes (%d): %d\n", headerByteSize, headerN)
-			continue
-		}
-
-		// convert binary header to the size uint16
-		inboundPacketSize := binary.BigEndian.Uint16(headerBuffer)
-
-		// new empty buffer of the size of the packet we're about to read
-		packetBuffer := make([]byte, inboundPacketSize)
-
-		// read the one individual packet
-		packetN, err := io.ReadFull(conn, packetBuffer)
-		if err != nil {
-			fmt.Printf("Failed to read packet from net conn: %v\n", err)
-			continue
-		}
-		if packetN < int(inboundPacketSize) {
-			fmt.Printf("Read less than the advertised packet size (expected %d, got %d)\n", inboundPacketSize, packetN)
-			continue
-		}
-
-		// write the packet to the TUN iface
-		if _, err = iface.Write(packetBuffer); err != nil {
-			fmt.Printf("Failed to write packet to the TUN iface: %v\n", err)
-			continue
 		}
 	}
+	return dnsServersBypassRoutes, nil
 }

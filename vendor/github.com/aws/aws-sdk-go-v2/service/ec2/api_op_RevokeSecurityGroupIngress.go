@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -21,10 +22,12 @@ import (
 // group rule has a description, you do not need to specify the description to
 // revoke the rule. For a default VPC, if the values you specify do not match the
 // existing rule's values, no error is returned, and the output describes the
-// security group rules that were not revoked. Amazon Web Services recommends that
-// you describe the security group to verify that the rules were removed. Rule
-// changes are propagated to instances within the security group as quickly as
-// possible. However, a small delay might occur.
+// security group rules that were not revoked. For a non-default VPC, if the values
+// you specify do not match the existing rule's values, an
+// InvalidPermission.NotFound client error is returned, and no rules are revoked.
+// Amazon Web Services recommends that you describe the security group to verify
+// that the rules were removed. Rule changes are propagated to instances within the
+// security group as quickly as possible. However, a small delay might occur.
 func (c *Client) RevokeSecurityGroupIngress(ctx context.Context, params *RevokeSecurityGroupIngressInput, optFns ...func(*Options)) (*RevokeSecurityGroupIngressOutput, error) {
 	if params == nil {
 		params = &RevokeSecurityGroupIngressInput{}
@@ -109,12 +112,22 @@ type RevokeSecurityGroupIngressOutput struct {
 }
 
 func (c *Client) addOperationRevokeSecurityGroupIngressMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpRevokeSecurityGroupIngress{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpRevokeSecurityGroupIngress{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "RevokeSecurityGroupIngress"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -135,9 +148,6 @@ func (c *Client) addOperationRevokeSecurityGroupIngressMiddlewares(stack *middle
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -151,6 +161,9 @@ func (c *Client) addOperationRevokeSecurityGroupIngressMiddlewares(stack *middle
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opRevokeSecurityGroupIngress(options.Region), middleware.Before); err != nil {
@@ -168,6 +181,9 @@ func (c *Client) addOperationRevokeSecurityGroupIngressMiddlewares(stack *middle
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -175,7 +191,6 @@ func newServiceMetadataMiddleware_opRevokeSecurityGroupIngress(region string) *a
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "RevokeSecurityGroupIngress",
 	}
 }

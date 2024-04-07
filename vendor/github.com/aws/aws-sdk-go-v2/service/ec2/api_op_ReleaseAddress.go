@@ -4,6 +4,7 @@ package ec2
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/smithy-go/middleware"
@@ -50,9 +51,7 @@ type ReleaseAddressInput struct {
 
 	// The set of Availability Zones, Local Zones, or Wavelength Zones from which
 	// Amazon Web Services advertises IP addresses. If you provide an incorrect network
-	// border group, you receive an InvalidAddress.NotFound error. You cannot use a
-	// network border group with EC2 Classic. If you attempt this operation on EC2
-	// classic, you receive an InvalidParameterCombination error.
+	// border group, you receive an InvalidAddress.NotFound error.
 	NetworkBorderGroup *string
 
 	// Deprecated.
@@ -69,12 +68,22 @@ type ReleaseAddressOutput struct {
 }
 
 func (c *Client) addOperationReleaseAddressMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpReleaseAddress{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpReleaseAddress{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ReleaseAddress"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -95,9 +104,6 @@ func (c *Client) addOperationReleaseAddressMiddlewares(stack *middleware.Stack, 
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -111,6 +117,9 @@ func (c *Client) addOperationReleaseAddressMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opReleaseAddress(options.Region), middleware.Before); err != nil {
@@ -128,6 +137,9 @@ func (c *Client) addOperationReleaseAddressMiddlewares(stack *middleware.Stack, 
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -135,7 +147,6 @@ func newServiceMetadataMiddleware_opReleaseAddress(region string) *awsmiddleware
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "ReleaseAddress",
 	}
 }

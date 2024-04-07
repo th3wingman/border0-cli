@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-go/types/common"
@@ -25,6 +26,9 @@ type ProxyConfig struct {
 	AWSRegion          string
 	AWSProfile         string
 	ECSSSMProxy        *ECSSSMProxy
+	IsKubectlExec      bool
+	KubectlExecProxy   *KubectlExecProxy
+	IsDockerExec       bool
 	AwsConfig          aws.Config
 	AwsUpstreamType    string
 	Logger             *zap.Logger
@@ -43,6 +47,19 @@ type ECSSSMProxy struct {
 	Services   []string
 	Tasks      []string
 	Containers []string
+}
+
+type KubectlExecProxy struct {
+	// eks
+	IsAwsEks          bool
+	AwsEksClusterName string
+
+	// standard
+	MasterUrl      string
+	KubeconfigPath string
+
+	NamespaceAllowlist          []string
+	NamespaceSelectorsAllowlist map[string]map[string][]string
 }
 
 func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSProfile string, hostkey *ssh.Signer, org *models.Organization, border0API border0.Border0API) (*ProxyConfig, error) {
@@ -82,6 +99,10 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 		}
 	}
 
+	if socket.ConnectorLocalData.IsAwsEks && socket.ConnectorLocalData.AwsEksCluster == "" {
+		return nil, fmt.Errorf("aws eks cluster name is required for aws eks kubectl exec ssh sockets.")
+	}
+
 	proxyConfig := &ProxyConfig{
 		Logger:             logger,
 		Hostname:           socket.ConnectorData.TargetHostname,
@@ -101,21 +122,44 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 		Border0API:         border0API,
 	}
 
-	switch {
-	case socket.UpstreamType == "aws-ssm":
-		proxyConfig.AwsUpstreamType = "aws-ssm"
-	case socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled:
+	if socket.ConnectorLocalData.IsKubectlExec {
+		proxyConfig.IsKubectlExec = true
+
+		proxyConfig.KubectlExecProxy = &KubectlExecProxy{
+			NamespaceAllowlist:          socket.ConnectorLocalData.K8sNamespaceAllowlist,
+			NamespaceSelectorsAllowlist: socket.ConnectorLocalData.K8sNamespaceSelectorsAllowlist,
+
+			// optional fields. Used only for standard (non eks) kubernetes.
+			MasterUrl:      socket.ConnectorLocalData.K8sMasterUrl,
+			KubeconfigPath: socket.ConnectorLocalData.K8sKubeconfigPath,
+		}
+
+		if socket.ConnectorLocalData.IsAwsEks {
+			proxyConfig.KubectlExecProxy.IsAwsEks = true
+			proxyConfig.KubectlExecProxy.AwsEksClusterName = socket.ConnectorLocalData.AwsEksCluster
+
+			// As of December 5th 2023, this string only signals the code downstream that it
+			// should source aws credentials, the actual value of the string doesnt matter,
+			// as long as the field is populated.
+			proxyConfig.AwsUpstreamType = "aws-eks-kubectl-exec"
+		}
+	}
+
+	if socket.UpstreamType == "aws-ec2connect" || socket.ConnectorLocalData.AWSEC2InstanceConnectEnabled {
 		proxyConfig.AwsUpstreamType = "aws-ec2connect"
 	}
 
-	if socket.UpstreamType == "aws-ssm" && socket.ConnectorLocalData.AWSECSCluster != "" {
-		// TODO: when ECSSSMProxy is not nil, proxyConfig.AwsSSMTarget will be constructed
-		// from ecs cluster during connection... this kind of sucks... improve
-		proxyConfig.ECSSSMProxy = &ECSSSMProxy{
-			Cluster:    socket.ConnectorLocalData.AWSECSCluster,
-			Services:   socket.ConnectorLocalData.AWSECSServices,
-			Tasks:      socket.ConnectorLocalData.AWSECSTasks,
-			Containers: socket.ConnectorLocalData.AWSECSContainers,
+	if socket.UpstreamType == "aws-ssm" {
+		proxyConfig.AwsUpstreamType = "aws-ssm"
+		if socket.ConnectorLocalData.AWSECSCluster != "" {
+			// TODO: when ECSSSMProxy is not nil, proxyConfig.AwsSSMTarget will be constructed
+			// from ecs cluster during connection... this kind of sucks... improve
+			proxyConfig.ECSSSMProxy = &ECSSSMProxy{
+				Cluster:    socket.ConnectorLocalData.AWSECSCluster,
+				Services:   socket.ConnectorLocalData.AWSECSServices,
+				Tasks:      socket.ConnectorLocalData.AWSECSTasks,
+				Containers: socket.ConnectorLocalData.AWSECSContainers,
+			}
 		}
 	}
 

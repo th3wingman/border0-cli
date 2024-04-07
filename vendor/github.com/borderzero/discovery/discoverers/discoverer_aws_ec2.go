@@ -85,9 +85,10 @@ func WithAwsEc2DiscovererDiscovererId(discovererId string) AwsEc2DiscovererOptio
 
 // WithAwsEc2DiscovererSsmStatusCheck is the AwsEc2DiscovererOption
 // to enable/disable checking instances' status with SSM.
+// If required is true, enabled is automatically set to true.
 func WithAwsEc2DiscovererSsmStatusCheck(enabled, required bool) AwsEc2DiscovererOption {
 	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.ssmStatusCheckEnabled = enabled
+		ec2d.ssmStatusCheckEnabled = enabled || required
 		ec2d.ssmStatusCheckRequired = required
 	}
 }
@@ -100,8 +101,12 @@ func WithAwsEc2DiscovererNetworkReachabilityCheck(enabled bool) AwsEc2Discoverer
 
 // WithAwsEc2DiscovererReachabilityRequired is the AwsEc2DiscovererOption
 // to exclude instances that are not reachable through any means from results.
+// If required is true, enabled is automatically set to true.
 func WithAwsEc2DiscovererReachabilityRequired(required bool) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) { ec2d.reachabilityRequired = required }
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.networkReachabilityCheckEnabled = ec2d.networkReachabilityCheckEnabled || required
+		ec2d.reachabilityRequired = required
+	}
 }
 
 // WithAwsEc2DiscovererNetworkReachabilityCheckCache is the AwsEc2DiscovererOption
@@ -312,12 +317,9 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheckAndAdd(
 			testswg.Add(1)
 			go func() {
 				defer testswg.Done()
-				ec2Details.PrivateDnsNameReachable =
-					pointer.To(ec2d.reachabilityCheck(
-						ctx,
-						result,
-						ec2Details.PrivateDnsName,
-					))
+				ec2Details.PrivateDnsNameReachable = pointer.To(
+					ec2d.reachabilityCheck(ctx, ec2Details.PrivateDnsName),
+				)
 			}()
 		}
 
@@ -325,12 +327,9 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheckAndAdd(
 			testswg.Add(1)
 			go func() {
 				defer testswg.Done()
-				ec2Details.PrivateIpAddressReachable =
-					pointer.To(ec2d.reachabilityCheck(
-						ctx,
-						result,
-						ec2Details.PrivateIpAddress,
-					))
+				ec2Details.PrivateIpAddressReachable = pointer.To(
+					ec2d.reachabilityCheck(ctx, ec2Details.PrivateIpAddress),
+				)
 			}()
 		}
 
@@ -338,12 +337,9 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheckAndAdd(
 			testswg.Add(1)
 			go func() {
 				defer testswg.Done()
-				ec2Details.PublicDnsNameReachable =
-					pointer.To(ec2d.reachabilityCheck(
-						ctx,
-						result,
-						ec2Details.PublicDnsName,
-					))
+				ec2Details.PublicDnsNameReachable = pointer.To(
+					ec2d.reachabilityCheck(ctx, ec2Details.PublicDnsName),
+				)
 			}()
 		}
 
@@ -351,12 +347,9 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheckAndAdd(
 			testswg.Add(1)
 			go func() {
 				defer testswg.Done()
-				ec2Details.PublicIpAddressReachable =
-					pointer.To(ec2d.reachabilityCheck(
-						ctx,
-						result,
-						ec2Details.PublicIpAddress,
-					))
+				ec2Details.PublicIpAddressReachable = pointer.To(
+					ec2d.reachabilityCheck(ctx, ec2Details.PublicIpAddress),
+				)
 			}()
 		}
 
@@ -399,7 +392,6 @@ func (ec2d *AwsEc2Discoverer) shouldIncludeInstance(
 
 func (ec2d *AwsEc2Discoverer) reachabilityCheck(
 	ctx context.Context,
-	result *discovery.Result,
 	target string,
 ) bool {
 	cached, ok := ec2d.networkReachabilityCheckCache.Get(target)

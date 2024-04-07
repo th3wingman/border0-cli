@@ -33,6 +33,8 @@ func NewPlugin(
 		return newAwsEc2DiscoveryPlugin(ctx, logger, pluginId, config.AwsEc2DiscoveryPluginConfiguration)
 	case connector.PluginTypeAwsEcsDiscovery:
 		return newAwsEcsDiscoveryPlugin(ctx, logger, pluginId, config.AwsEcsDiscoveryPluginConfiguration)
+	case connector.PluginTypeAwsEksDiscovery:
+		return newAwsEksDiscoveryPlugin(ctx, logger, pluginId, config.AwsEksDiscoveryPluginConfiguration)
 	case connector.PluginTypeAwsRdsDiscovery:
 		return newAwsRdsDiscoveryPlugin(ctx, logger, pluginId, config.AwsRdsDiscoveryPluginConfiguration)
 	case connector.PluginTypeKubernetesDiscovery:

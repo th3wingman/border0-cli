@@ -13,10 +13,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
+
 	"github.com/borderzero/border0-cli/internal/connector_v2/daemon"
 	"github.com/borderzero/border0-cli/internal/connector_v2/install"
+	"github.com/borderzero/border0-cli/internal/connector_v2/invite"
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/kardianos/service"
 
@@ -46,9 +49,14 @@ var (
 )
 
 // hidden variables used for connector v2 only
-var token string
-var daemonOnly bool
-var connectorId string
+var (
+	token       string
+	daemonOnly  bool
+	connectorId string
+	inviteCode  string
+
+	tokenPersistenceSsmPath string
+)
 
 type Socket struct {
 	Type      string `yaml:"type"`
@@ -232,6 +240,16 @@ var connectorStartCmd = &cobra.Command{
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
+			// when --invite is provided, exchange the invite code for a connector token,
+			// and then set the token in the environment variable
+			if inviteCode != "" {
+				connectorToken, err := invite.ExchangeForConnectorToken(ctx, inviteCode)
+				if err != nil {
+					log.Fatal("failed to exchange invite code for connector token", zap.Error(err))
+				}
+				_ = connectorv2config.SetBorder0Token(connectorToken)
+			}
+
 			config, err := connectorv2config.GetConfiguration(ctx, connectorConfig)
 			if err != nil {
 				log.Fatal("failed to get connector (v2) configuration", zap.Error(err))
@@ -240,7 +258,7 @@ var connectorStartCmd = &cobra.Command{
 				config.ConnectorId = connectorId
 			}
 
-			connectorv2.NewConnectorService(ctx, log, version, config).Start()
+			connectorv2.NewConnectorService(ctx, log, internal.Version, config).Start()
 			return
 		}
 
@@ -277,7 +295,7 @@ var connectorStartCmd = &cobra.Command{
 				}
 			}
 
-			if err := connector.NewConnectorService(*cfg, log, version).Start(); err != nil {
+			if err := connector.NewConnectorService(*cfg, log, internal.Version).Start(); err != nil {
 				log.Error("failed to start connector", zap.String("error", err.Error()))
 			}
 		}
@@ -304,7 +322,7 @@ func connectorInstallAws(cmd *cobra.Command) {
 	}()
 
 	loginCmd.Run(cmd, []string{})
-	if err := install.RunCloudInstallWizardForAWS(ctx, version); err != nil {
+	if err := install.RunCloudInstallWizardForAWS(ctx, inviteCode, internal.Version); err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
 	}
@@ -323,7 +341,7 @@ func connectorInstallLocal(cmd *cobra.Command) {
 	if !daemonOnly {
 		loginCmd.Run(cmd, []string{})
 	}
-	err := install.RunInstallWizard(cmd.Context(), version, daemonOnly, token)
+	err := install.RunInstallWizard(cmd.Context(), internal.Version, daemonOnly, token, inviteCode, tokenPersistenceSsmPath)
 	if err != nil {
 		fmt.Printf("\nError: %s\n", err)
 		os.Exit(1)
@@ -427,14 +445,21 @@ func init() {
 	connectorStartCmd.Flags().StringVarP(&serviceFlag, "service", "s", "", "used to provide service actions e.g. start | stop | install | uninstall...")
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
 	connectorStartCmd.Flags().StringVarP(&connectorId, "connector-id", "", "", "connector id to use with connector control stream")
-	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
-	connectorInstallCmd.Flags().BoolVarP(&daemonOnly, "daemon-only", "d", false, "Install the daemon only, do not create connector")
-	connectorInstallCmd.Flags().StringVarP(&token, "token", "t", "", "Border0 token for use by the installed connector")
+	connectorStartCmd.Flags().StringVarP(&inviteCode, "invite", "i", "", "invite code for installing the connector")
 
 	// The start command needs to be able to handle OS control
 	// messages through a 'service' flag, really only in Windows.
 	// The customer does not need to know about this flag so we hide it.
-	connectorStartCmd.Flag("service").Hidden = true
+	connectorStartCmd.Flags().MarkHidden("service")
+
+	connectorInstallCmd.Flags().BoolVarP(&aws, "aws", "", false, "true to run the connector installation wizard for AWS")
+	connectorInstallCmd.Flags().BoolVarP(&daemonOnly, "daemon-only", "d", false, "Install the daemon only, do not create connector")
+	connectorInstallCmd.Flags().StringVarP(&token, "token", "t", "", "Border0 token for use by the installed connector")
+	connectorInstallCmd.Flags().StringVarP(&inviteCode, "invite", "i", "", "invite code for installing the connector")
+	connectorInstallCmd.Flags().StringVarP(&tokenPersistenceSsmPath, "token-persistence-ssm-path", "p", "", "path in AWS SSM to persist connector token after exchanging an invite token")
+	connectorInstallCmd.Flags().MarkHidden("token-persistence-ssm-path") // hidden as it is only used in web installer
+	connectorInstallCmd.Flags().BoolVar(&qr, "qr", false, "Print a QR code for authenticating with a mobile device")
+	connectorInstallCmd.Flags().MarkHidden("qr")
 
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)

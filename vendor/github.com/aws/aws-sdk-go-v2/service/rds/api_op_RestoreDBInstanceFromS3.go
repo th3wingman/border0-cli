@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -16,7 +17,7 @@ import (
 // database, store it on Amazon Simple Storage Service (Amazon S3), and then
 // restore the backup file onto a new Amazon RDS DB instance running MySQL. For
 // more information, see Importing Data into an Amazon RDS MySQL DB Instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.Procedural.Importing.html)
-// in the Amazon RDS User Guide. This command doesn't apply to RDS Custom.
+// in the Amazon RDS User Guide. This operation doesn't apply to RDS Custom.
 func (c *Client) RestoreDBInstanceFromS3(ctx context.Context, params *RestoreDBInstanceFromS3Input, optFns ...func(*Options)) (*RestoreDBInstanceFromS3Output, error) {
 	if params == nil {
 		params = &RestoreDBInstanceFromS3Input{}
@@ -88,9 +89,9 @@ type RestoreDBInstanceFromS3Input struct {
 	// succeed. You can also allocate additional storage for future growth.
 	AllocatedStorage *int32
 
-	// A value that indicates whether minor engine upgrades are applied automatically
-	// to the DB instance during the maintenance window. By default, minor engine
-	// upgrades are not applied automatically.
+	// Specifies whether to automatically apply minor engine upgrades to the DB
+	// instance during the maintenance window. By default, minor engine upgrades are
+	// not applied automatically.
 	AutoMinorVersionUpgrade *bool
 
 	// The Availability Zone that the DB instance is created in. For information about
@@ -108,8 +109,8 @@ type RestoreDBInstanceFromS3Input struct {
 	// CreateDBInstance .
 	BackupRetentionPeriod *int32
 
-	// A value that indicates whether to copy all tags from the DB instance to
-	// snapshots of the DB instance. By default, tags are not copied.
+	// Specifies whether to copy all tags from the DB instance to snapshots of the DB
+	// instance. By default, tags are not copied.
 	CopyTagsToSnapshot *bool
 
 	// The name of the database to create when the DB instance is created. Follow the
@@ -129,8 +130,11 @@ type RestoreDBInstanceFromS3Input struct {
 	// must match the name of an existing DBSubnetGroup. Example: mydbsubnetgroup
 	DBSubnetGroupName *string
 
-	// A value that indicates whether the DB instance has deletion protection enabled.
-	// The database can't be deleted when deletion protection is enabled. By default,
+	// Specifies whether to enable a dedicated log volume (DLV) for the DB instance.
+	DedicatedLogVolume *bool
+
+	// Specifies whether to enable deletion protection for the DB instance. The
+	// database can't be deleted when deletion protection is enabled. By default,
 	// deletion protection isn't enabled. For more information, see Deleting a DB
 	// Instance (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_DeleteInstance.html)
 	// .
@@ -142,15 +146,15 @@ type RestoreDBInstanceFromS3Input struct {
 	// in the Amazon RDS User Guide.
 	EnableCloudwatchLogsExports []string
 
-	// A value that indicates whether to enable mapping of Amazon Web Services
-	// Identity and Access Management (IAM) accounts to database accounts. By default,
-	// mapping isn't enabled. For more information about IAM database authentication,
-	// see IAM Database Authentication for MySQL and PostgreSQL (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html)
+	// Specifies whether to enable mapping of Amazon Web Services Identity and Access
+	// Management (IAM) accounts to database accounts. By default, mapping isn't
+	// enabled. For more information about IAM database authentication, see IAM
+	// Database Authentication for MySQL and PostgreSQL (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html)
 	// in the Amazon RDS User Guide.
 	EnableIAMDatabaseAuthentication *bool
 
-	// A value that indicates whether to enable Performance Insights for the DB
-	// instance. For more information, see Using Amazon Performance Insights (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PerfInsights.html)
+	// Specifies whether to enable Performance Insights for the DB instance. For more
+	// information, see Using Amazon Performance Insights (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PerfInsights.html)
 	// in the Amazon RDS User Guide.
 	EnablePerformanceInsights *bool
 
@@ -178,21 +182,26 @@ type RestoreDBInstanceFromS3Input struct {
 	// The license model for this DB instance. Use general-public-license .
 	LicenseModel *string
 
-	// A value that indicates whether to manage the master user password with Amazon
-	// Web Services Secrets Manager. For more information, see Password management
-	// with Amazon Web Services Secrets Manager (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html)
+	// Specifies whether to manage the master user password with Amazon Web Services
+	// Secrets Manager. For more information, see Password management with Amazon Web
+	// Services Secrets Manager (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html)
 	// in the Amazon RDS User Guide. Constraints:
 	//   - Can't manage the master user password with Amazon Web Services Secrets
 	//   Manager if MasterUserPassword is specified.
 	ManageMasterUserPassword *bool
 
-	// The password for the master user. The password can include any printable ASCII
-	// character except "/", """, or "@". Constraints: Can't be specified if
-	// ManageMasterUserPassword is turned on. MariaDB Constraints: Must contain from 8
-	// to 41 characters. Microsoft SQL Server Constraints: Must contain from 8 to 128
-	// characters. MySQL Constraints: Must contain from 8 to 41 characters. Oracle
-	// Constraints: Must contain from 8 to 30 characters. PostgreSQL Constraints: Must
-	// contain from 8 to 128 characters.
+	// The password for the master user. Constraints:
+	//   - Can't be specified if ManageMasterUserPassword is turned on.
+	//   - Can include any printable ASCII character except "/", """, or "@". For RDS
+	//   for Oracle, can't include the "&" (ampersand) or the "'" (single quotes)
+	//   character.
+	// Length Constraints:
+	//   - RDS for Db2 - Must contain from 8 to 128 characters.
+	//   - RDS for MariaDB - Must contain from 8 to 41 characters.
+	//   - RDS for Microsoft SQL Server - Must contain from 8 to 128 characters.
+	//   - RDS for MySQL - Must contain from 8 to 41 characters.
+	//   - RDS for Oracle - Must contain from 8 to 30 characters.
+	//   - RDS for PostgreSQL - Must contain from 8 to 128 characters.
 	MasterUserPassword *string
 
 	// The Amazon Web Services KMS key identifier to encrypt a secret that is
@@ -238,12 +247,11 @@ type RestoreDBInstanceFromS3Input struct {
 	// than 0, then you must supply a MonitoringRoleArn value.
 	MonitoringRoleArn *string
 
-	// A value that indicates whether the DB instance is a Multi-AZ deployment. If the
-	// DB instance is a Multi-AZ deployment, you can't set the AvailabilityZone
-	// parameter.
+	// Specifies whether the DB instance is a Multi-AZ deployment. If the DB instance
+	// is a Multi-AZ deployment, you can't set the AvailabilityZone parameter.
 	MultiAZ *bool
 
-	// The network type of the DB instance. Valid values:
+	// The network type of the DB instance. Valid Values:
 	//   - IPV4
 	//   - DUAL
 	// The network type is determined by the DBSubnetGroup specified for the DB
@@ -308,28 +316,28 @@ type RestoreDBInstanceFromS3Input struct {
 	// class of the DB instance.
 	ProcessorFeatures []types.ProcessorFeature
 
-	// A value that indicates whether the DB instance is publicly accessible. When the
-	// DB instance is publicly accessible, its Domain Name System (DNS) endpoint
-	// resolves to the private IP address from within the DB instance's virtual private
-	// cloud (VPC). It resolves to the public IP address from outside of the DB
-	// instance's VPC. Access to the DB instance is ultimately controlled by the
-	// security group it uses. That public access is not permitted if the security
-	// group assigned to the DB instance doesn't permit it. When the DB instance isn't
-	// publicly accessible, it is an internal DB instance with a DNS name that resolves
-	// to a private IP address. For more information, see CreateDBInstance .
+	// Specifies whether the DB instance is publicly accessible. When the DB instance
+	// is publicly accessible, its Domain Name System (DNS) endpoint resolves to the
+	// private IP address from within the DB instance's virtual private cloud (VPC). It
+	// resolves to the public IP address from outside of the DB instance's VPC. Access
+	// to the DB instance is ultimately controlled by the security group it uses. That
+	// public access is not permitted if the security group assigned to the DB instance
+	// doesn't permit it. When the DB instance isn't publicly accessible, it is an
+	// internal DB instance with a DNS name that resolves to a private IP address. For
+	// more information, see CreateDBInstance .
 	PubliclyAccessible *bool
 
 	// The prefix of your Amazon S3 bucket.
 	S3Prefix *string
 
-	// A value that indicates whether the new DB instance is encrypted or not.
+	// Specifies whether the new DB instance is encrypted or not.
 	StorageEncrypted *bool
 
 	// Specifies the storage throughput value for the DB instance. This setting
 	// doesn't apply to RDS Custom or Amazon Aurora.
 	StorageThroughput *int32
 
-	// Specifies the storage type to be associated with the DB instance. Valid values:
+	// Specifies the storage type to be associated with the DB instance. Valid Values:
 	// gp2 | gp3 | io1 | standard If you specify io1 or gp3 , you must also include a
 	// value for the Iops parameter. Default: io1 if the Iops parameter is specified;
 	// otherwise gp2
@@ -340,8 +348,8 @@ type RestoreDBInstanceFromS3Input struct {
 	// in the Amazon RDS User Guide.
 	Tags []types.Tag
 
-	// A value that indicates whether the DB instance class of the DB instance uses
-	// its default processor features.
+	// Specifies whether the DB instance class of the DB instance uses its default
+	// processor features.
 	UseDefaultProcessorFeatures *bool
 
 	// A list of VPC security groups to associate with this DB instance.
@@ -367,12 +375,22 @@ type RestoreDBInstanceFromS3Output struct {
 }
 
 func (c *Client) addOperationRestoreDBInstanceFromS3Middlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpRestoreDBInstanceFromS3{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpRestoreDBInstanceFromS3{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "RestoreDBInstanceFromS3"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -393,9 +411,6 @@ func (c *Client) addOperationRestoreDBInstanceFromS3Middlewares(stack *middlewar
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -409,6 +424,9 @@ func (c *Client) addOperationRestoreDBInstanceFromS3Middlewares(stack *middlewar
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpRestoreDBInstanceFromS3ValidationMiddleware(stack); err != nil {
@@ -429,6 +447,9 @@ func (c *Client) addOperationRestoreDBInstanceFromS3Middlewares(stack *middlewar
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -436,7 +457,6 @@ func newServiceMetadataMiddleware_opRestoreDBInstanceFromS3(region string) *awsm
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "RestoreDBInstanceFromS3",
 	}
 }

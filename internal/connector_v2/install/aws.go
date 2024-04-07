@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,7 +18,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
+	"github.com/aws/smithy-go"
 	border0 "github.com/borderzero/border0-cli/internal/api"
+	"github.com/borderzero/border0-cli/internal/connector_v2/invite"
+	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/border0-go/types/connector"
@@ -36,6 +40,7 @@ const (
 	timeoutDescribeVpcSubnetsPage = time.Second * 10
 	timeoutDescribeSsmParameters  = time.Second * 10
 	timeoutCreateBorder0Token     = time.Second * 10
+	timeoutGetSsmParameter        = time.Second * 10
 	timeoutPutSsmParameter        = time.Second * 10
 	timeoutCreateStack            = time.Second * 10
 	timeoutDescribeStackEvents    = time.Second * 10
@@ -52,8 +57,8 @@ var (
 )
 
 // RunCloudInstallWizardForAWS runs the connector cloud install wizard for AWS.
-func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
-	fmt.Println(fmt.Sprintf("%s\n", banner))
+func RunCloudInstallWizardForAWS(ctx context.Context, inviteCode, cliVersion string) error {
+	fmt.Printf("%s\n\n", banner)
 
 	runId := fmt.Sprintf("border0-aws-connector-%d", time.Now().Unix())
 
@@ -80,36 +85,61 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		return fmt.Errorf("failed to prompt for AWS VPC Subnet ID: %v", err)
 	}
 
-	border0ConnectorName, err := getUniqueConnectorName(ctx, cliVersion, "aws-connector")
-	if err != nil {
-		return fmt.Errorf("failed to determine unique name for connector: %v", err)
+	connectorID := ""
+	connectorToken := ""
+	ssmParameter := ""
+
+	// when --invite is provided, exchange the invite code for a connector token,
+	// and then set the token in the environment variable
+	if inviteCode != "" {
+		border0TokenSsmParameter, err := promptForBorder0TokenSsmParameterPath(ctx, cfg, fmt.Sprintf("border0-%s-token", inviteCode))
+		if err != nil {
+			return fmt.Errorf("failed to prompt for AWS SSM Parameter path for Border0 token: %v", err)
+		}
+		ssmParameter = border0TokenSsmParameter
+
+		id, token, err := invite.ExchangeForAwsConnectorToken(ctx, "aws-connector", inviteCode)
+		if err != nil {
+			return fmt.Errorf("failed to exchange invite code for Border0 token: %v", err)
+		}
+		connectorID = id
+		connectorToken = token
+	} else {
+		border0ConnectorName, err := getUniqueConnectorName(ctx, cliVersion, "aws-connector")
+		if err != nil {
+			return fmt.Errorf("failed to determine unique name for connector: %v", err)
+		}
+
+		border0TokenSsmParameter, err := promptForBorder0TokenSsmParameterPath(ctx, cfg, fmt.Sprintf("border0-%s-token", border0ConnectorName))
+		if err != nil {
+			return fmt.Errorf("failed to prompt for AWS SSM Parameter path for Border0 token: %v", err)
+		}
+		ssmParameter = border0TokenSsmParameter
+
+		border0Connector, err := createNewBorder0Connector(ctx, border0ConnectorName, "AWS Cloud-Install Border0 Connector", cliVersion, false)
+		if err != nil {
+			return fmt.Errorf("failed to create new Border0 connector: %v", err)
+		}
+
+		border0Token, err := generateNewBorder0ConnectorToken(ctx, border0Connector.ConnectorID, cliVersion, fmt.Sprintf("%s-token", maxString(runId, 50)))
+		if err != nil {
+			return fmt.Errorf("failed to create new Border0 token: %v", err)
+		}
+
+		connectorID = border0Connector.ConnectorID
+		connectorToken = border0Token.Token
 	}
 
-	border0TokenSsmParameter, err := promptForBorder0TokenSsmParameterPath(ctx, cfg, fmt.Sprintf("border0-%s-token", border0ConnectorName))
-	if err != nil {
-		return fmt.Errorf("failed to prompt for AWS SSM Parameter path for Border0 token: %v", err)
-	}
-
-	border0Connector, err := createNewBorder0Connector(ctx, border0ConnectorName, "AWS Cloud-Install Border0 Connector", cliVersion, false)
-	if err != nil {
-		return fmt.Errorf("failed to create new Border0 connector: %v", err)
-	}
-
-	if err = enableAwsDiscoveryPluginsForConnector(ctx, border0Connector.ConnectorID, cliVersion); err != nil {
+	if err = enableAwsDiscoveryPluginsForConnector(ctx, connectorID, cliVersion); err != nil {
 		// we don't fail here on purpose
 		fmt.Printf("warning: failed to enable AWS plugins: %v\n", err)
-	}
-
-	border0Token, err := generateNewBorder0ConnectorToken(ctx, border0Connector.ConnectorID, cliVersion, runId)
-	if err != nil {
-		return fmt.Errorf("failed to create new Border0 token: %v", err)
 	}
 
 	err = saveBorder0TokenInSsmParameterStore(
 		ctx,
 		cfg,
-		border0Token.Token,
-		border0TokenSsmParameter,
+		connectorToken,
+		ssmParameter,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to store new Border0 token in AWS SSM: %v", err)
@@ -121,7 +151,7 @@ func RunCloudInstallWizardForAWS(ctx context.Context, cliVersion string) error {
 		runId,
 		vpcId,
 		subnetId,
-		border0TokenSsmParameter,
+		ssmParameter,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create connector resources in AWS: %v", err)
@@ -140,6 +170,7 @@ func enableAwsDiscoveryPluginsForConnector(
 	for _, pluginType := range []string{
 		connector.PluginTypeAwsEc2Discovery,
 		connector.PluginTypeAwsEcsDiscovery,
+		connector.PluginTypeAwsEksDiscovery,
 		connector.PluginTypeAwsRdsDiscovery,
 	} {
 		pluginConfig, err := border0Client.GetDefaultPluginConfiguration(ctx, pluginType)
@@ -406,6 +437,31 @@ func saveBorder0TokenInSsmParameterStore(
 
 	fmt.Printf("🚀 SSM Parameter \"%s\" created successfully!\n", border0TokenSsmParameterPath)
 	return nil
+}
+
+func getBorder0TokenInSsmParameterStore(
+	ctx context.Context,
+	cfg aws.Config,
+	border0TokenSsmParameterPath string,
+) (*string, error) {
+	ssmClient := ssm.NewFromConfig(cfg)
+
+	getSsmParameterCtx, getSsmParameterCtxCancel := context.WithTimeout(ctx, timeoutGetSsmParameter)
+	defer getSsmParameterCtxCancel()
+
+	getParameterOutput, err := ssmClient.GetParameter(getSsmParameterCtx, &ssm.GetParameterInput{
+		Name:           &border0TokenSsmParameterPath,
+		WithDecryption: pointer.To(true),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ParameterNotFound" {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get ssm parameter via the AWS API: %v", err)
+	}
+
+	return getParameterOutput.Parameter.Value, nil
 }
 
 // Improvements:

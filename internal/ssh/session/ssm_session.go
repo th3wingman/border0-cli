@@ -19,7 +19,10 @@ import (
 	"github.com/aws/session-manager-plugin/src/message"
 	"github.com/aws/session-manager-plugin/src/retry"
 	awsSession "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	"github.com/manifoldco/promptui"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
@@ -36,12 +39,16 @@ type ssmSessionHandler struct {
 	ssmClient *ssm.Client
 }
 
+// ensure ssmSessionHandler implements SessionHandler.
+var _ SessionHandler = (*ssmSessionHandler)(nil)
+
 type ssmSession struct {
 	awsSession.Session
-	retryParams        retry.RepeatableExponentialRetryer
-	logger             *zap.Logger
 	config             *config.ProxyConfig
-	sessionKey         *string
+	logger             *zap.Logger
+	metadata           *border0.E2EEncryptionMetadata
+	sshServerConfig    *ssh.ServerConfig
+	retryParams        retry.RepeatableExponentialRetryer
 	downstreamSshConn  *ssh.ServerConn
 	downstreamSshChans <-chan ssh.NewChannel
 	downstreamSshReqs  <-chan *ssh.Request
@@ -52,7 +59,7 @@ type ssmSession struct {
 	ssmClient          *ssm.Client
 }
 
-func NewSsmSession(logger *zap.Logger, config *config.ProxyConfig) (*ssmSessionHandler, error) {
+func NewSsmSessionHandler(logger *zap.Logger, config *config.ProxyConfig) (*ssmSessionHandler, error) {
 	ssmClient := ssm.NewFromConfig(config.AwsConfig)
 
 	if config.ECSSSMProxy != nil {
@@ -83,32 +90,60 @@ func NewSsmSession(logger *zap.Logger, config *config.ProxyConfig) (*ssmSessionH
 func (s *ssmSessionHandler) Proxy(conn net.Conn) {
 	defer conn.Close()
 
-	sshConn, chans, reqs, sessionKey, _, err := newSSHServerConn(conn, s.config)
+	session := &ssmSession{
+		logger:          s.logger,
+		config:          s.config,
+		sshServerConfig: s.config.SshServerConfig,
+		sshWidth:        80,
+		sshHeight:       24,
+		awsSSMTarget:    s.config.AwsSSMTarget,
+		ssmClient:       s.ssmClient,
+	}
+
+	if s.config.EndToEndEncryption {
+		e2EEncryptionConn, ok := conn.(border0.E2EEncryptionConn)
+		if !ok {
+			conn.Close()
+			s.logger.Error("failed to cast connection to e2eencryption")
+			return
+		}
+
+		if e2EEncryptionConn.Metadata == nil {
+			s.logger.Error("invalid e2e metadata")
+			return
+		}
+
+		session.metadata = e2EEncryptionConn.Metadata
+		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.config.OrgSshCA,
+			s.config.Border0API,
+			s.config.Socket,
+			e2EEncryptionConn.Metadata,
+		)
+	}
+
+	var err error
+	session.downstreamSshConn, session.downstreamSshChans, session.downstreamSshReqs, err = ssh.NewServerConn(conn, session.config.SshServerConfig)
 	if err != nil {
-		s.logger.Sugar().Errorf("failed to accept ssh connection: %s", err)
+		session.logger.Error("failed to accept ssh connection", zap.Error(err))
 		return
 	}
 
-	session := &ssmSession{
-		config:             s.config,
-		downstreamSshConn:  sshConn,
-		downstreamSshChans: chans,
-		downstreamSshReqs:  reqs,
-		logger:             s.logger,
-		sshWidth:           80,
-		sshHeight:          24,
-		awsSSMTarget:       s.config.AwsSSMTarget,
-		ssmClient:          s.ssmClient,
-	}
-
-	if sessionKey != nil {
-		session.sessionKey = sessionKey
-		session.logger = session.logger.With(zap.String("session_key", *sessionKey))
+	if session.config.EndToEndEncryption {
+		if err := session.config.Border0API.UpdateSession(models.SessionUpdate{
+			SessionKey: session.metadata.SessionKey,
+			Socket:     session.config.Socket,
+			UserData:   ",sshuser=" + session.downstreamSshConn.User(),
+		}); err != nil {
+			session.logger.Error("failed to update session", zap.Error(err))
+			return
+		}
 	}
 
 	// we don't support global requests (yet)
 	// so we can disregard the reqs channel
-	go ssh.DiscardRequests(reqs)
+	go ssh.DiscardRequests(session.downstreamSshReqs)
 
 	if err := session.handleChannels(); err != nil {
 		s.logger.Error("failed to handle channels", zap.Error(err))
@@ -141,7 +176,7 @@ func (s *ssmSession) handleChannels() error {
 					continue
 				case req.Type == "pty-req":
 					termLen := req.Payload[3]
-					w, h := parseDims(req.Payload[termLen+4:])
+					w, h := common.ParseDims(req.Payload[termLen+4:])
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
 
@@ -149,7 +184,7 @@ func (s *ssmSession) handleChannels() error {
 						req.Reply(true, nil)
 					}
 				case req.Type == "window-change":
-					w, h := parseDims(req.Payload)
+					w, h := common.ParseDims(req.Payload)
 					s.sshWidth = int(w)
 					s.sshHeight = int(h)
 
@@ -451,7 +486,7 @@ func (s *ssmSession) handleSSMShell(channel ssh.Channel, req *ssh.Request) {
 		pwc := NewPipeWriteChannel(channel)
 		channel = pwc
 
-		r := NewRecording(s.logger, pwc.reader, *s.sessionKey, s.config.Border0API, s.sshWidth, s.sshHeight)
+		r := common.NewRecording(s.logger, pwc.reader, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.sshWidth, s.sshHeight)
 		if err := r.Record(); err != nil {
 			s.logger.Error("failed to record session", zap.Error(err))
 			return
@@ -611,6 +646,10 @@ func (s *ssmSession) OpenDataChannel(log log.T) (err error) {
 }
 
 func (s *ssmSession) handleWindowChange(width, height int) error {
+	if s.DataChannel == nil {
+		return nil
+	}
+
 	sizeData := message.SizeData{
 		Cols: uint32(width),
 		Rows: uint32(height),

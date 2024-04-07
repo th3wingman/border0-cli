@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -157,28 +158,37 @@ type DeleteCustomDBEngineVersionOutput struct {
 	// the CreateDBInstance action.
 	SupportedTimezones []types.Timezone
 
-	// A value that indicates whether the engine version supports Babelfish for Aurora
-	// PostgreSQL.
-	SupportsBabelfish bool
+	// Indicates whether the engine version supports Babelfish for Aurora PostgreSQL.
+	SupportsBabelfish *bool
 
-	// A value that indicates whether the engine version supports rotating the server
-	// certificate without rebooting the DB instance.
+	// Indicates whether the engine version supports rotating the server certificate
+	// without rebooting the DB instance.
 	SupportsCertificateRotationWithoutRestart *bool
 
-	// A value that indicates whether you can use Aurora global databases with a
-	// specific DB engine version.
-	SupportsGlobalDatabases bool
+	// Indicates whether you can use Aurora global databases with a specific DB engine
+	// version.
+	SupportsGlobalDatabases *bool
 
-	// A value that indicates whether the engine version supports exporting the log
-	// types specified by ExportableLogTypes to CloudWatch Logs.
-	SupportsLogExportsToCloudwatchLogs bool
+	// Indicates whether the DB engine version supports zero-ETL integrations with
+	// Amazon Redshift.
+	SupportsIntegrations *bool
 
-	// A value that indicates whether you can use Aurora parallel query with a
-	// specific DB engine version.
-	SupportsParallelQuery bool
+	// Indicates whether the DB engine version supports forwarding write operations
+	// from reader DB instances to the writer DB instance in the DB cluster. By
+	// default, write operations aren't allowed on reader DB instances. Valid for:
+	// Aurora DB clusters only
+	SupportsLocalWriteForwarding *bool
+
+	// Indicates whether the engine version supports exporting the log types specified
+	// by ExportableLogTypes to CloudWatch Logs.
+	SupportsLogExportsToCloudwatchLogs *bool
+
+	// Indicates whether you can use Aurora parallel query with a specific DB engine
+	// version.
+	SupportsParallelQuery *bool
 
 	// Indicates whether the database engine version supports read replicas.
-	SupportsReadReplica bool
+	SupportsReadReplica *bool
 
 	// A list of tags. For more information, see Tagging Amazon RDS Resources (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Tagging.html)
 	// in the Amazon RDS User Guide.
@@ -194,12 +204,22 @@ type DeleteCustomDBEngineVersionOutput struct {
 }
 
 func (c *Client) addOperationDeleteCustomDBEngineVersionMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDeleteCustomDBEngineVersion{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpDeleteCustomDBEngineVersion{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DeleteCustomDBEngineVersion"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -220,9 +240,6 @@ func (c *Client) addOperationDeleteCustomDBEngineVersionMiddlewares(stack *middl
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -236,6 +253,9 @@ func (c *Client) addOperationDeleteCustomDBEngineVersionMiddlewares(stack *middl
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpDeleteCustomDBEngineVersionValidationMiddleware(stack); err != nil {
@@ -256,6 +276,9 @@ func (c *Client) addOperationDeleteCustomDBEngineVersionMiddlewares(stack *middl
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -263,7 +286,6 @@ func newServiceMetadataMiddleware_opDeleteCustomDBEngineVersion(region string) *
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "DeleteCustomDBEngineVersion",
 	}
 }

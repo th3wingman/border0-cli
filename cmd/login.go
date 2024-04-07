@@ -28,7 +28,7 @@ import (
 
 	"os"
 
-	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/cenkalti/backoff/v4"
 	jwt "github.com/golang-jwt/jwt"
@@ -37,6 +37,38 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+func pollForToken(sessionToken string) {
+	exponentialBackoff := backoff.NewExponentialBackOff()
+	exponentialBackoff.InitialInterval = 1 * time.Second
+	exponentialBackoff.MaxInterval = 5 * time.Second
+	exponentialBackoff.Multiplier = 1.3
+	exponentialBackoff.MaxElapsedTime = 3 * time.Minute
+
+	var token string
+
+	retryFn := func() error {
+		tk, err := http.GetDeviceAuthorization(sessionToken)
+		if err != nil {
+			return err
+		}
+		token = tk.Token
+		return err
+	}
+
+	err := backoff.Retry(retryFn, exponentialBackoff)
+	if err != nil {
+		if errors.Is(err, http.ErrUnauthorized) {
+			log.Fatalf("We couldn't log you in, your session is expired or you are not authorized to perform this action: %v", err)
+		}
+		log.Fatalf("We couldn't log you in, make sure that you are properly logged in using the link above: %v", err)
+	}
+
+	fmt.Println("Login successful")
+	if err := http.SaveTokenInDisk(token); err != nil {
+		log.Fatalf("failed to save token: %s", err)
+	}
+}
 
 // loginCmd represents the login command
 var loginCmd = &cobra.Command{
@@ -49,7 +81,7 @@ var loginCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error while checking for latest version: %v", err)
 		}
-		if latest_version != version {
+		if latest_version != internal.Version {
 			binary_path := os.Args[0]
 			fmt.Printf("New version available. Please upgrade:\n%s version upgrade\n\n", binary_path)
 		}
@@ -114,45 +146,10 @@ var loginCmd = &cobra.Command{
 				}
 			}
 
-			// Polling for token
-			i := 1
-			for {
-				retriesThreeTimesEveryTwoSeconds := backoff.WithMaxRetries(backoff.NewConstantBackOff(2*time.Second), 3)
-
-				var token *models.SessionTokenForm
-				var err error
-
-				err = backoff.Retry(func() error {
-					token, err = http.GetDeviceAuthorization(sessionToken)
-					return err
-				}, retriesThreeTimesEveryTwoSeconds)
-
-				if err != nil {
-					if errors.Is(err, http.ErrUnauthorized) {
-						log.Fatalf("We couldn't log you in, your session is expired or you are not authorized to perform this action: %v", err)
-					}
-
-					log.Fatalf("We couldn't log you in, make sure that you are properly logged in using the link above: %v", err)
-				}
-
-				if token != nil && token.Token != "" && token.State != "not_authorized" {
-					fmt.Println("Login successful")
-					if err := http.SaveTokenInDisk(token.Token); err != nil {
-						log.Fatalf("failed to save token: %s", err)
-					}
-					return
-				}
-
-				if i < 10 {
-					time.Sleep(1 * time.Second)
-				} else if i < 20 {
-					time.Sleep(2 * time.Second)
-				} else {
-					time.Sleep(5 * time.Second)
-				}
-				i++
-			}
+			pollForToken(sessionToken)
+			return
 		}
+
 		// If email is not provided, then prompt for it
 		if email == "" {
 			fmt.Print("Email: ")
@@ -214,6 +211,8 @@ func init() {
 	// now make the disableBrowser and qr flags hidden
 	loginCmd.Flags().MarkHidden("disable-browser")
 	loginCmd.Flags().MarkHidden("qr")
+	loginCmd.Flags().MarkHidden("email")
+	loginCmd.Flags().MarkHidden("password")
 
 	rootCmd.AddCommand(loginCmd)
 }

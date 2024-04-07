@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"runtime"
 
+	awsc "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/daemon"
+	"github.com/borderzero/border0-cli/internal/connector_v2/invite"
 	"github.com/borderzero/border0-cli/internal/util"
 	"gopkg.in/yaml.v3"
 )
@@ -21,6 +23,8 @@ func RunInstallWizard(
 	version string,
 	daemonOnly bool,
 	token string,
+	inviteCode string,
+	tokenPersistenceSsmPath string,
 ) error {
 	// ensure not already installed
 	ok, err := daemon.IsInstalled()
@@ -38,7 +42,7 @@ func RunInstallWizard(
 		if err != nil {
 			return fmt.Errorf("failed to get system hostname: %v", err)
 		}
-		connectorName, err := getUniqueConnectorName(ctx, version, hostname)
+		connectorName, err := getUniqueConnectorName(ctx, version, maxString(hostname, 40))
 		if err != nil {
 			return fmt.Errorf("failed to determine unique name for connector: %v", err)
 		}
@@ -50,7 +54,7 @@ func RunInstallWizard(
 			ctx,
 			border0Connector.ConnectorID,
 			version,
-			fmt.Sprintf("%s-token", connectorName),
+			fmt.Sprintf("%s-token", maxString(connectorName, 50)),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create new connector token: %v", err)
@@ -59,6 +63,54 @@ func RunInstallWizard(
 	} else {
 		if token != "" {
 			connectorToken = token
+		} else {
+			if inviteCode != "" {
+				hasToken := false
+
+				// retrieve token from SSM
+				if tokenPersistenceSsmPath != "" {
+					loadDefaultConfigCtx, loadDefaultConfigCtxCancel := context.WithTimeout(ctx, timeoutLoadDefaultConfig)
+					loadDefaultConfigCtxCancel()
+					cfg, err := awsc.LoadDefaultConfig(loadDefaultConfigCtx)
+					if err != nil {
+						return fmt.Errorf("unable to load AWS SDK config: %v", err)
+					}
+					token, err := getBorder0TokenInSsmParameterStore(ctx, cfg, tokenPersistenceSsmPath)
+					if err != nil {
+						return fmt.Errorf("failed to check ssm parameter %s for connector token: %v", tokenPersistenceSsmPath, err)
+					}
+					if token != nil {
+						connectorToken = *token
+						hasToken = true
+					}
+				}
+
+				if !hasToken {
+					// try exchange invite code for token
+					token, err := invite.ExchangeForConnectorToken(ctx, inviteCode)
+					if err != nil {
+						return fmt.Errorf("failed to exchange invite code for connector token: %v", err)
+					}
+					connectorToken = token
+					hasToken = true
+
+					// best effort storage in AWS SSM
+					if tokenPersistenceSsmPath != "" {
+						// load aws config
+						loadDefaultConfigCtx, loadDefaultConfigCtxCancel := context.WithTimeout(ctx, timeoutLoadDefaultConfig)
+						loadDefaultConfigCtxCancel()
+						cfg, err := awsc.LoadDefaultConfig(loadDefaultConfigCtx)
+						if err != nil {
+							fmt.Printf("failed to load AWS SDK config for persisting token in ssm parameter: %v", err)
+						}
+
+						// store in ssm
+						if err = saveBorder0TokenInSsmParameterStore(ctx, cfg, token, tokenPersistenceSsmPath); err != nil {
+							fmt.Printf("failed to persist token in ssm parameter: %v\n", err)
+						}
+					}
+				}
+			}
 		}
 	}
 

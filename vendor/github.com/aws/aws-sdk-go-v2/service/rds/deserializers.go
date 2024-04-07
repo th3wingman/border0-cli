@@ -376,6 +376,15 @@ func awsAwsquery_deserializeOpErrorAddTagsToResource(response *smithyhttp.Respon
 	case strings.EqualFold("DBSnapshotNotFound", errorCode):
 		return awsAwsquery_deserializeErrorDBSnapshotNotFoundFault(response, errorBody)
 
+	case strings.EqualFold("DBSnapshotTenantDatabaseNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBSnapshotTenantDatabaseNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseNotFound", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseNotFoundFault(response, errorBody)
+
 	default:
 		genericError := &smithy.GenericAPIError{
 			Code:    errorCode,
@@ -1816,6 +1825,9 @@ func awsAwsquery_deserializeOpErrorCreateDBCluster(response *smithyhttp.Response
 	case strings.EqualFold("InvalidDBInstanceState", errorCode):
 		return awsAwsquery_deserializeErrorInvalidDBInstanceStateFault(response, errorBody)
 
+	case strings.EqualFold("InvalidDBSubnetGroupFault", errorCode):
+		return awsAwsquery_deserializeErrorInvalidDBSubnetGroupFault(response, errorBody)
+
 	case strings.EqualFold("InvalidDBSubnetGroupStateFault", errorCode):
 		return awsAwsquery_deserializeErrorInvalidDBSubnetGroupStateFault(response, errorBody)
 
@@ -1830,6 +1842,9 @@ func awsAwsquery_deserializeOpErrorCreateDBCluster(response *smithyhttp.Response
 
 	case strings.EqualFold("KMSKeyNotAccessibleFault", errorCode):
 		return awsAwsquery_deserializeErrorKMSKeyNotAccessibleFault(response, errorBody)
+
+	case strings.EqualFold("OptionGroupNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorOptionGroupNotFoundFault(response, errorBody)
 
 	case strings.EqualFold("StorageQuotaExceeded", errorCode):
 		return awsAwsquery_deserializeErrorStorageQuotaExceededFault(response, errorBody)
@@ -2356,6 +2371,9 @@ func awsAwsquery_deserializeOpErrorCreateDBInstance(response *smithyhttp.Respons
 	case strings.EqualFold("StorageTypeNotSupported", errorCode):
 		return awsAwsquery_deserializeErrorStorageTypeNotSupportedFault(response, errorBody)
 
+	case strings.EqualFold("TenantDatabaseQuotaExceeded", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response, errorBody)
+
 	default:
 		genericError := &smithy.GenericAPIError{
 			Code:    errorCode,
@@ -2526,6 +2544,9 @@ func awsAwsquery_deserializeOpErrorCreateDBInstanceReadReplica(response *smithyh
 
 	case strings.EqualFold("StorageTypeNotSupported", errorCode):
 		return awsAwsquery_deserializeErrorStorageTypeNotSupportedFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseQuotaExceeded", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -3476,6 +3497,129 @@ func awsAwsquery_deserializeOpErrorCreateGlobalCluster(response *smithyhttp.Resp
 	}
 }
 
+type awsAwsquery_deserializeOpCreateIntegration struct {
+}
+
+func (*awsAwsquery_deserializeOpCreateIntegration) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpCreateIntegration) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorCreateIntegration(response, &metadata)
+	}
+	output := &CreateIntegrationOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("CreateIntegrationResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentCreateIntegrationOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorCreateIntegration(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBClusterNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBClusterNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("DBInstanceNotFound", errorCode):
+		return awsAwsquery_deserializeErrorDBInstanceNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationAlreadyExistsFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationAlreadyExistsFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationConflictOperationFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationConflictOperationFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationQuotaExceededFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationQuotaExceededFault(response, errorBody)
+
+	case strings.EqualFold("KMSKeyNotAccessibleFault", errorCode):
+		return awsAwsquery_deserializeErrorKMSKeyNotAccessibleFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
 type awsAwsquery_deserializeOpCreateOptionGroup struct {
 }
 
@@ -3576,6 +3720,123 @@ func awsAwsquery_deserializeOpErrorCreateOptionGroup(response *smithyhttp.Respon
 
 	case strings.EqualFold("OptionGroupQuotaExceededFault", errorCode):
 		return awsAwsquery_deserializeErrorOptionGroupQuotaExceededFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+type awsAwsquery_deserializeOpCreateTenantDatabase struct {
+}
+
+func (*awsAwsquery_deserializeOpCreateTenantDatabase) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpCreateTenantDatabase) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorCreateTenantDatabase(response, &metadata)
+	}
+	output := &CreateTenantDatabaseOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("CreateTenantDatabaseResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentCreateTenantDatabaseOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorCreateTenantDatabase(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBInstanceNotFound", errorCode):
+		return awsAwsquery_deserializeErrorDBInstanceNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("InvalidDBInstanceState", errorCode):
+		return awsAwsquery_deserializeErrorInvalidDBInstanceStateFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseAlreadyExists", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseAlreadyExistsFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseQuotaExceeded", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -3904,6 +4165,9 @@ func awsAwsquery_deserializeOpErrorDeleteDBCluster(response *smithyhttp.Response
 	}
 	errorBody.Seek(0, io.SeekStart)
 	switch {
+	case strings.EqualFold("DBClusterAutomatedBackupQuotaExceededFault", errorCode):
+		return awsAwsquery_deserializeErrorDBClusterAutomatedBackupQuotaExceededFault(response, errorBody)
+
 	case strings.EqualFold("DBClusterNotFoundFault", errorCode):
 		return awsAwsquery_deserializeErrorDBClusterNotFoundFault(response, errorBody)
 
@@ -3918,6 +4182,117 @@ func awsAwsquery_deserializeOpErrorDeleteDBCluster(response *smithyhttp.Response
 
 	case strings.EqualFold("SnapshotQuotaExceeded", errorCode):
 		return awsAwsquery_deserializeErrorSnapshotQuotaExceededFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+type awsAwsquery_deserializeOpDeleteDBClusterAutomatedBackup struct {
+}
+
+func (*awsAwsquery_deserializeOpDeleteDBClusterAutomatedBackup) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDeleteDBClusterAutomatedBackup) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDeleteDBClusterAutomatedBackup(response, &metadata)
+	}
+	output := &DeleteDBClusterAutomatedBackupOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DeleteDBClusterAutomatedBackupResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDeleteDBClusterAutomatedBackupOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDeleteDBClusterAutomatedBackup(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBClusterAutomatedBackupNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBClusterAutomatedBackupNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("InvalidDBClusterAutomatedBackupStateFault", errorCode):
+		return awsAwsquery_deserializeErrorInvalidDBClusterAutomatedBackupStateFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -5250,6 +5625,120 @@ func awsAwsquery_deserializeOpErrorDeleteGlobalCluster(response *smithyhttp.Resp
 	}
 }
 
+type awsAwsquery_deserializeOpDeleteIntegration struct {
+}
+
+func (*awsAwsquery_deserializeOpDeleteIntegration) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDeleteIntegration) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDeleteIntegration(response, &metadata)
+	}
+	output := &DeleteIntegrationOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DeleteIntegrationResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDeleteIntegrationOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDeleteIntegration(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("IntegrationConflictOperationFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationConflictOperationFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("InvalidIntegrationStateFault", errorCode):
+		return awsAwsquery_deserializeErrorInvalidIntegrationStateFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
 type awsAwsquery_deserializeOpDeleteOptionGroup struct {
 }
 
@@ -5315,6 +5804,120 @@ func awsAwsquery_deserializeOpErrorDeleteOptionGroup(response *smithyhttp.Respon
 
 	case strings.EqualFold("OptionGroupNotFoundFault", errorCode):
 		return awsAwsquery_deserializeErrorOptionGroupNotFoundFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+type awsAwsquery_deserializeOpDeleteTenantDatabase struct {
+}
+
+func (*awsAwsquery_deserializeOpDeleteTenantDatabase) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDeleteTenantDatabase) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDeleteTenantDatabase(response, &metadata)
+	}
+	output := &DeleteTenantDatabaseOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DeleteTenantDatabaseResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDeleteTenantDatabaseOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDeleteTenantDatabase(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBInstanceNotFound", errorCode):
+		return awsAwsquery_deserializeErrorDBInstanceNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("InvalidDBInstanceState", errorCode):
+		return awsAwsquery_deserializeErrorInvalidDBInstanceStateFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseNotFound", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseNotFoundFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -5753,6 +6356,114 @@ func awsAwsquery_deserializeOpErrorDescribeCertificates(response *smithyhttp.Res
 	switch {
 	case strings.EqualFold("CertificateNotFound", errorCode):
 		return awsAwsquery_deserializeErrorCertificateNotFoundFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+type awsAwsquery_deserializeOpDescribeDBClusterAutomatedBackups struct {
+}
+
+func (*awsAwsquery_deserializeOpDescribeDBClusterAutomatedBackups) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDescribeDBClusterAutomatedBackups) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDescribeDBClusterAutomatedBackups(response, &metadata)
+	}
+	output := &DescribeDBClusterAutomatedBackupsOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DescribeDBClusterAutomatedBackupsResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDescribeDBClusterAutomatedBackupsOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDescribeDBClusterAutomatedBackups(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBClusterAutomatedBackupNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBClusterAutomatedBackupNotFoundFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -7942,6 +8653,114 @@ func awsAwsquery_deserializeOpErrorDescribeDBSnapshots(response *smithyhttp.Resp
 	}
 }
 
+type awsAwsquery_deserializeOpDescribeDBSnapshotTenantDatabases struct {
+}
+
+func (*awsAwsquery_deserializeOpDescribeDBSnapshotTenantDatabases) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDescribeDBSnapshotTenantDatabases) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDescribeDBSnapshotTenantDatabases(response, &metadata)
+	}
+	output := &DescribeDBSnapshotTenantDatabasesOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DescribeDBSnapshotTenantDatabasesResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDescribeDBSnapshotTenantDatabasesOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDescribeDBSnapshotTenantDatabases(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBSnapshotNotFound", errorCode):
+		return awsAwsquery_deserializeErrorDBSnapshotNotFoundFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
 type awsAwsquery_deserializeOpDescribeDBSubnetGroups struct {
 }
 
@@ -8794,6 +9613,114 @@ func awsAwsquery_deserializeOpErrorDescribeGlobalClusters(response *smithyhttp.R
 	}
 }
 
+type awsAwsquery_deserializeOpDescribeIntegrations struct {
+}
+
+func (*awsAwsquery_deserializeOpDescribeIntegrations) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDescribeIntegrations) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDescribeIntegrations(response, &metadata)
+	}
+	output := &DescribeIntegrationsOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DescribeIntegrationsResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDescribeIntegrationsOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDescribeIntegrations(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("IntegrationNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationNotFoundFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
 type awsAwsquery_deserializeOpDescribeOptionGroupOptions struct {
 }
 
@@ -9541,6 +10468,114 @@ func awsAwsquery_deserializeOpErrorDescribeSourceRegions(response *smithyhttp.Re
 	}
 }
 
+type awsAwsquery_deserializeOpDescribeTenantDatabases struct {
+}
+
+func (*awsAwsquery_deserializeOpDescribeTenantDatabases) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpDescribeTenantDatabases) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorDescribeTenantDatabases(response, &metadata)
+	}
+	output := &DescribeTenantDatabasesOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("DescribeTenantDatabasesResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentDescribeTenantDatabasesOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorDescribeTenantDatabases(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBInstanceNotFound", errorCode):
+		return awsAwsquery_deserializeErrorDBInstanceNotFoundFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
 type awsAwsquery_deserializeOpDescribeValidDBInstanceModifications struct {
 }
 
@@ -10106,6 +11141,15 @@ func awsAwsquery_deserializeOpErrorListTagsForResource(response *smithyhttp.Resp
 
 	case strings.EqualFold("DBSnapshotNotFound", errorCode):
 		return awsAwsquery_deserializeErrorDBSnapshotNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("DBSnapshotTenantDatabaseNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBSnapshotTenantDatabaseNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseNotFound", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseNotFoundFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -10695,6 +11739,9 @@ func awsAwsquery_deserializeOpErrorModifyDBCluster(response *smithyhttp.Response
 	case strings.EqualFold("InvalidVPCNetworkStateFault", errorCode):
 		return awsAwsquery_deserializeErrorInvalidVPCNetworkStateFault(response, errorBody)
 
+	case strings.EqualFold("OptionGroupNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorOptionGroupNotFoundFault(response, errorBody)
+
 	case strings.EqualFold("StorageQuotaExceeded", errorCode):
 		return awsAwsquery_deserializeErrorStorageQuotaExceededFault(response, errorBody)
 
@@ -11210,6 +12257,9 @@ func awsAwsquery_deserializeOpErrorModifyDBInstance(response *smithyhttp.Respons
 
 	case strings.EqualFold("StorageTypeNotSupported", errorCode):
 		return awsAwsquery_deserializeErrorStorageTypeNotSupportedFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseQuotaExceeded", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -12359,6 +13409,123 @@ func awsAwsquery_deserializeOpErrorModifyOptionGroup(response *smithyhttp.Respon
 
 	case strings.EqualFold("OptionGroupNotFoundFault", errorCode):
 		return awsAwsquery_deserializeErrorOptionGroupNotFoundFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+type awsAwsquery_deserializeOpModifyTenantDatabase struct {
+}
+
+func (*awsAwsquery_deserializeOpModifyTenantDatabase) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpModifyTenantDatabase) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorModifyTenantDatabase(response, &metadata)
+	}
+	output := &ModifyTenantDatabaseOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("ModifyTenantDatabaseResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentModifyTenantDatabaseOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorModifyTenantDatabase(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBInstanceNotFound", errorCode):
+		return awsAwsquery_deserializeErrorDBInstanceNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("InvalidDBInstanceState", errorCode):
+		return awsAwsquery_deserializeErrorInvalidDBInstanceStateFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseAlreadyExists", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseAlreadyExistsFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseNotFound", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseNotFoundFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -13524,6 +14691,15 @@ func awsAwsquery_deserializeOpErrorRemoveTagsFromResource(response *smithyhttp.R
 	case strings.EqualFold("DBSnapshotNotFound", errorCode):
 		return awsAwsquery_deserializeErrorDBSnapshotNotFoundFault(response, errorBody)
 
+	case strings.EqualFold("DBSnapshotTenantDatabaseNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBSnapshotTenantDatabaseNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("IntegrationNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorIntegrationNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseNotFound", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseNotFoundFault(response, errorBody)
+
 	default:
 		genericError := &smithy.GenericAPIError{
 			Code:    errorCode,
@@ -14016,6 +15192,9 @@ func awsAwsquery_deserializeOpErrorRestoreDBClusterFromSnapshot(response *smithy
 	case strings.EqualFold("DBSnapshotNotFound", errorCode):
 		return awsAwsquery_deserializeErrorDBSnapshotNotFoundFault(response, errorBody)
 
+	case strings.EqualFold("DBSubnetGroupDoesNotCoverEnoughAZs", errorCode):
+		return awsAwsquery_deserializeErrorDBSubnetGroupDoesNotCoverEnoughAZs(response, errorBody)
+
 	case strings.EqualFold("DBSubnetGroupNotFoundFault", errorCode):
 		return awsAwsquery_deserializeErrorDBSubnetGroupNotFoundFault(response, errorBody)
 
@@ -14162,6 +15341,9 @@ func awsAwsquery_deserializeOpErrorRestoreDBClusterToPointInTime(response *smith
 	switch {
 	case strings.EqualFold("DBClusterAlreadyExistsFault", errorCode):
 		return awsAwsquery_deserializeErrorDBClusterAlreadyExistsFault(response, errorBody)
+
+	case strings.EqualFold("DBClusterAutomatedBackupNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBClusterAutomatedBackupNotFoundFault(response, errorBody)
 
 	case strings.EqualFold("DBClusterNotFoundFault", errorCode):
 		return awsAwsquery_deserializeErrorDBClusterNotFoundFault(response, errorBody)
@@ -14384,6 +15566,9 @@ func awsAwsquery_deserializeOpErrorRestoreDBInstanceFromDBSnapshot(response *smi
 
 	case strings.EqualFold("StorageTypeNotSupported", errorCode):
 		return awsAwsquery_deserializeErrorStorageTypeNotSupportedFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseQuotaExceeded", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -14717,6 +15902,9 @@ func awsAwsquery_deserializeOpErrorRestoreDBInstanceToPointInTime(response *smit
 
 	case strings.EqualFold("StorageTypeNotSupported", errorCode):
 		return awsAwsquery_deserializeErrorStorageTypeNotSupportedFault(response, errorBody)
+
+	case strings.EqualFold("TenantDatabaseQuotaExceeded", errorCode):
+		return awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response, errorBody)
 
 	default:
 		genericError := &smithy.GenericAPIError{
@@ -16048,6 +17236,123 @@ func awsAwsquery_deserializeOpErrorSwitchoverBlueGreenDeployment(response *smith
 	}
 }
 
+type awsAwsquery_deserializeOpSwitchoverGlobalCluster struct {
+}
+
+func (*awsAwsquery_deserializeOpSwitchoverGlobalCluster) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsAwsquery_deserializeOpSwitchoverGlobalCluster) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsAwsquery_deserializeOpErrorSwitchoverGlobalCluster(response, &metadata)
+	}
+	output := &SwitchoverGlobalClusterOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(response.Body, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return out, metadata, nil
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("SwitchoverGlobalClusterResult")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeOpDocumentSwitchoverGlobalClusterOutput(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	return out, metadata, err
+}
+
+func awsAwsquery_deserializeOpErrorSwitchoverGlobalCluster(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	errorComponents, err := awsxml.GetErrorResponseComponents(errorBody, false)
+	if err != nil {
+		return err
+	}
+	if reqID := errorComponents.RequestID; len(reqID) != 0 {
+		awsmiddleware.SetRequestIDMetadata(metadata, reqID)
+	}
+	if len(errorComponents.Code) != 0 {
+		errorCode = errorComponents.Code
+	}
+	if len(errorComponents.Message) != 0 {
+		errorMessage = errorComponents.Message
+	}
+	errorBody.Seek(0, io.SeekStart)
+	switch {
+	case strings.EqualFold("DBClusterNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorDBClusterNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("GlobalClusterNotFoundFault", errorCode):
+		return awsAwsquery_deserializeErrorGlobalClusterNotFoundFault(response, errorBody)
+
+	case strings.EqualFold("InvalidDBClusterStateFault", errorCode):
+		return awsAwsquery_deserializeErrorInvalidDBClusterStateFault(response, errorBody)
+
+	case strings.EqualFold("InvalidGlobalClusterStateFault", errorCode):
+		return awsAwsquery_deserializeErrorInvalidGlobalClusterStateFault(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
 type awsAwsquery_deserializeOpSwitchoverReadReplica struct {
 }
 
@@ -16719,6 +18024,94 @@ func awsAwsquery_deserializeErrorDBClusterAlreadyExistsFault(response *smithyhtt
 
 	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 	err = awsAwsquery_deserializeDocumentDBClusterAlreadyExistsFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorDBClusterAutomatedBackupNotFoundFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.DBClusterAutomatedBackupNotFoundFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentDBClusterAutomatedBackupNotFoundFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorDBClusterAutomatedBackupQuotaExceededFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.DBClusterAutomatedBackupQuotaExceededFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentDBClusterAutomatedBackupQuotaExceededFault(&output, decoder)
 	if err != nil {
 		var snapshot bytes.Buffer
 		io.Copy(&snapshot, ringBuffer)
@@ -18403,6 +19796,50 @@ func awsAwsquery_deserializeErrorDBSnapshotNotFoundFault(response *smithyhttp.Re
 	return output
 }
 
+func awsAwsquery_deserializeErrorDBSnapshotTenantDatabaseNotFoundFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.DBSnapshotTenantDatabaseNotFoundFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentDBSnapshotTenantDatabaseNotFoundFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
 func awsAwsquery_deserializeErrorDBSubnetGroupAlreadyExistsFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
 	output := &types.DBSubnetGroupAlreadyExistsFault{}
 	var buff [1024]byte
@@ -19371,6 +20808,182 @@ func awsAwsquery_deserializeErrorInsufficientStorageClusterCapacityFault(respons
 	return output
 }
 
+func awsAwsquery_deserializeErrorIntegrationAlreadyExistsFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.IntegrationAlreadyExistsFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentIntegrationAlreadyExistsFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorIntegrationConflictOperationFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.IntegrationConflictOperationFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentIntegrationConflictOperationFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorIntegrationNotFoundFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.IntegrationNotFoundFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentIntegrationNotFoundFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorIntegrationQuotaExceededFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.IntegrationQuotaExceededFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentIntegrationQuotaExceededFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
 func awsAwsquery_deserializeErrorInvalidBlueGreenDeploymentStateFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
 	output := &types.InvalidBlueGreenDeploymentStateFault{}
 	var buff [1024]byte
@@ -19447,6 +21060,50 @@ func awsAwsquery_deserializeErrorInvalidCustomDBEngineVersionStateFault(response
 
 	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 	err = awsAwsquery_deserializeDocumentInvalidCustomDBEngineVersionStateFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorInvalidDBClusterAutomatedBackupStateFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.InvalidDBClusterAutomatedBackupStateFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentInvalidDBClusterAutomatedBackupStateFault(&output, decoder)
 	if err != nil {
 		var snapshot bytes.Buffer
 		io.Copy(&snapshot, ringBuffer)
@@ -20283,6 +21940,50 @@ func awsAwsquery_deserializeErrorInvalidGlobalClusterStateFault(response *smithy
 
 	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 	err = awsAwsquery_deserializeDocumentInvalidGlobalClusterStateFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorInvalidIntegrationStateFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.InvalidIntegrationStateFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentInvalidIntegrationStateFault(&output, decoder)
 	if err != nil {
 		var snapshot bytes.Buffer
 		io.Copy(&snapshot, ringBuffer)
@@ -21703,6 +23404,138 @@ func awsAwsquery_deserializeErrorSubscriptionNotFoundFault(response *smithyhttp.
 	return output
 }
 
+func awsAwsquery_deserializeErrorTenantDatabaseAlreadyExistsFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.TenantDatabaseAlreadyExistsFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentTenantDatabaseAlreadyExistsFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorTenantDatabaseNotFoundFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.TenantDatabaseNotFoundFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentTenantDatabaseNotFoundFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
+func awsAwsquery_deserializeErrorTenantDatabaseQuotaExceededFault(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	output := &types.TenantDatabaseQuotaExceededFault{}
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+	body := io.TeeReader(errorBody, ringBuffer)
+	rootDecoder := xml.NewDecoder(body)
+	t, err := smithyxml.FetchRootElement(rootDecoder)
+	if err == io.EOF {
+		return output
+	}
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder := smithyxml.WrapNodeDecoder(rootDecoder, t)
+	t, err = decoder.GetElement("Error")
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	decoder = smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+	err = awsAwsquery_deserializeDocumentTenantDatabaseQuotaExceededFault(&output, decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	return output
+}
+
 func awsAwsquery_deserializeDocumentAccountQuota(v **types.AccountQuota, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -21752,7 +23585,7 @@ func awsAwsquery_deserializeDocumentAccountQuota(v **types.AccountQuota, decoder
 				if err != nil {
 					return err
 				}
-				sv.Max = i64
+				sv.Max = ptr.Int64(i64)
 			}
 
 		case strings.EqualFold("Used", t.Name.Local):
@@ -21769,7 +23602,7 @@ func awsAwsquery_deserializeDocumentAccountQuota(v **types.AccountQuota, decoder
 				if err != nil {
 					return err
 				}
-				sv.Used = i64
+				sv.Used = ptr.Int64(i64)
 			}
 
 		default:
@@ -23626,6 +25459,12 @@ func awsAwsquery_deserializeDocumentClusterPendingModifiedValues(v **types.Clust
 				return err
 			}
 
+		case strings.EqualFold("RdsCustomClusterConfiguration", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentRdsCustomClusterConfiguration(&sv.RdsCustomClusterConfiguration, nodeDecoder); err != nil {
+				return err
+			}
+
 		case strings.EqualFold("StorageType", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -23689,7 +25528,7 @@ func awsAwsquery_deserializeDocumentConnectionPoolConfigurationInfo(v **types.Co
 				if err != nil {
 					return err
 				}
-				sv.ConnectionBorrowTimeout = int32(i64)
+				sv.ConnectionBorrowTimeout = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("InitQuery", t.Name.Local):
@@ -23719,7 +25558,7 @@ func awsAwsquery_deserializeDocumentConnectionPoolConfigurationInfo(v **types.Co
 				if err != nil {
 					return err
 				}
-				sv.MaxConnectionsPercent = int32(i64)
+				sv.MaxConnectionsPercent = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("MaxIdleConnectionsPercent", t.Name.Local):
@@ -23736,7 +25575,7 @@ func awsAwsquery_deserializeDocumentConnectionPoolConfigurationInfo(v **types.Co
 				if err != nil {
 					return err
 				}
-				sv.MaxIdleConnectionsPercent = int32(i64)
+				sv.MaxIdleConnectionsPercent = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("SessionPinningFilters", t.Name.Local):
@@ -24193,13 +26032,26 @@ func awsAwsquery_deserializeDocumentDBCluster(v **types.DBCluster, decoder smith
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.AutoMinorVersionUpgrade = xtv
+				sv.AutoMinorVersionUpgrade = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("AvailabilityZones", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentAvailabilityZones(&sv.AvailabilityZones, nodeDecoder); err != nil {
 				return err
+			}
+
+		case strings.EqualFold("AwsBackupRecoveryPointArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.AwsBackupRecoveryPointArn = ptr.String(xtv)
 			}
 
 		case strings.EqualFold("BacktrackConsumedChangeRecords", t.Name.Local):
@@ -24719,6 +26571,19 @@ func awsAwsquery_deserializeDocumentDBCluster(v **types.DBCluster, decoder smith
 				sv.LatestRestorableTime = ptr.Time(t)
 			}
 
+		case strings.EqualFold("LocalWriteForwardingStatus", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.LocalWriteForwardingStatus = types.LocalWriteForwardingStatus(xtv)
+			}
+
 		case strings.EqualFold("MasterUsername", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -24921,6 +26786,12 @@ func awsAwsquery_deserializeDocumentDBCluster(v **types.DBCluster, decoder smith
 				sv.PubliclyAccessible = ptr.Bool(xtv)
 			}
 
+		case strings.EqualFold("RdsCustomClusterConfiguration", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentRdsCustomClusterConfiguration(&sv.RdsCustomClusterConfiguration, nodeDecoder); err != nil {
+				return err
+			}
+
 		case strings.EqualFold("ReaderEndpoint", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -24978,6 +26849,12 @@ func awsAwsquery_deserializeDocumentDBCluster(v **types.DBCluster, decoder smith
 				sv.Status = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("StatusInfos", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentDBClusterStatusInfoList(&sv.StatusInfos, nodeDecoder); err != nil {
+				return err
+			}
+
 		case strings.EqualFold("StorageEncrypted", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -24991,7 +26868,7 @@ func awsAwsquery_deserializeDocumentDBCluster(v **types.DBCluster, decoder smith
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.StorageEncrypted = xtv
+				sv.StorageEncrypted = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("StorageType", t.Name.Local):
@@ -25040,6 +26917,532 @@ func awsAwsquery_deserializeDocumentDBClusterAlreadyExistsFault(v **types.DBClus
 	var sv *types.DBClusterAlreadyExistsFault
 	if *v == nil {
 		sv = &types.DBClusterAlreadyExistsFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBClusterAutomatedBackup(v **types.DBClusterAutomatedBackup, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.DBClusterAutomatedBackup
+	if *v == nil {
+		sv = &types.DBClusterAutomatedBackup{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("AllocatedStorage", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				i64, err := strconv.ParseInt(xtv, 10, 64)
+				if err != nil {
+					return err
+				}
+				sv.AllocatedStorage = ptr.Int32(int32(i64))
+			}
+
+		case strings.EqualFold("AvailabilityZones", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentAvailabilityZones(&sv.AvailabilityZones, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("AwsBackupRecoveryPointArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.AwsBackupRecoveryPointArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("BackupRetentionPeriod", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				i64, err := strconv.ParseInt(xtv, 10, 64)
+				if err != nil {
+					return err
+				}
+				sv.BackupRetentionPeriod = ptr.Int32(int32(i64))
+			}
+
+		case strings.EqualFold("ClusterCreateTime", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				t, err := smithytime.ParseDateTime(xtv)
+				if err != nil {
+					return err
+				}
+				sv.ClusterCreateTime = ptr.Time(t)
+			}
+
+		case strings.EqualFold("DBClusterArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBClusterArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DBClusterAutomatedBackupsArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBClusterAutomatedBackupsArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DBClusterIdentifier", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBClusterIdentifier = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DbClusterResourceId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DbClusterResourceId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Engine", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Engine = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("EngineMode", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.EngineMode = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("EngineVersion", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.EngineVersion = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("IAMDatabaseAuthenticationEnabled", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.IAMDatabaseAuthenticationEnabled = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("Iops", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				i64, err := strconv.ParseInt(xtv, 10, 64)
+				if err != nil {
+					return err
+				}
+				sv.Iops = ptr.Int32(int32(i64))
+			}
+
+		case strings.EqualFold("KmsKeyId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.KmsKeyId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("LicenseModel", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.LicenseModel = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("MasterUsername", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.MasterUsername = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Port", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				i64, err := strconv.ParseInt(xtv, 10, 64)
+				if err != nil {
+					return err
+				}
+				sv.Port = ptr.Int32(int32(i64))
+			}
+
+		case strings.EqualFold("Region", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Region = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("RestoreWindow", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentRestoreWindow(&sv.RestoreWindow, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("Status", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Status = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("StorageEncrypted", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.StorageEncrypted = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("StorageType", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.StorageType = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("VpcId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.VpcId = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBClusterAutomatedBackupList(v *[]types.DBClusterAutomatedBackup, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv []types.DBClusterAutomatedBackup
+	if *v == nil {
+		sv = make([]types.DBClusterAutomatedBackup, 0)
+	} else {
+		sv = *v
+	}
+
+	originalDecoder := decoder
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("DBClusterAutomatedBackup", t.Name.Local):
+			var col types.DBClusterAutomatedBackup
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			destAddr := &col
+			if err := awsAwsquery_deserializeDocumentDBClusterAutomatedBackup(&destAddr, nodeDecoder); err != nil {
+				return err
+			}
+			col = *destAddr
+			sv = append(sv, col)
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBClusterAutomatedBackupListUnwrapped(v *[]types.DBClusterAutomatedBackup, decoder smithyxml.NodeDecoder) error {
+	var sv []types.DBClusterAutomatedBackup
+	if *v == nil {
+		sv = make([]types.DBClusterAutomatedBackup, 0)
+	} else {
+		sv = *v
+	}
+
+	switch {
+	default:
+		var mv types.DBClusterAutomatedBackup
+		t := decoder.StartEl
+		_ = t
+		nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+		destAddr := &mv
+		if err := awsAwsquery_deserializeDocumentDBClusterAutomatedBackup(&destAddr, nodeDecoder); err != nil {
+			return err
+		}
+		mv = *destAddr
+		sv = append(sv, mv)
+	}
+	*v = sv
+	return nil
+}
+func awsAwsquery_deserializeDocumentDBClusterAutomatedBackupNotFoundFault(v **types.DBClusterAutomatedBackupNotFoundFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.DBClusterAutomatedBackupNotFoundFault
+	if *v == nil {
+		sv = &types.DBClusterAutomatedBackupNotFoundFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBClusterAutomatedBackupQuotaExceededFault(v **types.DBClusterAutomatedBackupQuotaExceededFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.DBClusterAutomatedBackupQuotaExceededFault
+	if *v == nil {
+		sv = &types.DBClusterAutomatedBackupQuotaExceededFault{}
 	} else {
 		sv = *v
 	}
@@ -25821,7 +28224,7 @@ func awsAwsquery_deserializeDocumentDBClusterMember(v **types.DBClusterMember, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsClusterWriter = xtv
+				sv.IsClusterWriter = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("PromotionTier", t.Name.Local):
@@ -26682,7 +29085,7 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshot(v **types.DBClusterSnapsho
 				if err != nil {
 					return err
 				}
-				sv.AllocatedStorage = int32(i64)
+				sv.AllocatedStorage = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("AvailabilityZones", t.Name.Local):
@@ -26719,6 +29122,19 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshot(v **types.DBClusterSnapsho
 			{
 				xtv := string(val)
 				sv.DBClusterIdentifier = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DbClusterResourceId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DbClusterResourceId = ptr.String(xtv)
 			}
 
 		case strings.EqualFold("DBClusterSnapshotArn", t.Name.Local):
@@ -26812,7 +29228,7 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshot(v **types.DBClusterSnapsho
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IAMDatabaseAuthenticationEnabled = xtv
+				sv.IAMDatabaseAuthenticationEnabled = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("KmsKeyId", t.Name.Local):
@@ -26868,7 +29284,7 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshot(v **types.DBClusterSnapsho
 				if err != nil {
 					return err
 				}
-				sv.PercentProgress = int32(i64)
+				sv.PercentProgress = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("Port", t.Name.Local):
@@ -26885,7 +29301,7 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshot(v **types.DBClusterSnapsho
 				if err != nil {
 					return err
 				}
-				sv.Port = int32(i64)
+				sv.Port = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("SnapshotCreateTime", t.Name.Local):
@@ -26957,7 +29373,7 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshot(v **types.DBClusterSnapsho
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.StorageEncrypted = xtv
+				sv.StorageEncrypted = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("StorageType", t.Name.Local):
@@ -27350,6 +29766,165 @@ func awsAwsquery_deserializeDocumentDBClusterSnapshotNotFoundFault(v **types.DBC
 	return nil
 }
 
+func awsAwsquery_deserializeDocumentDBClusterStatusInfo(v **types.DBClusterStatusInfo, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.DBClusterStatusInfo
+	if *v == nil {
+		sv = &types.DBClusterStatusInfo{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("Message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Normal", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.Normal = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("Status", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Status = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("StatusType", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.StatusType = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBClusterStatusInfoList(v *[]types.DBClusterStatusInfo, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv []types.DBClusterStatusInfo
+	if *v == nil {
+		sv = make([]types.DBClusterStatusInfo, 0)
+	} else {
+		sv = *v
+	}
+
+	originalDecoder := decoder
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("DBClusterStatusInfo", t.Name.Local):
+			var col types.DBClusterStatusInfo
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			destAddr := &col
+			if err := awsAwsquery_deserializeDocumentDBClusterStatusInfo(&destAddr, nodeDecoder); err != nil {
+				return err
+			}
+			col = *destAddr
+			sv = append(sv, col)
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBClusterStatusInfoListUnwrapped(v *[]types.DBClusterStatusInfo, decoder smithyxml.NodeDecoder) error {
+	var sv []types.DBClusterStatusInfo
+	if *v == nil {
+		sv = make([]types.DBClusterStatusInfo, 0)
+	} else {
+		sv = *v
+	}
+
+	switch {
+	default:
+		var mv types.DBClusterStatusInfo
+		t := decoder.StartEl
+		_ = t
+		nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+		destAddr := &mv
+		if err := awsAwsquery_deserializeDocumentDBClusterStatusInfo(&destAddr, nodeDecoder); err != nil {
+			return err
+		}
+		mv = *destAddr
+		sv = append(sv, mv)
+	}
+	*v = sv
+	return nil
+}
 func awsAwsquery_deserializeDocumentDBEngineVersion(v **types.DBEngineVersion, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -27625,7 +30200,7 @@ func awsAwsquery_deserializeDocumentDBEngineVersion(v **types.DBEngineVersion, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsBabelfish = xtv
+				sv.SupportsBabelfish = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsCertificateRotationWithoutRestart", t.Name.Local):
@@ -27657,7 +30232,39 @@ func awsAwsquery_deserializeDocumentDBEngineVersion(v **types.DBEngineVersion, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsGlobalDatabases = xtv
+				sv.SupportsGlobalDatabases = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsIntegrations", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsIntegrations = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsLocalWriteForwarding", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsLocalWriteForwarding = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsLogExportsToCloudwatchLogs", t.Name.Local):
@@ -27673,7 +30280,7 @@ func awsAwsquery_deserializeDocumentDBEngineVersion(v **types.DBEngineVersion, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsLogExportsToCloudwatchLogs = xtv
+				sv.SupportsLogExportsToCloudwatchLogs = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsParallelQuery", t.Name.Local):
@@ -27689,7 +30296,7 @@ func awsAwsquery_deserializeDocumentDBEngineVersion(v **types.DBEngineVersion, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsParallelQuery = xtv
+				sv.SupportsParallelQuery = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsReadReplica", t.Name.Local):
@@ -27705,7 +30312,7 @@ func awsAwsquery_deserializeDocumentDBEngineVersion(v **types.DBEngineVersion, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsReadReplica = xtv
+				sv.SupportsReadReplica = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("TagList", t.Name.Local):
@@ -27919,7 +30526,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.AllocatedStorage = int32(i64)
+				sv.AllocatedStorage = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("AssociatedRoles", t.Name.Local):
@@ -27971,7 +30578,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.AutoMinorVersionUpgrade = xtv
+				sv.AutoMinorVersionUpgrade = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("AvailabilityZone", t.Name.Local):
@@ -28014,7 +30621,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.BackupRetentionPeriod = int32(i64)
+				sv.BackupRetentionPeriod = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("BackupTarget", t.Name.Local):
@@ -28075,7 +30682,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.CopyTagsToSnapshot = xtv
+				sv.CopyTagsToSnapshot = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("CustomerOwnedIpEnabled", t.Name.Local):
@@ -28179,7 +30786,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.DbInstancePort = int32(i64)
+				sv.DbInstancePort = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("DBInstanceStatus", t.Name.Local):
@@ -28252,6 +30859,22 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				sv.DBSystemId = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("DedicatedLogVolume", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.DedicatedLogVolume = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("DeletionProtection", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -28265,7 +30888,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.DeletionProtection = xtv
+				sv.DeletionProtection = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("DomainMemberships", t.Name.Local):
@@ -28338,7 +30961,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IAMDatabaseAuthenticationEnabled = xtv
+				sv.IAMDatabaseAuthenticationEnabled = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("InstanceCreateTime", t.Name.Local):
@@ -28373,6 +30996,22 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 					return err
 				}
 				sv.Iops = ptr.Int32(int32(i64))
+			}
+
+		case strings.EqualFold("IsStorageConfigUpgradeAvailable", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.IsStorageConfigUpgradeAvailable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("KmsKeyId", t.Name.Local):
@@ -28503,7 +31142,23 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.MultiAZ = xtv
+				sv.MultiAZ = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("MultiTenant", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.MultiTenant = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("NcharCharacterSetName", t.Name.Local):
@@ -28665,7 +31320,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.PubliclyAccessible = xtv
+				sv.PubliclyAccessible = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("ReadReplicaDBClusterIdentifiers", t.Name.Local):
@@ -28768,7 +31423,7 @@ func awsAwsquery_deserializeDocumentDBInstance(v **types.DBInstance, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.StorageEncrypted = xtv
+				sv.StorageEncrypted = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("StorageThroughput", t.Name.Local):
@@ -28938,7 +31593,7 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 				if err != nil {
 					return err
 				}
-				sv.AllocatedStorage = int32(i64)
+				sv.AllocatedStorage = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("AvailabilityZone", t.Name.Local):
@@ -28952,6 +31607,19 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 			{
 				xtv := string(val)
 				sv.AvailabilityZone = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("AwsBackupRecoveryPointArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.AwsBackupRecoveryPointArn = ptr.String(xtv)
 			}
 
 		case strings.EqualFold("BackupRetentionPeriod", t.Name.Local):
@@ -29042,6 +31710,22 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 				sv.DbiResourceId = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("DedicatedLogVolume", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.DedicatedLogVolume = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("Encrypted", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -29055,7 +31739,7 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Encrypted = xtv
+				sv.Encrypted = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Engine", t.Name.Local):
@@ -29097,7 +31781,7 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IAMDatabaseAuthenticationEnabled = xtv
+				sv.IAMDatabaseAuthenticationEnabled = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("InstanceCreateTime", t.Name.Local):
@@ -29173,6 +31857,22 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 				sv.MasterUsername = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("MultiTenant", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.MultiTenant = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("OptionGroupName", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -29200,7 +31900,7 @@ func awsAwsquery_deserializeDocumentDBInstanceAutomatedBackup(v **types.DBInstan
 				if err != nil {
 					return err
 				}
-				sv.Port = int32(i64)
+				sv.Port = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("Region", t.Name.Local):
@@ -30056,7 +32756,7 @@ func awsAwsquery_deserializeDocumentDBInstanceStatusInfo(v **types.DBInstanceSta
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Normal = xtv
+				sv.Normal = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Status", t.Name.Local):
@@ -30733,7 +33433,7 @@ func awsAwsquery_deserializeDocumentDBProxy(v **types.DBProxy, decoder smithyxml
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.DebugLogging = xtv
+				sv.DebugLogging = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Endpoint", t.Name.Local):
@@ -30776,7 +33476,7 @@ func awsAwsquery_deserializeDocumentDBProxy(v **types.DBProxy, decoder smithyxml
 				if err != nil {
 					return err
 				}
-				sv.IdleClientTimeout = int32(i64)
+				sv.IdleClientTimeout = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("RequireTLS", t.Name.Local):
@@ -30792,7 +33492,7 @@ func awsAwsquery_deserializeDocumentDBProxy(v **types.DBProxy, decoder smithyxml
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.RequireTLS = xtv
+				sv.RequireTLS = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("RoleArn", t.Name.Local):
@@ -31030,7 +33730,7 @@ func awsAwsquery_deserializeDocumentDBProxyEndpoint(v **types.DBProxyEndpoint, d
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsDefault = xtv
+				sv.IsDefault = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Status", t.Name.Local):
@@ -31528,7 +34228,7 @@ func awsAwsquery_deserializeDocumentDBProxyTarget(v **types.DBProxyTarget, decod
 				if err != nil {
 					return err
 				}
-				sv.Port = int32(i64)
+				sv.Port = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("RdsResourceId", t.Name.Local):
@@ -31736,7 +34436,7 @@ func awsAwsquery_deserializeDocumentDBProxyTargetGroup(v **types.DBProxyTargetGr
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsDefault = xtv
+				sv.IsDefault = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Status", t.Name.Local):
@@ -32450,7 +35150,7 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.AllocatedStorage = int32(i64)
+				sv.AllocatedStorage = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("AvailabilityZone", t.Name.Local):
@@ -32531,6 +35231,22 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				sv.DBSystemId = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("DedicatedLogVolume", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.DedicatedLogVolume = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("Encrypted", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -32544,7 +35260,7 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Encrypted = xtv
+				sv.Encrypted = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Engine", t.Name.Local):
@@ -32586,7 +35302,7 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IAMDatabaseAuthenticationEnabled = xtv
+				sv.IAMDatabaseAuthenticationEnabled = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("InstanceCreateTime", t.Name.Local):
@@ -32662,6 +35378,22 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				sv.MasterUsername = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("MultiTenant", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.MultiTenant = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("OptionGroupName", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -32706,7 +35438,7 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.PercentProgress = int32(i64)
+				sv.PercentProgress = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("Port", t.Name.Local):
@@ -32723,7 +35455,7 @@ func awsAwsquery_deserializeDocumentDBSnapshot(v **types.DBSnapshot, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.Port = int32(i64)
+				sv.Port = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("ProcessorFeatures", t.Name.Local):
@@ -33264,6 +35996,325 @@ func awsAwsquery_deserializeDocumentDBSnapshotNotFoundFault(v **types.DBSnapshot
 	return nil
 }
 
+func awsAwsquery_deserializeDocumentDBSnapshotTenantDatabase(v **types.DBSnapshotTenantDatabase, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.DBSnapshotTenantDatabase
+	if *v == nil {
+		sv = &types.DBSnapshotTenantDatabase{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("CharacterSetName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.CharacterSetName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DBInstanceIdentifier", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBInstanceIdentifier = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DbiResourceId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DbiResourceId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DBSnapshotIdentifier", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBSnapshotIdentifier = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DBSnapshotTenantDatabaseARN", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBSnapshotTenantDatabaseARN = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("EngineName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.EngineName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("MasterUsername", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.MasterUsername = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("NcharCharacterSetName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.NcharCharacterSetName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("SnapshotType", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.SnapshotType = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TagList", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTagList(&sv.TagList, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("TenantDatabaseCreateTime", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				t, err := smithytime.ParseDateTime(xtv)
+				if err != nil {
+					return err
+				}
+				sv.TenantDatabaseCreateTime = ptr.Time(t)
+			}
+
+		case strings.EqualFold("TenantDatabaseResourceId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TenantDatabaseResourceId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TenantDBName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TenantDBName = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBSnapshotTenantDatabaseNotFoundFault(v **types.DBSnapshotTenantDatabaseNotFoundFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.DBSnapshotTenantDatabaseNotFoundFault
+	if *v == nil {
+		sv = &types.DBSnapshotTenantDatabaseNotFoundFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBSnapshotTenantDatabasesList(v *[]types.DBSnapshotTenantDatabase, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv []types.DBSnapshotTenantDatabase
+	if *v == nil {
+		sv = make([]types.DBSnapshotTenantDatabase, 0)
+	} else {
+		sv = *v
+	}
+
+	originalDecoder := decoder
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("DBSnapshotTenantDatabase", t.Name.Local):
+			var col types.DBSnapshotTenantDatabase
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			destAddr := &col
+			if err := awsAwsquery_deserializeDocumentDBSnapshotTenantDatabase(&destAddr, nodeDecoder); err != nil {
+				return err
+			}
+			col = *destAddr
+			sv = append(sv, col)
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentDBSnapshotTenantDatabasesListUnwrapped(v *[]types.DBSnapshotTenantDatabase, decoder smithyxml.NodeDecoder) error {
+	var sv []types.DBSnapshotTenantDatabase
+	if *v == nil {
+		sv = make([]types.DBSnapshotTenantDatabase, 0)
+	} else {
+		sv = *v
+	}
+
+	switch {
+	default:
+		var mv types.DBSnapshotTenantDatabase
+		t := decoder.StartEl
+		_ = t
+		nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+		destAddr := &mv
+		if err := awsAwsquery_deserializeDocumentDBSnapshotTenantDatabase(&destAddr, nodeDecoder); err != nil {
+			return err
+		}
+		mv = *destAddr
+		sv = append(sv, mv)
+	}
+	*v = sv
+	return nil
+}
 func awsAwsquery_deserializeDocumentDBSubnetGroup(v **types.DBSubnetGroup, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -33824,7 +36875,7 @@ func awsAwsquery_deserializeDocumentDescribeDBLogFilesDetails(v **types.Describe
 				if err != nil {
 					return err
 				}
-				sv.LastWritten = i64
+				sv.LastWritten = ptr.Int64(i64)
 			}
 
 		case strings.EqualFold("LogFileName", t.Name.Local):
@@ -33854,7 +36905,7 @@ func awsAwsquery_deserializeDocumentDescribeDBLogFilesDetails(v **types.Describe
 				if err != nil {
 					return err
 				}
-				sv.Size = i64
+				sv.Size = ptr.Int64(i64)
 			}
 
 		default:
@@ -34212,7 +37263,7 @@ func awsAwsquery_deserializeDocumentDoubleRange(v **types.DoubleRange, decoder s
 				if err != nil {
 					return err
 				}
-				sv.From = f64
+				sv.From = ptr.Float64(f64)
 			}
 
 		case strings.EqualFold("To", t.Name.Local):
@@ -34229,7 +37280,7 @@ func awsAwsquery_deserializeDocumentDoubleRange(v **types.DoubleRange, decoder s
 				if err != nil {
 					return err
 				}
-				sv.To = f64
+				sv.To = ptr.Float64(f64)
 			}
 
 		default:
@@ -34519,6 +37570,104 @@ func awsAwsquery_deserializeDocumentEC2SecurityGroupListUnwrapped(v *[]types.EC2
 	*v = sv
 	return nil
 }
+func awsAwsquery_deserializeDocumentEncryptionContextMap(v *map[string]string, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv map[string]string
+	if *v == nil {
+		sv = make(map[string]string, 0)
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("entry", t.Name.Local):
+			entryDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentEncryptionContextMapUnwrapped(&sv, entryDecoder); err != nil {
+				return err
+			}
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentEncryptionContextMapUnwrapped(v *map[string]string, decoder smithyxml.NodeDecoder) error {
+	var sv map[string]string
+	if *v == nil {
+		sv = make(map[string]string, 0)
+	} else {
+		sv = *v
+	}
+
+	var ek string
+	var ev string
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			sv[ek] = ev
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("key", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				ek = xtv
+			}
+
+		case strings.EqualFold("value", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				ev = xtv
+			}
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
 func awsAwsquery_deserializeDocumentEndpoint(v **types.Endpoint, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -34581,7 +37730,7 @@ func awsAwsquery_deserializeDocumentEndpoint(v **types.Endpoint, decoder smithyx
 				if err != nil {
 					return err
 				}
-				sv.Port = int32(i64)
+				sv.Port = ptr.Int32(int32(i64))
 			}
 
 		default:
@@ -35189,7 +38338,7 @@ func awsAwsquery_deserializeDocumentEventSubscription(v **types.EventSubscriptio
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Enabled = xtv
+				sv.Enabled = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("EventCategoriesList", t.Name.Local):
@@ -35494,7 +38643,7 @@ func awsAwsquery_deserializeDocumentExportTask(v **types.ExportTask, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.PercentProgress = int32(i64)
+				sv.PercentProgress = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("S3Bucket", t.Name.Local):
@@ -35627,7 +38776,7 @@ func awsAwsquery_deserializeDocumentExportTask(v **types.ExportTask, decoder smi
 				if err != nil {
 					return err
 				}
-				sv.TotalExtractedDataInGB = int32(i64)
+				sv.TotalExtractedDataInGB = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("WarningMessage", t.Name.Local):
@@ -35856,6 +39005,22 @@ func awsAwsquery_deserializeDocumentFailoverState(v **types.FailoverState, decod
 			{
 				xtv := string(val)
 				sv.FromDbClusterArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("IsDataLossAllowed", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.IsDataLossAllowed = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Status", t.Name.Local):
@@ -36327,13 +39492,26 @@ func awsAwsquery_deserializeDocumentGlobalClusterMember(v **types.GlobalClusterM
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsWriter = xtv
+				sv.IsWriter = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Readers", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentReadersArnList(&sv.Readers, nodeDecoder); err != nil {
 				return err
+			}
+
+		case strings.EqualFold("SynchronizationStatus", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.SynchronizationStatus = types.GlobalClusterMemberSynchronizationStatus(xtv)
 			}
 
 		default:
@@ -36859,6 +40037,549 @@ func awsAwsquery_deserializeDocumentInsufficientStorageClusterCapacityFault(v **
 	return nil
 }
 
+func awsAwsquery_deserializeDocumentIntegration(v **types.Integration, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.Integration
+	if *v == nil {
+		sv = &types.Integration{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("AdditionalEncryptionContext", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentEncryptionContextMap(&sv.AdditionalEncryptionContext, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("CreateTime", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				t, err := smithytime.ParseDateTime(xtv)
+				if err != nil {
+					return err
+				}
+				sv.CreateTime = ptr.Time(t)
+			}
+
+		case strings.EqualFold("Errors", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentIntegrationErrorList(&sv.Errors, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("IntegrationArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.IntegrationArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("IntegrationName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.IntegrationName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("KMSKeyId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.KMSKeyId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("SourceArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.SourceArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Status", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Status = types.IntegrationStatus(xtv)
+			}
+
+		case strings.EqualFold("Tags", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTagList(&sv.Tags, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("TargetArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TargetArn = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationAlreadyExistsFault(v **types.IntegrationAlreadyExistsFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.IntegrationAlreadyExistsFault
+	if *v == nil {
+		sv = &types.IntegrationAlreadyExistsFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationConflictOperationFault(v **types.IntegrationConflictOperationFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.IntegrationConflictOperationFault
+	if *v == nil {
+		sv = &types.IntegrationConflictOperationFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationError(v **types.IntegrationError, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.IntegrationError
+	if *v == nil {
+		sv = &types.IntegrationError{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("ErrorCode", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.ErrorCode = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("ErrorMessage", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.ErrorMessage = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationErrorList(v *[]types.IntegrationError, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv []types.IntegrationError
+	if *v == nil {
+		sv = make([]types.IntegrationError, 0)
+	} else {
+		sv = *v
+	}
+
+	originalDecoder := decoder
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("IntegrationError", t.Name.Local):
+			var col types.IntegrationError
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			destAddr := &col
+			if err := awsAwsquery_deserializeDocumentIntegrationError(&destAddr, nodeDecoder); err != nil {
+				return err
+			}
+			col = *destAddr
+			sv = append(sv, col)
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationErrorListUnwrapped(v *[]types.IntegrationError, decoder smithyxml.NodeDecoder) error {
+	var sv []types.IntegrationError
+	if *v == nil {
+		sv = make([]types.IntegrationError, 0)
+	} else {
+		sv = *v
+	}
+
+	switch {
+	default:
+		var mv types.IntegrationError
+		t := decoder.StartEl
+		_ = t
+		nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+		destAddr := &mv
+		if err := awsAwsquery_deserializeDocumentIntegrationError(&destAddr, nodeDecoder); err != nil {
+			return err
+		}
+		mv = *destAddr
+		sv = append(sv, mv)
+	}
+	*v = sv
+	return nil
+}
+func awsAwsquery_deserializeDocumentIntegrationList(v *[]types.Integration, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv []types.Integration
+	if *v == nil {
+		sv = make([]types.Integration, 0)
+	} else {
+		sv = *v
+	}
+
+	originalDecoder := decoder
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("Integration", t.Name.Local):
+			var col types.Integration
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			destAddr := &col
+			if err := awsAwsquery_deserializeDocumentIntegration(&destAddr, nodeDecoder); err != nil {
+				return err
+			}
+			col = *destAddr
+			sv = append(sv, col)
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationListUnwrapped(v *[]types.Integration, decoder smithyxml.NodeDecoder) error {
+	var sv []types.Integration
+	if *v == nil {
+		sv = make([]types.Integration, 0)
+	} else {
+		sv = *v
+	}
+
+	switch {
+	default:
+		var mv types.Integration
+		t := decoder.StartEl
+		_ = t
+		nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+		destAddr := &mv
+		if err := awsAwsquery_deserializeDocumentIntegration(&destAddr, nodeDecoder); err != nil {
+			return err
+		}
+		mv = *destAddr
+		sv = append(sv, mv)
+	}
+	*v = sv
+	return nil
+}
+func awsAwsquery_deserializeDocumentIntegrationNotFoundFault(v **types.IntegrationNotFoundFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.IntegrationNotFoundFault
+	if *v == nil {
+		sv = &types.IntegrationNotFoundFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentIntegrationQuotaExceededFault(v **types.IntegrationQuotaExceededFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.IntegrationQuotaExceededFault
+	if *v == nil {
+		sv = &types.IntegrationQuotaExceededFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeDocumentInvalidBlueGreenDeploymentStateFault(v **types.InvalidBlueGreenDeploymentStateFault, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -36915,6 +40636,55 @@ func awsAwsquery_deserializeDocumentInvalidCustomDBEngineVersionStateFault(v **t
 	var sv *types.InvalidCustomDBEngineVersionStateFault
 	if *v == nil {
 		sv = &types.InvalidCustomDBEngineVersionStateFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentInvalidDBClusterAutomatedBackupStateFault(v **types.InvalidDBClusterAutomatedBackupStateFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.InvalidDBClusterAutomatedBackupStateFault
+	if *v == nil {
+		sv = &types.InvalidDBClusterAutomatedBackupStateFault{}
 	} else {
 		sv = *v
 	}
@@ -37888,6 +41658,55 @@ func awsAwsquery_deserializeDocumentInvalidGlobalClusterStateFault(v **types.Inv
 	return nil
 }
 
+func awsAwsquery_deserializeDocumentInvalidIntegrationStateFault(v **types.InvalidIntegrationStateFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.InvalidIntegrationStateFault
+	if *v == nil {
+		sv = &types.InvalidIntegrationStateFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeDocumentInvalidOptionGroupStateFault(v **types.InvalidOptionGroupStateFault, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -38732,7 +42551,7 @@ func awsAwsquery_deserializeDocumentOption(v **types.Option, decoder smithyxml.N
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Permanent = xtv
+				sv.Permanent = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Persistent", t.Name.Local):
@@ -38748,7 +42567,7 @@ func awsAwsquery_deserializeDocumentOption(v **types.Option, decoder smithyxml.N
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Persistent = xtv
+				sv.Persistent = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Port", t.Name.Local):
@@ -38823,7 +42642,7 @@ func awsAwsquery_deserializeDocumentOptionGroup(v **types.OptionGroup, decoder s
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.AllowsVpcAndNonVpcInstanceMemberships = xtv
+				sv.AllowsVpcAndNonVpcInstanceMemberships = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("CopyTimestamp", t.Name.Local):
@@ -39352,7 +43171,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOption(v **types.OptionGroupOptio
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Permanent = xtv
+				sv.Permanent = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Persistent", t.Name.Local):
@@ -39368,7 +43187,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOption(v **types.OptionGroupOptio
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Persistent = xtv
+				sv.Persistent = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("PortRequired", t.Name.Local):
@@ -39384,7 +43203,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOption(v **types.OptionGroupOptio
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.PortRequired = xtv
+				sv.PortRequired = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("RequiresAutoMinorEngineVersionUpgrade", t.Name.Local):
@@ -39400,7 +43219,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOption(v **types.OptionGroupOptio
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.RequiresAutoMinorEngineVersionUpgrade = xtv
+				sv.RequiresAutoMinorEngineVersionUpgrade = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsOptionVersionDowngrade", t.Name.Local):
@@ -39432,7 +43251,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOption(v **types.OptionGroupOptio
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.VpcOnly = xtv
+				sv.VpcOnly = ptr.Bool(xtv)
 			}
 
 		default:
@@ -39523,7 +43342,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOptionSetting(v **types.OptionGro
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsModifiable = xtv
+				sv.IsModifiable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("IsRequired", t.Name.Local):
@@ -39539,7 +43358,7 @@ func awsAwsquery_deserializeDocumentOptionGroupOptionSetting(v **types.OptionGro
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsRequired = xtv
+				sv.IsRequired = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("MinimumEngineVersionPerAllowedValue", t.Name.Local):
@@ -40169,7 +43988,7 @@ func awsAwsquery_deserializeDocumentOptionSetting(v **types.OptionSetting, decod
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsCollection = xtv
+				sv.IsCollection = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("IsModifiable", t.Name.Local):
@@ -40185,7 +44004,7 @@ func awsAwsquery_deserializeDocumentOptionSetting(v **types.OptionSetting, decod
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsModifiable = xtv
+				sv.IsModifiable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Name", t.Name.Local):
@@ -40399,7 +44218,7 @@ func awsAwsquery_deserializeDocumentOptionVersion(v **types.OptionVersion, decod
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsDefault = xtv
+				sv.IsDefault = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Version", t.Name.Local):
@@ -40711,7 +44530,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.MultiAZCapable = xtv
+				sv.MultiAZCapable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("OutpostCapable", t.Name.Local):
@@ -40727,7 +44546,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.OutpostCapable = xtv
+				sv.OutpostCapable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("ReadReplicaCapable", t.Name.Local):
@@ -40743,7 +44562,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.ReadReplicaCapable = xtv
+				sv.ReadReplicaCapable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("StorageType", t.Name.Local):
@@ -40790,7 +44609,23 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsClusters = xtv
+				sv.SupportsClusters = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsDedicatedLogVolume", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsDedicatedLogVolume = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsEnhancedMonitoring", t.Name.Local):
@@ -40806,7 +44641,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsEnhancedMonitoring = xtv
+				sv.SupportsEnhancedMonitoring = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsGlobalDatabases", t.Name.Local):
@@ -40822,7 +44657,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsGlobalDatabases = xtv
+				sv.SupportsGlobalDatabases = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsIAMDatabaseAuthentication", t.Name.Local):
@@ -40838,7 +44673,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsIAMDatabaseAuthentication = xtv
+				sv.SupportsIAMDatabaseAuthentication = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsIops", t.Name.Local):
@@ -40854,7 +44689,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsIops = xtv
+				sv.SupportsIops = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsKerberosAuthentication", t.Name.Local):
@@ -40886,7 +44721,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsPerformanceInsights = xtv
+				sv.SupportsPerformanceInsights = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsStorageAutoscaling", t.Name.Local):
@@ -40918,7 +44753,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsStorageEncryption = xtv
+				sv.SupportsStorageEncryption = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsStorageThroughput", t.Name.Local):
@@ -40934,7 +44769,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsStorageThroughput = xtv
+				sv.SupportsStorageThroughput = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Vpc", t.Name.Local):
@@ -40950,7 +44785,7 @@ func awsAwsquery_deserializeDocumentOrderableDBInstanceOption(v **types.Orderabl
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.Vpc = xtv
+				sv.Vpc = ptr.Bool(xtv)
 			}
 
 		default:
@@ -41184,7 +45019,7 @@ func awsAwsquery_deserializeDocumentParameter(v **types.Parameter, decoder smith
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsModifiable = xtv
+				sv.IsModifiable = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("MinimumEngineVersion", t.Name.Local):
@@ -41758,6 +45593,22 @@ func awsAwsquery_deserializeDocumentPendingModifiedValues(v **types.PendingModif
 				sv.DBSubnetGroupName = ptr.String(xtv)
 			}
 
+		case strings.EqualFold("DedicatedLogVolume", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.DedicatedLogVolume = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("Engine", t.Name.Local):
 			val, err := decoder.Value()
 			if err != nil {
@@ -41857,6 +45708,22 @@ func awsAwsquery_deserializeDocumentPendingModifiedValues(v **types.PendingModif
 					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
 				}
 				sv.MultiAZ = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("MultiTenant", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.MultiTenant = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("PendingCloudwatchLogsExports", t.Name.Local):
@@ -42213,7 +46080,7 @@ func awsAwsquery_deserializeDocumentRange(v **types.Range, decoder smithyxml.Nod
 				if err != nil {
 					return err
 				}
-				sv.From = int32(i64)
+				sv.From = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("Step", t.Name.Local):
@@ -42247,7 +46114,7 @@ func awsAwsquery_deserializeDocumentRange(v **types.Range, decoder smithyxml.Nod
 				if err != nil {
 					return err
 				}
-				sv.To = int32(i64)
+				sv.To = ptr.Int32(int32(i64))
 			}
 
 		default:
@@ -42332,6 +46199,81 @@ func awsAwsquery_deserializeDocumentRangeListUnwrapped(v *[]types.Range, decoder
 	*v = sv
 	return nil
 }
+func awsAwsquery_deserializeDocumentRdsCustomClusterConfiguration(v **types.RdsCustomClusterConfiguration, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.RdsCustomClusterConfiguration
+	if *v == nil {
+		sv = &types.RdsCustomClusterConfiguration{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("InterconnectSubnetId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.InterconnectSubnetId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("ReplicaMode", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.ReplicaMode = types.ReplicaMode(xtv)
+			}
+
+		case strings.EqualFold("TransitGatewayMulticastDomainId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TransitGatewayMulticastDomainId = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeDocumentReadersArnList(v *[]string, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -42688,7 +46630,7 @@ func awsAwsquery_deserializeDocumentRecurringCharge(v **types.RecurringCharge, d
 				if err != nil {
 					return err
 				}
-				sv.RecurringChargeAmount = f64
+				sv.RecurringChargeAmount = ptr.Float64(f64)
 			}
 
 		case strings.EqualFold("RecurringChargeFrequency", t.Name.Local):
@@ -42848,7 +46790,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstance(v **types.ReservedDBInsta
 				if err != nil {
 					return err
 				}
-				sv.DBInstanceCount = int32(i64)
+				sv.DBInstanceCount = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("Duration", t.Name.Local):
@@ -42865,7 +46807,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstance(v **types.ReservedDBInsta
 				if err != nil {
 					return err
 				}
-				sv.Duration = int32(i64)
+				sv.Duration = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("FixedPrice", t.Name.Local):
@@ -42882,7 +46824,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstance(v **types.ReservedDBInsta
 				if err != nil {
 					return err
 				}
-				sv.FixedPrice = f64
+				sv.FixedPrice = ptr.Float64(f64)
 			}
 
 		case strings.EqualFold("LeaseId", t.Name.Local):
@@ -42911,7 +46853,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstance(v **types.ReservedDBInsta
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.MultiAZ = xtv
+				sv.MultiAZ = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("OfferingType", t.Name.Local):
@@ -43029,7 +46971,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstance(v **types.ReservedDBInsta
 				if err != nil {
 					return err
 				}
-				sv.UsagePrice = f64
+				sv.UsagePrice = ptr.Float64(f64)
 			}
 
 		default:
@@ -43323,7 +47265,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstancesOffering(v **types.Reserv
 				if err != nil {
 					return err
 				}
-				sv.Duration = int32(i64)
+				sv.Duration = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("FixedPrice", t.Name.Local):
@@ -43340,7 +47282,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstancesOffering(v **types.Reserv
 				if err != nil {
 					return err
 				}
-				sv.FixedPrice = f64
+				sv.FixedPrice = ptr.Float64(f64)
 			}
 
 		case strings.EqualFold("MultiAZ", t.Name.Local):
@@ -43356,7 +47298,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstancesOffering(v **types.Reserv
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.MultiAZ = xtv
+				sv.MultiAZ = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("OfferingType", t.Name.Local):
@@ -43418,7 +47360,7 @@ func awsAwsquery_deserializeDocumentReservedDBInstancesOffering(v **types.Reserv
 				if err != nil {
 					return err
 				}
-				sv.UsagePrice = f64
+				sv.UsagePrice = ptr.Float64(f64)
 			}
 
 		default:
@@ -44475,7 +48417,7 @@ func awsAwsquery_deserializeDocumentSourceRegion(v **types.SourceRegion, decoder
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsDBInstanceAutomatedBackupsReplication = xtv
+				sv.SupportsDBInstanceAutomatedBackupsReplication = ptr.Bool(xtv)
 			}
 
 		default:
@@ -45745,6 +49687,481 @@ func awsAwsquery_deserializeDocumentTargetListUnwrapped(v *[]types.DBProxyTarget
 	*v = sv
 	return nil
 }
+func awsAwsquery_deserializeDocumentTenantDatabase(v **types.TenantDatabase, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.TenantDatabase
+	if *v == nil {
+		sv = &types.TenantDatabase{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("CharacterSetName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.CharacterSetName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DBInstanceIdentifier", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DBInstanceIdentifier = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DbiResourceId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DbiResourceId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("DeletionProtection", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.DeletionProtection = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("MasterUsername", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.MasterUsername = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("NcharCharacterSetName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.NcharCharacterSetName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("PendingModifiedValues", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTenantDatabasePendingModifiedValues(&sv.PendingModifiedValues, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("Status", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Status = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TagList", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTagList(&sv.TagList, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("TenantDatabaseARN", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TenantDatabaseARN = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TenantDatabaseCreateTime", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				t, err := smithytime.ParseDateTime(xtv)
+				if err != nil {
+					return err
+				}
+				sv.TenantDatabaseCreateTime = ptr.Time(t)
+			}
+
+		case strings.EqualFold("TenantDatabaseResourceId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TenantDatabaseResourceId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TenantDBName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TenantDBName = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentTenantDatabaseAlreadyExistsFault(v **types.TenantDatabaseAlreadyExistsFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.TenantDatabaseAlreadyExistsFault
+	if *v == nil {
+		sv = &types.TenantDatabaseAlreadyExistsFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentTenantDatabaseNotFoundFault(v **types.TenantDatabaseNotFoundFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.TenantDatabaseNotFoundFault
+	if *v == nil {
+		sv = &types.TenantDatabaseNotFoundFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentTenantDatabasePendingModifiedValues(v **types.TenantDatabasePendingModifiedValues, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.TenantDatabasePendingModifiedValues
+	if *v == nil {
+		sv = &types.TenantDatabasePendingModifiedValues{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("MasterUserPassword", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.MasterUserPassword = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TenantDBName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TenantDBName = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentTenantDatabaseQuotaExceededFault(v **types.TenantDatabaseQuotaExceededFault, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *types.TenantDatabaseQuotaExceededFault
+	if *v == nil {
+		sv = &types.TenantDatabaseQuotaExceededFault{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("message", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Message = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentTenantDatabasesList(v *[]types.TenantDatabase, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv []types.TenantDatabase
+	if *v == nil {
+		sv = make([]types.TenantDatabase, 0)
+	} else {
+		sv = *v
+	}
+
+	originalDecoder := decoder
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		switch {
+		case strings.EqualFold("TenantDatabase", t.Name.Local):
+			var col types.TenantDatabase
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			destAddr := &col
+			if err := awsAwsquery_deserializeDocumentTenantDatabase(&destAddr, nodeDecoder); err != nil {
+				return err
+			}
+			col = *destAddr
+			sv = append(sv, col)
+
+		default:
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeDocumentTenantDatabasesListUnwrapped(v *[]types.TenantDatabase, decoder smithyxml.NodeDecoder) error {
+	var sv []types.TenantDatabase
+	if *v == nil {
+		sv = make([]types.TenantDatabase, 0)
+	} else {
+		sv = *v
+	}
+
+	switch {
+	default:
+		var mv types.TenantDatabase
+		t := decoder.StartEl
+		_ = t
+		nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+		destAddr := &mv
+		if err := awsAwsquery_deserializeDocumentTenantDatabase(&destAddr, nodeDecoder); err != nil {
+			return err
+		}
+		mv = *destAddr
+		sv = append(sv, mv)
+	}
+	*v = sv
+	return nil
+}
 func awsAwsquery_deserializeDocumentTimezone(v **types.Timezone, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -45829,7 +50246,7 @@ func awsAwsquery_deserializeDocumentUpgradeTarget(v **types.UpgradeTarget, decod
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.AutoUpgrade = xtv
+				sv.AutoUpgrade = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("Description", t.Name.Local):
@@ -45884,7 +50301,7 @@ func awsAwsquery_deserializeDocumentUpgradeTarget(v **types.UpgradeTarget, decod
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.IsMajorVersionUpgrade = xtv
+				sv.IsMajorVersionUpgrade = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportedEngineModes", t.Name.Local):
@@ -45923,6 +50340,38 @@ func awsAwsquery_deserializeDocumentUpgradeTarget(v **types.UpgradeTarget, decod
 					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
 				}
 				sv.SupportsGlobalDatabases = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsIntegrations", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsIntegrations = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsLocalWriteForwarding", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsLocalWriteForwarding = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsParallelQuery", t.Name.Local):
@@ -46165,6 +50614,22 @@ func awsAwsquery_deserializeDocumentValidDBInstanceModificationsMessage(v **type
 				return err
 			}
 
+		case strings.EqualFold("SupportsDedicatedLogVolume", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsDedicatedLogVolume = ptr.Bool(xtv)
+			}
+
 		case strings.EqualFold("ValidProcessorFeatures", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentAvailableProcessorFeatureList(&sv.ValidProcessorFeatures, nodeDecoder); err != nil {
@@ -46263,7 +50728,7 @@ func awsAwsquery_deserializeDocumentValidStorageOptions(v **types.ValidStorageOp
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsStorageAutoscaling = xtv
+				sv.SupportsStorageAutoscaling = ptr.Bool(xtv)
 			}
 
 		default:
@@ -46892,7 +51357,7 @@ func awsAwsquery_deserializeOpDocumentCancelExportTaskOutput(v **CancelExportTas
 				if err != nil {
 					return err
 				}
-				sv.PercentProgress = int32(i64)
+				sv.PercentProgress = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("S3Bucket", t.Name.Local):
@@ -47025,7 +51490,7 @@ func awsAwsquery_deserializeOpDocumentCancelExportTaskOutput(v **CancelExportTas
 				if err != nil {
 					return err
 				}
-				sv.TotalExtractedDataInGB = int32(i64)
+				sv.TotalExtractedDataInGB = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("WarningMessage", t.Name.Local):
@@ -47582,7 +52047,7 @@ func awsAwsquery_deserializeOpDocumentCreateCustomDBEngineVersionOutput(v **Crea
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsBabelfish = xtv
+				sv.SupportsBabelfish = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsCertificateRotationWithoutRestart", t.Name.Local):
@@ -47614,7 +52079,39 @@ func awsAwsquery_deserializeOpDocumentCreateCustomDBEngineVersionOutput(v **Crea
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsGlobalDatabases = xtv
+				sv.SupportsGlobalDatabases = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsIntegrations", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsIntegrations = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsLocalWriteForwarding", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsLocalWriteForwarding = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsLogExportsToCloudwatchLogs", t.Name.Local):
@@ -47630,7 +52127,7 @@ func awsAwsquery_deserializeOpDocumentCreateCustomDBEngineVersionOutput(v **Crea
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsLogExportsToCloudwatchLogs = xtv
+				sv.SupportsLogExportsToCloudwatchLogs = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsParallelQuery", t.Name.Local):
@@ -47646,7 +52143,7 @@ func awsAwsquery_deserializeOpDocumentCreateCustomDBEngineVersionOutput(v **Crea
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsParallelQuery = xtv
+				sv.SupportsParallelQuery = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsReadReplica", t.Name.Local):
@@ -47662,7 +52159,7 @@ func awsAwsquery_deserializeOpDocumentCreateCustomDBEngineVersionOutput(v **Crea
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsReadReplica = xtv
+				sv.SupportsReadReplica = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("TagList", t.Name.Local):
@@ -48389,6 +52886,155 @@ func awsAwsquery_deserializeOpDocumentCreateGlobalClusterOutput(v **CreateGlobal
 	return nil
 }
 
+func awsAwsquery_deserializeOpDocumentCreateIntegrationOutput(v **CreateIntegrationOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *CreateIntegrationOutput
+	if *v == nil {
+		sv = &CreateIntegrationOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("AdditionalEncryptionContext", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentEncryptionContextMap(&sv.AdditionalEncryptionContext, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("CreateTime", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				t, err := smithytime.ParseDateTime(xtv)
+				if err != nil {
+					return err
+				}
+				sv.CreateTime = ptr.Time(t)
+			}
+
+		case strings.EqualFold("Errors", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentIntegrationErrorList(&sv.Errors, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("IntegrationArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.IntegrationArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("IntegrationName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.IntegrationName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("KMSKeyId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.KMSKeyId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("SourceArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.SourceArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Status", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Status = types.IntegrationStatus(xtv)
+			}
+
+		case strings.EqualFold("Tags", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTagList(&sv.Tags, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("TargetArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TargetArn = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeOpDocumentCreateOptionGroupOutput(v **CreateOptionGroupOutput, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -48414,6 +53060,48 @@ func awsAwsquery_deserializeOpDocumentCreateOptionGroupOutput(v **CreateOptionGr
 		case strings.EqualFold("OptionGroup", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentOptionGroup(&sv.OptionGroup, nodeDecoder); err != nil {
+				return err
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeOpDocumentCreateTenantDatabaseOutput(v **CreateTenantDatabaseOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *CreateTenantDatabaseOutput
+	if *v == nil {
+		sv = &CreateTenantDatabaseOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("TenantDatabase", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTenantDatabase(&sv.TenantDatabase, nodeDecoder); err != nil {
 				return err
 			}
 
@@ -48748,7 +53436,7 @@ func awsAwsquery_deserializeOpDocumentDeleteCustomDBEngineVersionOutput(v **Dele
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsBabelfish = xtv
+				sv.SupportsBabelfish = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsCertificateRotationWithoutRestart", t.Name.Local):
@@ -48780,7 +53468,39 @@ func awsAwsquery_deserializeOpDocumentDeleteCustomDBEngineVersionOutput(v **Dele
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsGlobalDatabases = xtv
+				sv.SupportsGlobalDatabases = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsIntegrations", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsIntegrations = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsLocalWriteForwarding", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsLocalWriteForwarding = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsLogExportsToCloudwatchLogs", t.Name.Local):
@@ -48796,7 +53516,7 @@ func awsAwsquery_deserializeOpDocumentDeleteCustomDBEngineVersionOutput(v **Dele
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsLogExportsToCloudwatchLogs = xtv
+				sv.SupportsLogExportsToCloudwatchLogs = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsParallelQuery", t.Name.Local):
@@ -48812,7 +53532,7 @@ func awsAwsquery_deserializeOpDocumentDeleteCustomDBEngineVersionOutput(v **Dele
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsParallelQuery = xtv
+				sv.SupportsParallelQuery = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsReadReplica", t.Name.Local):
@@ -48828,7 +53548,7 @@ func awsAwsquery_deserializeOpDocumentDeleteCustomDBEngineVersionOutput(v **Dele
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsReadReplica = xtv
+				sv.SupportsReadReplica = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("TagList", t.Name.Local):
@@ -48840,6 +53560,48 @@ func awsAwsquery_deserializeOpDocumentDeleteCustomDBEngineVersionOutput(v **Dele
 		case strings.EqualFold("ValidUpgradeTarget", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentValidUpgradeTargetList(&sv.ValidUpgradeTarget, nodeDecoder); err != nil {
+				return err
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeOpDocumentDeleteDBClusterAutomatedBackupOutput(v **DeleteDBClusterAutomatedBackupOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DeleteDBClusterAutomatedBackupOutput
+	if *v == nil {
+		sv = &DeleteDBClusterAutomatedBackupOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("DBClusterAutomatedBackup", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentDBClusterAutomatedBackup(&sv.DBClusterAutomatedBackup, nodeDecoder); err != nil {
 				return err
 			}
 
@@ -49387,6 +54149,197 @@ func awsAwsquery_deserializeOpDocumentDeleteGlobalClusterOutput(v **DeleteGlobal
 	return nil
 }
 
+func awsAwsquery_deserializeOpDocumentDeleteIntegrationOutput(v **DeleteIntegrationOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DeleteIntegrationOutput
+	if *v == nil {
+		sv = &DeleteIntegrationOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("AdditionalEncryptionContext", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentEncryptionContextMap(&sv.AdditionalEncryptionContext, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("CreateTime", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				t, err := smithytime.ParseDateTime(xtv)
+				if err != nil {
+					return err
+				}
+				sv.CreateTime = ptr.Time(t)
+			}
+
+		case strings.EqualFold("Errors", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentIntegrationErrorList(&sv.Errors, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("IntegrationArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.IntegrationArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("IntegrationName", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.IntegrationName = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("KMSKeyId", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.KMSKeyId = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("SourceArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.SourceArn = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Status", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Status = types.IntegrationStatus(xtv)
+			}
+
+		case strings.EqualFold("Tags", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTagList(&sv.Tags, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("TargetArn", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.TargetArn = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeOpDocumentDeleteTenantDatabaseOutput(v **DeleteTenantDatabaseOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DeleteTenantDatabaseOutput
+	if *v == nil {
+		sv = &DeleteTenantDatabaseOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("TenantDatabase", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTenantDatabase(&sv.TenantDatabase, nodeDecoder); err != nil {
+				return err
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeOpDocumentDeregisterDBProxyTargetsOutput(v **DeregisterDBProxyTargetsOutput, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -49545,6 +54498,74 @@ func awsAwsquery_deserializeOpDocumentDescribeCertificatesOutput(v **DescribeCer
 		case strings.EqualFold("Certificates", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentCertificateList(&sv.Certificates, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("DefaultCertificateForNewLaunches", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.DefaultCertificateForNewLaunches = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("Marker", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Marker = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeOpDocumentDescribeDBClusterAutomatedBackupsOutput(v **DescribeDBClusterAutomatedBackupsOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DescribeDBClusterAutomatedBackupsOutput
+	if *v == nil {
+		sv = &DescribeDBClusterAutomatedBackupsOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("DBClusterAutomatedBackups", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentDBClusterAutomatedBackupList(&sv.DBClusterAutomatedBackups, nodeDecoder); err != nil {
 				return err
 			}
 
@@ -50649,6 +55670,61 @@ func awsAwsquery_deserializeOpDocumentDescribeDBSnapshotsOutput(v **DescribeDBSn
 	return nil
 }
 
+func awsAwsquery_deserializeOpDocumentDescribeDBSnapshotTenantDatabasesOutput(v **DescribeDBSnapshotTenantDatabasesOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DescribeDBSnapshotTenantDatabasesOutput
+	if *v == nil {
+		sv = &DescribeDBSnapshotTenantDatabasesOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("DBSnapshotTenantDatabases", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentDBSnapshotTenantDatabasesList(&sv.DBSnapshotTenantDatabases, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("Marker", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Marker = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeOpDocumentDescribeDBSubnetGroupsOutput(v **DescribeDBSubnetGroupsOutput, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -51020,6 +56096,61 @@ func awsAwsquery_deserializeOpDocumentDescribeGlobalClustersOutput(v **DescribeG
 		case strings.EqualFold("GlobalClusters", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentGlobalClusterList(&sv.GlobalClusters, nodeDecoder); err != nil {
+				return err
+			}
+
+		case strings.EqualFold("Marker", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Marker = ptr.String(xtv)
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeOpDocumentDescribeIntegrationsOutput(v **DescribeIntegrationsOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DescribeIntegrationsOutput
+	if *v == nil {
+		sv = &DescribeIntegrationsOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("Integrations", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentIntegrationList(&sv.Integrations, nodeDecoder); err != nil {
 				return err
 			}
 
@@ -51435,6 +56566,61 @@ func awsAwsquery_deserializeOpDocumentDescribeSourceRegionsOutput(v **DescribeSo
 	return nil
 }
 
+func awsAwsquery_deserializeOpDocumentDescribeTenantDatabasesOutput(v **DescribeTenantDatabasesOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *DescribeTenantDatabasesOutput
+	if *v == nil {
+		sv = &DescribeTenantDatabasesOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("Marker", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv := string(val)
+				sv.Marker = ptr.String(xtv)
+			}
+
+		case strings.EqualFold("TenantDatabases", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTenantDatabasesList(&sv.TenantDatabases, nodeDecoder); err != nil {
+				return err
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeOpDocumentDescribeValidDBInstanceModificationsOutput(v **DescribeValidDBInstanceModificationsOutput, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -51512,7 +56698,7 @@ func awsAwsquery_deserializeOpDocumentDownloadDBLogFilePortionOutput(v **Downloa
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.AdditionalDataPending = xtv
+				sv.AdditionalDataPending = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("LogFileData", t.Name.Local):
@@ -52228,7 +57414,7 @@ func awsAwsquery_deserializeOpDocumentModifyCustomDBEngineVersionOutput(v **Modi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsBabelfish = xtv
+				sv.SupportsBabelfish = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsCertificateRotationWithoutRestart", t.Name.Local):
@@ -52260,7 +57446,39 @@ func awsAwsquery_deserializeOpDocumentModifyCustomDBEngineVersionOutput(v **Modi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsGlobalDatabases = xtv
+				sv.SupportsGlobalDatabases = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsIntegrations", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsIntegrations = ptr.Bool(xtv)
+			}
+
+		case strings.EqualFold("SupportsLocalWriteForwarding", t.Name.Local):
+			val, err := decoder.Value()
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				break
+			}
+			{
+				xtv, err := strconv.ParseBool(string(val))
+				if err != nil {
+					return fmt.Errorf("expected BooleanOptional to be of type *bool, got %T instead", val)
+				}
+				sv.SupportsLocalWriteForwarding = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsLogExportsToCloudwatchLogs", t.Name.Local):
@@ -52276,7 +57494,7 @@ func awsAwsquery_deserializeOpDocumentModifyCustomDBEngineVersionOutput(v **Modi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsLogExportsToCloudwatchLogs = xtv
+				sv.SupportsLogExportsToCloudwatchLogs = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsParallelQuery", t.Name.Local):
@@ -52292,7 +57510,7 @@ func awsAwsquery_deserializeOpDocumentModifyCustomDBEngineVersionOutput(v **Modi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsParallelQuery = xtv
+				sv.SupportsParallelQuery = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("SupportsReadReplica", t.Name.Local):
@@ -52308,7 +57526,7 @@ func awsAwsquery_deserializeOpDocumentModifyCustomDBEngineVersionOutput(v **Modi
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.SupportsReadReplica = xtv
+				sv.SupportsReadReplica = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("TagList", t.Name.Local):
@@ -53091,6 +58309,48 @@ func awsAwsquery_deserializeOpDocumentModifyOptionGroupOutput(v **ModifyOptionGr
 	return nil
 }
 
+func awsAwsquery_deserializeOpDocumentModifyTenantDatabaseOutput(v **ModifyTenantDatabaseOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *ModifyTenantDatabaseOutput
+	if *v == nil {
+		sv = &ModifyTenantDatabaseOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("TenantDatabase", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentTenantDatabase(&sv.TenantDatabase, nodeDecoder); err != nil {
+				return err
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
 func awsAwsquery_deserializeOpDocumentPromoteReadReplicaDBClusterOutput(v **PromoteReadReplicaDBClusterOutput, decoder smithyxml.NodeDecoder) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -53854,7 +59114,7 @@ func awsAwsquery_deserializeOpDocumentStartActivityStreamOutput(v **StartActivit
 				if err != nil {
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", val)
 				}
-				sv.ApplyImmediately = xtv
+				sv.ApplyImmediately = ptr.Bool(xtv)
 			}
 
 		case strings.EqualFold("EngineNativeAuditFieldsIncluded", t.Name.Local):
@@ -54159,7 +59419,7 @@ func awsAwsquery_deserializeOpDocumentStartExportTaskOutput(v **StartExportTaskO
 				if err != nil {
 					return err
 				}
-				sv.PercentProgress = int32(i64)
+				sv.PercentProgress = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("S3Bucket", t.Name.Local):
@@ -54292,7 +59552,7 @@ func awsAwsquery_deserializeOpDocumentStartExportTaskOutput(v **StartExportTaskO
 				if err != nil {
 					return err
 				}
-				sv.TotalExtractedDataInGB = int32(i64)
+				sv.TotalExtractedDataInGB = ptr.Int32(int32(i64))
 			}
 
 		case strings.EqualFold("WarningMessage", t.Name.Local):
@@ -54548,6 +59808,48 @@ func awsAwsquery_deserializeOpDocumentSwitchoverBlueGreenDeploymentOutput(v **Sw
 		case strings.EqualFold("BlueGreenDeployment", t.Name.Local):
 			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
 			if err := awsAwsquery_deserializeDocumentBlueGreenDeployment(&sv.BlueGreenDeployment, nodeDecoder); err != nil {
+				return err
+			}
+
+		default:
+			// Do nothing and ignore the unexpected tag element
+			err = decoder.Decoder.Skip()
+			if err != nil {
+				return err
+			}
+
+		}
+		decoder = originalDecoder
+	}
+	*v = sv
+	return nil
+}
+
+func awsAwsquery_deserializeOpDocumentSwitchoverGlobalClusterOutput(v **SwitchoverGlobalClusterOutput, decoder smithyxml.NodeDecoder) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	var sv *SwitchoverGlobalClusterOutput
+	if *v == nil {
+		sv = &SwitchoverGlobalClusterOutput{}
+	} else {
+		sv = *v
+	}
+
+	for {
+		t, done, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if done {
+			break
+		}
+		originalDecoder := decoder
+		decoder = smithyxml.WrapNodeDecoder(originalDecoder.Decoder, t)
+		switch {
+		case strings.EqualFold("GlobalCluster", t.Name.Local):
+			nodeDecoder := smithyxml.WrapNodeDecoder(decoder.Decoder, t)
+			if err := awsAwsquery_deserializeDocumentGlobalCluster(&sv.GlobalCluster, nodeDecoder); err != nil {
 				return err
 			}
 

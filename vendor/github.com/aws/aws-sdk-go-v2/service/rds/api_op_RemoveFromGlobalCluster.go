@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -14,7 +15,7 @@ import (
 // Detaches an Aurora secondary cluster from an Aurora global database cluster.
 // The cluster becomes a standalone cluster with read-write capability instead of
 // being read-only and receiving data from a primary cluster in a different Region.
-// This action only applies to Aurora DB clusters.
+// This operation only applies to Aurora DB clusters.
 func (c *Client) RemoveFromGlobalCluster(ctx context.Context, params *RemoveFromGlobalClusterInput, optFns ...func(*Options)) (*RemoveFromGlobalClusterOutput, error) {
 	if params == nil {
 		params = &RemoveFromGlobalClusterInput{}
@@ -54,12 +55,22 @@ type RemoveFromGlobalClusterOutput struct {
 }
 
 func (c *Client) addOperationRemoveFromGlobalClusterMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpRemoveFromGlobalCluster{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpRemoveFromGlobalCluster{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "RemoveFromGlobalCluster"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -80,9 +91,6 @@ func (c *Client) addOperationRemoveFromGlobalClusterMiddlewares(stack *middlewar
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -96,6 +104,9 @@ func (c *Client) addOperationRemoveFromGlobalClusterMiddlewares(stack *middlewar
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opRemoveFromGlobalCluster(options.Region), middleware.Before); err != nil {
@@ -113,6 +124,9 @@ func (c *Client) addOperationRemoveFromGlobalClusterMiddlewares(stack *middlewar
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -120,7 +134,6 @@ func newServiceMetadataMiddleware_opRemoveFromGlobalCluster(region string) *awsm
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "RemoveFromGlobalCluster",
 	}
 }

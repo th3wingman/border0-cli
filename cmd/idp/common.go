@@ -13,6 +13,7 @@ var (
 	identityProviderTypeGlobalGoogle    = "google"
 	identityProviderTypeGlobalGithub    = "github"
 	identityProviderTypeGlobalMicrosoft = "microsoft"
+	identityProviderTypeGlobalEmailCode = "email code"
 	identityProviderTypeOIDC            = "oidc"
 	identityProviderTypeSAML            = "saml"
 	identityProviderTypeOktaWorkforce   = "okta-workforce"

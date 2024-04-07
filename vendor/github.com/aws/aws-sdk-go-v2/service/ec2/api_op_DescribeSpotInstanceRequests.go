@@ -70,9 +70,9 @@ type DescribeSpotInstanceRequestsInput struct {
 	//   volume.
 	//   - launch.block-device-mapping.volume-size - The size of the EBS volume, in
 	//   GiB.
-	//   - launch.block-device-mapping.volume-type - The type of EBS volume: gp2 for
-	//   General Purpose SSD, io1 or io2 for Provisioned IOPS SSD, st1 for Throughput
-	//   Optimized HDD, sc1 for Cold HDD, or standard for Magnetic.
+	//   - launch.block-device-mapping.volume-type - The type of EBS volume: gp2 or gp3
+	//   for General Purpose SSD, io1 or io2 for Provisioned IOPS SSD, st1 for
+	//   Throughput Optimized HDD, sc1 for Cold HDD, or standard for Magnetic.
 	//   - launch.group-id - The ID of the security group for the instance.
 	//   - launch.group-name - The name of the security group for the instance.
 	//   - launch.image-id - The ID of the AMI.
@@ -155,12 +155,22 @@ type DescribeSpotInstanceRequestsOutput struct {
 }
 
 func (c *Client) addOperationDescribeSpotInstanceRequestsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeSpotInstanceRequests{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeSpotInstanceRequests{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeSpotInstanceRequests"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -181,9 +191,6 @@ func (c *Client) addOperationDescribeSpotInstanceRequestsMiddlewares(stack *midd
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -199,6 +206,9 @@ func (c *Client) addOperationDescribeSpotInstanceRequestsMiddlewares(stack *midd
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeSpotInstanceRequests(options.Region), middleware.Before); err != nil {
 		return err
 	}
@@ -212,6 +222,9 @@ func (c *Client) addOperationDescribeSpotInstanceRequestsMiddlewares(stack *midd
 		return err
 	}
 	if err = addRequestResponseLogging(stack, options); err != nil {
+		return err
+	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -636,7 +649,6 @@ func newServiceMetadataMiddleware_opDescribeSpotInstanceRequests(region string) 
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "ec2",
 		OperationName: "DescribeSpotInstanceRequests",
 	}
 }

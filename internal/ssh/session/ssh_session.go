@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -15,7 +17,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect"
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
+	"github.com/borderzero/border0-cli/internal/ssh/session/common"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
@@ -25,10 +30,15 @@ type sshSessionHandler struct {
 	config *config.ProxyConfig
 }
 
+// ensure sshSessionHandler implements SessionHandler.
+var _ SessionHandler = (*sshSessionHandler)(nil)
+
 type sshSession struct {
-	logger             *zap.Logger
 	config             *config.ProxyConfig
-	sessionKey         *string
+	logger             *zap.Logger
+	metadata           *border0.E2EEncryptionMetadata
+	sshServerConfig    *ssh.ServerConfig
+	sshClientConfig    *ssh.ClientConfig
 	downstreamSshConn  *ssh.ServerConn
 	downstreamSshChans <-chan ssh.NewChannel
 	downstreamSshReqs  <-chan *ssh.Request
@@ -47,7 +57,7 @@ type sshChannel struct {
 	height            int
 }
 
-func NewSshSession(logger *zap.Logger, config *config.ProxyConfig) (*sshSessionHandler, error) {
+func NewSshSessionHandler(logger *zap.Logger, config *config.ProxyConfig) (*sshSessionHandler, error) {
 	var authMethods []ssh.AuthMethod
 	if config.IdentityFile != "" {
 		bytes, err := os.ReadFile(config.IdentityFile)
@@ -76,10 +86,12 @@ func NewSshSession(logger *zap.Logger, config *config.ProxyConfig) (*sshSessionH
 		authMethods = append(authMethods, ssh.Password(config.Password))
 	}
 
-	if len(authMethods) == 0 && !config.EndToEndEncryption {
-		return nil, fmt.Errorf("no authentication methods provided")
-	} else {
-		config.Border0CertAuth = true
+	if len(authMethods) == 0 {
+		if !config.EndToEndEncryption {
+			return nil, fmt.Errorf("no authentication methods provided")
+		} else {
+			config.Border0CertAuth = true
+		}
 	}
 
 	config.SshClientConfig = &ssh.ClientConfig{
@@ -95,7 +107,7 @@ func NewSshSession(logger *zap.Logger, config *config.ProxyConfig) (*sshSessionH
 	}, nil
 }
 
-func NewEc2InstanceConnectSession(logger *zap.Logger, config *config.ProxyConfig) *sshSessionHandler {
+func NewEc2InstanceConnectSessionHandler(logger *zap.Logger, config *config.ProxyConfig) *sshSessionHandler {
 	config.SshClientConfig = &ssh.ClientConfig{
 		User:            config.Username,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
@@ -111,23 +123,57 @@ func NewEc2InstanceConnectSession(logger *zap.Logger, config *config.ProxyConfig
 func (s *sshSessionHandler) Proxy(conn net.Conn) {
 	defer conn.Close()
 
-	sshConn, chans, reqs, sessionKey, _, err := newSSHServerConn(conn, s.config)
+	session := &sshSession{
+		logger:          s.logger,
+		config:          s.config,
+		sshServerConfig: s.config.SshServerConfig,
+		sshClientConfig: s.config.SshClientConfig,
+	}
+
+	if s.config.EndToEndEncryption {
+		e2EEncryptionConn, ok := conn.(border0.E2EEncryptionConn)
+		if !ok {
+			conn.Close()
+			s.logger.Error("failed to cast connection to e2eencryption")
+			return
+		}
+
+		if e2EEncryptionConn.Metadata == nil {
+			s.logger.Error("invalid e2e metadata")
+			return
+		}
+
+		session.metadata = e2EEncryptionConn.Metadata
+		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.PublicKeyCallback = common.GetPublicKeyCallback(
+			s.config.OrgSshCA,
+			s.config.Border0API,
+			s.config.Socket,
+			e2EEncryptionConn.Metadata,
+		)
+
+		if s.config.Border0CertAuth {
+			session.sshClientConfig.Auth = []ssh.AuthMethod{ssh.
+				PublicKeysCallback(session.userPublicKeyCallback)}
+		}
+	}
+
+	var err error
+	session.downstreamSshConn, session.downstreamSshChans, session.downstreamSshReqs, err = ssh.NewServerConn(conn, session.config.SshServerConfig)
 	if err != nil {
-		s.logger.Error("failed to accept ssh connection", zap.Error(err))
+		session.logger.Error("failed to accept ssh connection", zap.Error(err))
 		return
 	}
 
-	session := &sshSession{
-		config:             s.config,
-		logger:             s.logger,
-		downstreamSshConn:  sshConn,
-		downstreamSshChans: chans,
-		downstreamSshReqs:  reqs,
-	}
-
-	if sessionKey != nil {
-		session.sessionKey = sessionKey
-		session.logger = session.logger.With(zap.String("session_key", *sessionKey))
+	if session.config.EndToEndEncryption {
+		if err := session.config.Border0API.UpdateSession(models.SessionUpdate{
+			SessionKey: session.metadata.SessionKey,
+			Socket:     session.config.Socket,
+			UserData:   ",sshuser=" + session.downstreamSshConn.User(),
+		}); err != nil {
+			session.logger.Error("failed to update session", zap.Error(err))
+			return
+		}
 	}
 
 	if session.config.AwsUpstreamType == "aws-ec2connect" {
@@ -137,11 +183,22 @@ func (s *sshSessionHandler) Proxy(conn net.Conn) {
 		}
 	}
 
+	sshConnUser := session.downstreamSshConn.User()
+
+	// We only use the user from the ssh connection if
+	// the ssh client config does not have a user defined.
+	// If the user in the ssh client config at this point
+	// is not empty string, then it came from the socket's
+	// upstream configuration (so we use that).
+	if session.sshClientConfig.User == "" {
+		session.sshClientConfig.User = sshConnUser
+	}
+
 	// we don't support global requests (yet)
 	// so we can disregard the reqs channel
-	go ssh.DiscardRequests(reqs)
+	go ssh.DiscardRequests(session.downstreamSshReqs)
 	if err := session.handleChannels(); err != nil {
-		s.logger.Error("failed to handle channels", zap.Error(err))
+		session.logger.Error("failed to handle channels", zap.Error(err))
 		return
 	}
 }
@@ -182,7 +239,7 @@ func (s *sshSession) setupEc2InstanceConnect() error {
 		return fmt.Errorf("unable to parse private key: %s", err)
 	}
 
-	s.config.SshClientConfig.Auth = []ssh.AuthMethod{
+	s.sshClientConfig.Auth = []ssh.AuthMethod{
 		ssh.PublicKeys(signer),
 	}
 
@@ -193,8 +250,8 @@ func (s *sshSession) setupEc2InstanceConnect() error {
 	// If the user in the ssh client config at this point
 	// is not empty string, then it came from the socket's
 	// upstream configuration (so we use that).
-	if s.config.SshClientConfig.User == "" {
-		s.config.SshClientConfig.User = sshConnUser
+	if s.sshClientConfig.User == "" {
+		s.sshClientConfig.User = sshConnUser
 	}
 
 	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
@@ -208,7 +265,7 @@ func (s *sshSession) setupEc2InstanceConnect() error {
 	ec2ConnectClient := ec2instanceconnect.NewFromConfig(s.config.AwsConfig)
 	_, err = ec2ConnectClient.SendSSHPublicKey(context.TODO(), &ec2instanceconnect.SendSSHPublicKeyInput{
 		InstanceId:     &s.config.AwsEC2InstanceId,
-		InstanceOSUser: &s.config.SshClientConfig.User,
+		InstanceOSUser: &s.sshClientConfig.User,
 		SSHPublicKey:   &publicKeyString,
 	})
 
@@ -230,7 +287,7 @@ func (s *sshSession) handleChannels() error {
 		return fmt.Errorf("unable to connect to upstream host: %s", err)
 	}
 
-	s.upstreamSshConn, s.upstreamSshChans, s.upstreamSshReqs, err = ssh.NewClientConn(upstreamConn, "", s.config.SshClientConfig)
+	s.upstreamSshConn, s.upstreamSshChans, s.upstreamSshReqs, err = ssh.NewClientConn(upstreamConn, "", s.sshClientConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create ssh connection: %s", err)
 	}
@@ -239,6 +296,7 @@ func (s *sshSession) handleChannels() error {
 
 	defer s.upstreamSshConn.Close()
 	go ssh.DiscardRequests(s.upstreamSshReqs)
+	go s.keepAlive(ctx)
 
 	for {
 		select {
@@ -272,6 +330,23 @@ func (s *sshSession) handleChannels() error {
 			}
 		case <-ctx.Done():
 			return nil
+		}
+	}
+}
+
+func (s *sshSession) keepAlive(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, _, err := s.upstreamSshConn.SendRequest("keepalive@openssh.com", true, nil); err != nil {
+				s.logger.Error("failed to send keepalive request", zap.Error(err))
+				return
+			}
 		}
 	}
 }
@@ -373,7 +448,7 @@ func (s *sshChannel) handleRequest(req *ssh.Request) {
 		}
 
 		termLen := req.Payload[3]
-		w, h := parseDims(req.Payload[termLen+4:])
+		w, h := common.ParseDims(req.Payload[termLen+4:])
 		s.width = int(w)
 		s.height = int(h)
 
@@ -386,7 +461,7 @@ func (s *sshChannel) handleRequest(req *ssh.Request) {
 			req.Reply(false, nil)
 			return
 		}
-		w, h := parseDims(req.Payload)
+		w, h := common.ParseDims(req.Payload)
 		s.width = int(w)
 		s.height = int(h)
 
@@ -586,7 +661,7 @@ func closeChannel(downstreamChannel ssh.Channel, err error) {
 	downstreamChannel.Close()
 }
 
-func (s *sshChannel) record(reader *io.Reader) (*Recording, error) {
+func (s *sshChannel) record(reader *io.Reader) (*common.Recording, error) {
 	pr, pw := io.Pipe()
 	s.sessionWriter = pw
 
@@ -594,11 +669,53 @@ func (s *sshChannel) record(reader *io.Reader) (*Recording, error) {
 		*reader = io.TeeReader(*reader, pw)
 	}
 
-	r := NewRecording(s.logger, pr, *s.sessionKey, s.config.Border0API, s.width, s.height)
+	r := common.NewRecording(s.logger, pr, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.width, s.height)
 
 	if err := r.Record(); err != nil {
 		return nil, err
 	}
 
 	return r, nil
+}
+
+func (s *sshSession) userPublicKeyCallback() ([]ssh.Signer, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate private key: %s", err)
+	}
+
+	sshPublicKey, err := ssh.NewPublicKey(privateKey.Public())
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate public key: %s", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	signedSshCert, err := s.config.Border0API.SignSshOrgCertificate(ctx, s.config.Socket.SocketID, s.metadata.SessionKey, s.metadata.UserEmail, s.metadata.SshTicket, ssh.MarshalAuthorizedKey(sshPublicKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch signed ssh org certificate %s", err)
+	}
+
+	pubcert, _, _, _, err := ssh.ParseAuthorizedKey([]byte(signedSshCert))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authorized key: %s", err)
+	}
+
+	sshCert, ok := pubcert.(*ssh.Certificate)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast to ssh certificate")
+	}
+
+	signer, err := ssh.NewSignerFromKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate signer: %s", err)
+	}
+
+	certSigner, err := ssh.NewCertSigner(sshCert, signer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate cert signer: %s", err)
+	}
+
+	return []ssh.Signer{certSigner}, nil
 }

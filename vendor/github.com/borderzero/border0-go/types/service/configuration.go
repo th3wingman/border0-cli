@@ -18,6 +18,15 @@ const (
 
 	// ServiceTypeTls is the service type for tls services (fka sockets).
 	ServiceTypeTls = "tls"
+
+	// ServiceTypeVnc is the service type for vnc services (fka sockets).
+	ServiceTypeVnc = "vnc"
+
+	// ServiceTypeVpn is the service type for vpn services (fka sockets).
+	ServiceTypeVpn = "vpn"
+
+	// ServiceTypeRdp is the service type for rdp services (fka sockets).
+	ServiceTypeRdp = "rdp"
 )
 
 // Configuration represents upstream service configuration.
@@ -28,63 +37,47 @@ type Configuration struct {
 	HttpServiceConfiguration     *HttpServiceConfiguration     `json:"http_service_configuration,omitempty"`
 	SshServiceConfiguration      *SshServiceConfiguration      `json:"ssh_service_configuration,omitempty"`
 	TlsServiceConfiguration      *TlsServiceConfiguration      `json:"tls_service_configuration,omitempty"`
+	VncServiceConfiguration      *VncServiceConfiguration      `json:"vnc_service_configuration,omitempty"`
+	VpnServiceConfiguration      *VpnServiceConfiguration      `json:"vpn_service_configuration,omitempty"`
+	RdpServiceConfiguration      *RdpServiceConfiguration      `json:"rdp_service_configuration,omitempty"`
+}
+
+type validatable interface {
+	Validate() error
 }
 
 // Validate validates the Configuration.
 func (c *Configuration) Validate() error {
-	switch c.ServiceType {
-
-	case ServiceTypeDatabase:
-		if nilcheck.AnyNotNil(c.HttpServiceConfiguration, c.SshServiceConfiguration, c.TlsServiceConfiguration) {
-			return fmt.Errorf("service configuration for service type \"database\" can only have database service configuration defined")
-		}
-		if c.DatabaseServiceConfiguration == nil {
-			return fmt.Errorf("service configuration for service type \"database\" must have database service configuration defined")
-		}
-		if err := c.DatabaseServiceConfiguration.Validate(); err != nil {
-			return fmt.Errorf("invalid database service configuration: %v", err)
-		}
-		return nil
-
-	case ServiceTypeHttp:
-		if nilcheck.AnyNotNil(c.DatabaseServiceConfiguration, c.SshServiceConfiguration, c.TlsServiceConfiguration) {
-			return fmt.Errorf("service configuration for service type \"http\" can only have http service configuration defined")
-		}
-		if c.HttpServiceConfiguration == nil {
-			return fmt.Errorf("service configuration for service type \"http\" must have http service configuration defined")
-		}
-		if err := c.HttpServiceConfiguration.Validate(); err != nil {
-			return fmt.Errorf("invalid http service configuration: %v", err)
-		}
-		return nil
-
-	case ServiceTypeSsh:
-		if nilcheck.AnyNotNil(c.HttpServiceConfiguration, c.DatabaseServiceConfiguration, c.TlsServiceConfiguration) {
-			return fmt.Errorf("service configuration for service type \"ssh\" can only have ssh service configuration defined")
-		}
-		if c.SshServiceConfiguration == nil {
-			return fmt.Errorf("service configuration for service type \"ssh\" must have ssh service configuration defined")
-		}
-		if err := c.SshServiceConfiguration.Validate(); err != nil {
-			return fmt.Errorf("invalid ssh service configuration: %v", err)
-		}
-		return nil
-
-	case ServiceTypeTls:
-		if nilcheck.AnyNotNil(c.HttpServiceConfiguration, c.DatabaseServiceConfiguration, c.SshServiceConfiguration) {
-			return fmt.Errorf("service configuration for service type \"tls\" can only have tls service configuration defined")
-		}
-		if c.TlsServiceConfiguration == nil {
-			return fmt.Errorf("service configuration for service type \"tls\" must have tls service configuration defined")
-		}
-		if err := c.TlsServiceConfiguration.Validate(); err != nil {
-			return fmt.Errorf("invalid tls service configuration: %v", err)
-		}
-		return nil
-
-	default:
-		return fmt.Errorf("service configuration has invalid service type \"%s\"", c.ServiceType)
+	all := map[string]validatable{
+		ServiceTypeDatabase: c.DatabaseServiceConfiguration,
+		ServiceTypeHttp:     c.HttpServiceConfiguration,
+		ServiceTypeSsh:      c.SshServiceConfiguration,
+		ServiceTypeTls:      c.TlsServiceConfiguration,
+		ServiceTypeVnc:      c.VncServiceConfiguration,
+		ServiceTypeVpn:      c.VpnServiceConfiguration,
+		ServiceTypeRdp:      c.RdpServiceConfiguration,
 	}
+
+	if currentConfig, ok := all[c.ServiceType]; ok {
+		otherConfigs := []any{}
+		for serviceType, serviceTypeConfig := range all {
+			if serviceType != c.ServiceType {
+				otherConfigs = append(otherConfigs, serviceTypeConfig)
+			}
+		}
+		if nilcheck.AnyNotNil(otherConfigs...) {
+			return fmt.Errorf("service configuration for service type \"%s\" can only have %s service configuration defined", c.ServiceType, c.ServiceType)
+		}
+		if nilcheck.Nil(currentConfig) {
+			return fmt.Errorf("service configuration for service type \"%s\" must have %s service configuration defined", c.ServiceType, c.ServiceType)
+		}
+		if err := currentConfig.Validate(); err != nil {
+			return fmt.Errorf("invalid %s service configuration: %v", c.ServiceType, err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("service configuration has invalid service type \"%s\"", c.ServiceType)
 }
 
 // ConnectorServiceConfiguration includes both the connector socket and upstream service configuration

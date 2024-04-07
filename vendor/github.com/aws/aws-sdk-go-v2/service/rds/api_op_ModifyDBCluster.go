@@ -4,6 +4,7 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -52,14 +53,14 @@ type ModifyDBClusterInput struct {
 	// Constraints:
 	//   - You must allow engine mode changes when specifying a different value for
 	//   the EngineMode parameter from the DB cluster's current engine mode.
-	AllowEngineModeChange bool
+	AllowEngineModeChange *bool
 
 	// Specifies whether major version upgrades are allowed. Valid for Cluster Type:
-	// Aurora DB clusters only Constraints:
+	// Aurora DB clusters and Multi-AZ DB clusters Constraints:
 	//   - You must allow major version upgrades when specifying a value for the
 	//   EngineVersion parameter that is a different major version than the DB
 	//   cluster's current version.
-	AllowMajorVersionUpgrade bool
+	AllowMajorVersionUpgrade *bool
 
 	// Specifies whether the modifications in this request and any pending
 	// modifications are asynchronously applied as soon as possible, regardless of the
@@ -70,12 +71,16 @@ type ModifyDBClusterInput struct {
 	// protection and changing the master password, are applied immediately—regardless
 	// of when you choose to apply them. By default, this parameter is disabled. Valid
 	// for Cluster Type: Aurora DB clusters and Multi-AZ DB clusters
-	ApplyImmediately bool
+	ApplyImmediately *bool
 
 	// Specifies whether minor engine upgrades are applied automatically to the DB
 	// cluster during the maintenance window. By default, minor engine upgrades are
 	// applied automatically. Valid for Cluster Type: Multi-AZ DB clusters only
 	AutoMinorVersionUpgrade *bool
+
+	// The Amazon Resource Name (ARN) of the recovery point in Amazon Web Services
+	// Backup.
+	AwsBackupRecoveryPointArn *string
 
 	// The target backtrack window, in seconds. To disable backtracking, set this
 	// value to 0 . Valid for Cluster Type: Aurora MySQL DB clusters only Default: 0
@@ -175,6 +180,11 @@ type ModifyDBClusterInput struct {
 	// enabled. For more information, see IAM Database Authentication (https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html)
 	// in the Amazon Aurora User Guide. Valid for Cluster Type: Aurora DB clusters only
 	EnableIAMDatabaseAuthentication *bool
+
+	// Specifies whether read replicas can forward write operations to the writer DB
+	// instance in the DB cluster. By default, write operations aren't allowed on
+	// reader DB instances. Valid for: Aurora DB clusters only
+	EnableLocalWriteForwarding *bool
 
 	// Specifies whether to turn on Performance Insights for the DB cluster. For more
 	// information, see Using Amazon Performance Insights (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PerfInsights.html)
@@ -417,12 +427,22 @@ type ModifyDBClusterOutput struct {
 }
 
 func (c *Client) addOperationModifyDBClusterMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpModifyDBCluster{}, middleware.After)
 	if err != nil {
 		return err
 	}
 	err = stack.Deserialize.Add(&awsAwsquery_deserializeOpModifyDBCluster{}, middleware.After)
 	if err != nil {
+		return err
+	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyDBCluster"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
 		return err
 	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
@@ -443,9 +463,6 @@ func (c *Client) addOperationModifyDBClusterMiddlewares(stack *middleware.Stack,
 	if err = addRetryMiddlewares(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
-		return err
-	}
 	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
 		return err
 	}
@@ -459,6 +476,9 @@ func (c *Client) addOperationModifyDBClusterMiddlewares(stack *middleware.Stack,
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
 	if err = addOpModifyDBClusterValidationMiddleware(stack); err != nil {
@@ -479,6 +499,9 @@ func (c *Client) addOperationModifyDBClusterMiddlewares(stack *middleware.Stack,
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -486,7 +509,6 @@ func newServiceMetadataMiddleware_opModifyDBCluster(region string) *awsmiddlewar
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "rds",
 		OperationName: "ModifyDBCluster",
 	}
 }

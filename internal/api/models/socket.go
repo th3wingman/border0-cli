@@ -17,7 +17,6 @@ type Metadata struct {
 	ProviderEnv    string // e.g. "prod, or "dev"
 	ProviderRegion string // e.g. "us-east-1
 	ProviderType   string // e.g. "aws
-
 }
 
 type ConnectorData struct {
@@ -37,33 +36,46 @@ type ConnectorData struct {
 }
 
 type ConnectorLocalData struct {
-	UpstreamUsername             string
-	UpstreamPassword             string
-	UpstreamCertFile             string
-	UpstreamKeyFile              string
-	UpstreamCACertFile           string
-	UpstreamCertBlock            []byte
-	UpstreamKeyBlock             []byte
-	UpstreamCACertBlock          []byte
-	UpstreamTLS                  *bool
-	UpstreamIdentifyFile         string
-	UpstreamIdentityPrivateKey   []byte
-	SqlAuthProxy                 bool
-	RdsIAMAuth                   bool
-	AWSRegion                    string
-	CloudSQLConnector            bool
-	CloudSQLIAMAuth              bool
-	CloudSQLInstance             string
-	GoogleCredentialsFile        string
-	GoogleCredentialsJSON        []byte
-	SSHServer                    bool
-	AWSECSCluster                string
-	AWSECSServices               []string
-	AWSECSTasks                  []string
-	AWSECSContainers             []string
-	AwsEC2InstanceId             string
-	AWSEC2InstanceConnectEnabled bool
-	AwsCredentials               *common.AwsCredentials
+	UpstreamUsername               string
+	UpstreamPassword               string
+	UpstreamCertFile               string
+	UpstreamKeyFile                string
+	UpstreamCACertFile             string
+	UpstreamCertBlock              []byte
+	UpstreamKeyBlock               []byte
+	UpstreamCACertBlock            []byte
+	UpstreamTLS                    *bool
+	UpstreamIdentifyFile           string
+	UpstreamIdentityPrivateKey     []byte
+	SqlAuthProxy                   bool
+	RdsIAMAuth                     bool
+	AWSRegion                      string
+	CloudSQLConnector              bool
+	CloudSQLIAMAuth                bool
+	CloudSQLInstance               string
+	GoogleCredentialsFile          string
+	GoogleCredentialsJSON          []byte
+	SSHServer                      bool
+	AWSECSCluster                  string
+	AWSECSServices                 []string
+	AWSECSTasks                    []string
+	AWSECSContainers               []string
+	AwsEC2InstanceId               string
+	AWSEC2InstanceConnectEnabled   bool
+	AwsCredentials                 *common.AwsCredentials
+	IsKubectlExec                  bool
+	K8sNamespaceAllowlist          []string
+	K8sNamespaceSelectorsAllowlist map[string]map[string][]string
+	K8sMasterUrl                   string
+	K8sKubeconfigPath              string
+	IsAwsEks                       bool
+	AwsEksCluster                  string
+	AzureAD                        bool
+	Kerberos                       bool
+
+	// vpn sockets
+	DHCPPoolSubnet   string
+	AdvertisedRoutes []string
 }
 
 func (c *ConnectorData) Tags() map[string]string {
@@ -215,6 +227,9 @@ func (s *Socket) SetupTypeAndUpstreamTypeByPortOrTags() {
 			case "mysql":
 				s.UpstreamType = "mysql"
 				s.SocketType = "database"
+			case "mssql":
+				s.UpstreamType = "mssql"
+				s.SocketType = "database"
 			case "postgres":
 				s.UpstreamType = "postgres"
 				s.SocketType = "database"
@@ -224,6 +239,9 @@ func (s *Socket) SetupTypeAndUpstreamTypeByPortOrTags() {
 				}
 				if s.TargetPort == 5432 {
 					s.UpstreamType = "postgres"
+				}
+				if s.TargetPort == 1433 {
+					s.UpstreamType = "mssql"
 				}
 			case "https":
 				s.SocketType = "http"
@@ -240,6 +258,9 @@ func (s *Socket) SetupTypeAndUpstreamTypeByPortOrTags() {
 			case 3306:
 				s.SocketType = "database"
 				s.UpstreamType = "mysql"
+			case 1433:
+				s.SocketType = "database"
+				s.UpstreamType = "mssql"
 			case 5432:
 				s.SocketType = "database"
 				s.UpstreamType = "postgres"

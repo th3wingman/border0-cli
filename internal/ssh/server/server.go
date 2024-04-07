@@ -188,6 +188,6 @@ func GetShell(user *user.User) (string, error) {
 
 func execCmd(s ssh.Session, cmd exec.Cmd, uid, gid uint64, username string) {
 	pty, winCh, isPty := s.Pty()
-	exitCode := ExecCmd(s, s.RawCommand(), pty.Term, isPty, winCh, cmd, uid, gid, username)
+	exitCode := ExecCmd(s.Context(), s, s.RawCommand(), pty.Term, isPty, winCh, cmd, uid, gid, username)
 	s.Exit(exitCode)
 }
