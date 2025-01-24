@@ -106,7 +106,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 
 	var handlerConfig *sqlauthproxy.Config
 	if socket.SocketType == "database" {
-		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(c.logger, socket, c.border0API)
+		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(c.logger, socket, c.border0API, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create config for socket: %s", err)
 		}
@@ -128,7 +128,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 			}
 		}
 
-		sshProxyConfig, err = sshConfig.BuildProxyConfig(c.logger, socket, c.cfg.Connector.AwsRegion, c.cfg.Connector.AwsProfile, hostkeySigner, org, c.border0API)
+		sshProxyConfig, err = sshConfig.BuildProxyConfig(c.logger, socket, c.cfg.Connector.AwsRegion, c.cfg.Connector.AwsProfile, hostkeySigner, org, c.border0API, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create config for socket: %s", err)
 		}
@@ -169,7 +169,7 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 			return err
 		}
 	default:
-		if err := border0.Serve(c.logger, l, socket.ConnectorData.TargetHostname, socket.ConnectorData.Port); err != nil {
+		if err := border0.Serve(c.logger, l, socket.ConnectorData.TargetHostname, socket.ConnectorData.Port, socket.SocketType, c.border0API, &socket); err != nil {
 			return err
 		}
 	}
@@ -320,7 +320,7 @@ func (c *ConnectorCore) SocketsCoreHandler(ctx context.Context, socketsToUpdate 
 	return socketsToConnect, nil
 }
 
-func (c *ConnectorCore) checkTunnelConnections(ctx context.Context, socketApiMap map[string]models.Socket) error {
+func (c *ConnectorCore) checkTunnelConnections(_ context.Context, socketApiMap map[string]models.Socket) error {
 
 	c.connectedTunnels.Range(func(socketID, _ interface{}) bool {
 		var found bool
@@ -690,7 +690,7 @@ func (c *ConnectorCore) certificate(ctx context.Context, orgID string) (*tls.Cer
 
 	c.connectorCertificate = &tlsCert
 
-	if err := util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), cert, orgID, ""); err != nil {
+	if err := util.StoreConnectorCertificate(pem.EncodeToMemory(privKeyPem), cert, orgID, ""); err != nil {
 		c.logger.Warn("failed to store certificate", zap.Error(err))
 	}
 

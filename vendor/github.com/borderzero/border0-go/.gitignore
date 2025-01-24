@@ -1,0 +1,33 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+*.swp
+coverage.out
+coverage.tmp
+examples/*-create-socket/*-create-socket
+examples/*-update-socket/*-update-socket
+examples/*-list-sockets/*-list-sockets
+examples/*-delete-socket/*-delete-socket
+examples/*-reverse-proxy/*-reverse-proxy
+examples/*-load-balancer/*-load-balancer
+examples/*-echo-listener/*-echo-listener
+examples/*-fiber-listener/*-fiber-listener
+examples/*-gin-listener/*-gin-listener
+examples/*-http-listener/*-http-listener
+examples/*-create-connector-and-socket/*-create-connector-and-socket
+examples/*-delete-connector-and-socket/*-delete-connector-and-socket
+examples/*-create-policy-and-attach/*-create-policy-and-attach
+examples/*-detach-policy-and-delete/*-detach-policy-and-delete

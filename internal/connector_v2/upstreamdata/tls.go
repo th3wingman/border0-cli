@@ -38,7 +38,7 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForTlsServiceStandard(s *models.S
 	return nil
 }
 
-func (u *UpstreamDataBuilder) buildUpstreamDataForTlsServiceVpn(s *models.Socket, config *service.VpnTlsServiceConfiguration) error {
+func (u *UpstreamDataBuilder) buildUpstreamDataForTlsServiceVpn(_ *models.Socket, config *service.VpnTlsServiceConfiguration) error {
 	if config == nil {
 		return fmt.Errorf("got vpn tls service with no vpn tls service configuration")
 	}
@@ -47,7 +47,7 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForTlsServiceVpn(s *models.Socket
 	return fmt.Errorf("VPN TLS services not yet supported by connector v2")
 }
 
-func (u *UpstreamDataBuilder) buildUpstreamDataForTlsServiceHttpProxy(s *models.Socket, config *service.HttpProxyTlsServiceConfiguration) error {
+func (u *UpstreamDataBuilder) buildUpstreamDataForTlsServiceHttpProxy(_ *models.Socket, config *service.HttpProxyTlsServiceConfiguration) error {
 	if config == nil {
 		return fmt.Errorf("got http proxy tls service with no http proxy tls service configuration")
 	}

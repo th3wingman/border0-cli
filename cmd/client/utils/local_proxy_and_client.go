@@ -9,7 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
@@ -18,28 +18,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func openRDP(address string) error {
+func writeRdpConnFile(address string) (string, error) {
 	rdpFileContents := []byte(fmt.Sprintf("full address:s:%s\nprompt for credentials:i:1", address))
 
 	// Create temporary .rdp file
 	tmpDir := os.TempDir()
 
-	rdpFilePath := filepath.Join(tmpDir, "temp.rdp")
+	rdpFilePath := filepath.Join(tmpDir, fmt.Sprintf("temp-%d.rdp", time.Now().UnixNano())) // timestamped to avoid collisions on multiple runs
 	if err := os.WriteFile(rdpFilePath, rdpFileContents, 0644); err != nil {
-		return fmt.Errorf("failed to create RDP file: %w", err)
+		return "", fmt.Errorf("failed to create RDP file: %w", err)
 	}
-
-	defer os.Remove(rdpFilePath)
-
-	// On MacOS we open the client twice... because
-	// Microsoft's Remote Desktop client refuses
-	// to configure a new machine if the app is not
-	// already open.
-	if runtime.GOOS == "darwin" {
-		open.Run(rdpFilePath)
-		time.Sleep(time.Second * 1)
-	}
-	return open.Run(rdpFilePath)
+	return rdpFilePath, nil
 }
 
 // StartLocalProxyAndOpenClient starts a local listener on the given
@@ -90,16 +79,29 @@ func StartLocalProxyAndOpenClient(
 
 	log.Print("Waiting for connections on ", localListenerAddress, "...")
 
-	go func() {
-		var err error
-		if protocol == "rdp" {
-			err = openRDP(localListenerAddress)
-		} else {
-			err = open.Run(fmt.Sprintf("%s://%s", protocol, localListenerAddress))
-		}
+	clientOpenURI := fmt.Sprintf("%s://%s", protocol, localListenerAddress)
+	postOpenCleanup := func() { /* noop */ }
+
+	if protocol == "rdp" {
+		rdpConnFilePath, err := writeRdpConnFile(localListenerAddress)
 		if err != nil {
+			return err
+		}
+		defer os.Remove(rdpConnFilePath)
+
+		postOpenCleanup = func() {
+			// best effort removal
+			time.Sleep(time.Second * 5)
+			os.Remove(rdpConnFilePath)
+		}
+		clientOpenURI = rdpConnFilePath
+	}
+
+	go func() {
+		if err := open.Run(clientOpenURI); err != nil {
 			log.Printf("Failed to open system's %s client: %v", protocol, err)
 		}
+		postOpenCleanup()
 	}()
 
 	for {
@@ -109,7 +111,7 @@ func StartLocalProxyAndOpenClient(
 		}
 
 		go func() {
-			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+			conn, err := client.Connect(net.JoinHostPort(hostname, strconv.Itoa(info.Port)), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 			if err != nil {
 				if errors.Is(err, client.ErrConnectorHandshakeFailed) || errors.Is(err, client.ErrProxyHandshakeFailed) {
 					fmt.Printf("Error: %s. You may not be authorized for this socket. Speak to your Border0 administrator\n", err)

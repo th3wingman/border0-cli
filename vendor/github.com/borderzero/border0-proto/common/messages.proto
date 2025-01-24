@@ -1,0 +1,93 @@
+// sets the .proto file syntax version
+syntax = "proto3";
+
+// sets the output golang package name
+option go_package = "github.com/borderzero/border0-proto/common";
+
+// sets the protobuf package name (i.e. definitions namespace)
+package border0.common.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message DiscoveryDetailsMessage {
+  bool discoverable = 1;           // whether the peer should be returned along with the networks it's in
+  string endpoint_public_udp4 = 2; // the endpoint (IPv4 + port) to send packets to for the peer
+  string endpoint_public_udp6 = 3; // the endpoint (IPv6 + port) to send packets to for the peer
+  string public_key = 4;           // the public key of the peer, only used in connector
+}
+
+message HeartbeatMessage {}
+
+message StatsMessage {
+    oneof StatsMessageType {
+        NetworkDeviceStatsMessage network_device_stats = 1;
+    }
+}
+
+message NetworkDeviceStatsMessage {
+    google.protobuf.Timestamp timestamp = 1;
+    uint64 bytes_in = 2;
+    uint64 bytes_out = 3;
+    uint64 packets_in = 4;
+    uint64 packets_out = 5;
+}
+
+message PeerOnlineMessage {
+  string network_id = 1;
+  WireGuardPeer peer = 2;
+}
+
+message PeerOfflineMessage {
+  string network_id = 1;
+  string peer_public_key = 2;
+}
+
+message NetworkStateMessage {
+  string network_id = 1;
+  string network_cidr_v4 = 2;
+  string network_cidr_v6 = 3;
+  string self_ipv4 = 4;
+  string self_ipv6 = 5;
+  repeated WireGuardPeer online_peers = 6;
+  string network_resources_cidr_v4 = 7;
+  string network_resources_cidr_v6 = 8;
+}
+
+message WireGuardPeer {
+  string public_key = 1;                               // the public key of the peer, used for identification and encryption
+  string ipv4 = 2;                                     // the peer's (private) IPv4 address in the WireGuard network
+  string ipv6 = 3;                                     // the peer's (private) IPv6 address in the WireGuard network
+  repeated string allowed_ips = 4 [deprecated = true]; // list of routes (CIDRs) to be routed through this peer (most peers will just have their own IP/32). (this field is now deprecated in favor of building the allowed_ips list from ipv4 + ipv6 + service ips + subnet routes)
+  uint32 persistent_keepalive_interval_seconds = 5;    // the interval for sending keepalive packets (0 means disabled)
+  string public_udp4_endpoint = 6;                     // endpoint for UDP peer-to-peer communication over IPv4 (public IPv4 + port as seen from the Internet)
+  string public_udp6_endpoint = 7;                     // endpoint for UDP peer-to-peer communication over IPv6 (public IPv6 + port as seen from the Internet)
+  PeerType type = 8;                                   // client or connector
+  repeated Service services = 9;                       // applicable only when PeerType == PEER_TYPE_CONNECTOR
+  string name = 10;                                   // device (client or connector) name
+}
+
+message Service {
+  string name = 1;
+  string type = 2;
+  string ipv4 = 3;
+  string ipv6 = 4;
+  repeated string subnet_routes = 5; // applicable only to services of type SUBNET_ROUTES
+  string dns_name = 6;
+  string upstream_type = 7;
+}
+
+enum PeerType {
+  PEER_TYPE_UNKNOWN = 0;
+  PEER_TYPE_DEVICE = 1;
+  PEER_TYPE_CONNECTOR = 2;
+}
+
+enum DisconnectionReason {
+  UNKNOWN = 0;
+  SERVER_SHUTDOWN = 1;
+  NEWER_CONNECTION = 2;
+}
+
+message DisconnectMessage {
+  DisconnectionReason reason = 1;
+}

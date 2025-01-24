@@ -12,7 +12,7 @@ func (c *ConnectorService) SignSshOrgCertificate(ctx context.Context, socketID, 
 	requestId := uuid.New().String()
 	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
 		RequestType: &pb.ControlStreamRequest_SshCertificateSignRequest{
-			SshCertificateSignRequest: &pb.SshCertifcateSignRequest{
+			SshCertificateSignRequest: &pb.SshCertificateSignRequest{
 				RequestId:  requestId,
 				SocketId:   socketID,
 				SessionKey: sessionKey,
@@ -22,10 +22,10 @@ func (c *ConnectorService) SignSshOrgCertificate(ctx context.Context, socketID, 
 			},
 		},
 	}); err != nil {
-		return nil, fmt.Errorf("failed to send certifcate sign request: %w", err)
+		return nil, fmt.Errorf("failed to send Certificate sign request: %w", err)
 	}
 
-	recChan := make(chan *pb.ControlStreamReponse)
+	recChan := make(chan *pb.ControlStreamResponse)
 	c.requests.Store(requestId, recChan)
 	defer c.requests.Delete(requestId)
 	defer close(recChan)

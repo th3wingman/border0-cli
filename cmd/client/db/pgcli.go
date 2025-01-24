@@ -69,28 +69,43 @@ var pgcliCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
-			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
-			if err != nil {
-				fmt.Println("ERROR: could not setup listener:", err)
-				return err
+		if info.PrivateNetworkEnabled {
+			// Connect over VPN
+			// No need to add SSL certificates
+			// No need to start a listener
+
+			return client.ExecCommand("pgcli", fmt.Sprintf(
+				"postgres://:@%[1]s:%[2]d/%[3]s",
+				info.SocketName, info.Port, dbName,
+			))
+		} else {
+			// Connect over TLS via proxy
+			// Need to add SSL certificates
+			// Need to start a listener
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+				info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+				if err != nil {
+					fmt.Println("ERROR: could not setup listener:", err)
+					return err
+				}
+
+				hostname = "127.0.0.1"
 			}
 
-			hostname = "127.0.0.1"
-		}
+			sslmode := "verify-full"
+			if info.ConnectorAuthenticationEnabled {
+				sslmode = "verify-ca"
+			}
 
-		sslmode := "verify-full"
-		if info.ConnectorAuthenticationEnabled {
-			sslmode = "verify-ca"
-		}
+			if info.EndToEndEncryptionEnabled {
+				sslmode = "disable"
+			}
 
-		if info.EndToEndEncryptionEnabled {
-			sslmode = "disable"
+			return client.ExecCommand("pgcli", fmt.Sprintf(
+				"postgres://:@%[1]s:%[2]d/%[3]s?sslmode=%[7]s&sslkey=%[4]s&sslcert=%[5]s&sslrootcert=%[6]s",
+				hostname, info.Port, dbName, info.PrivateKeyPath, info.CertificatePath, certChainPath, sslmode,
+			))
 		}
-
-		return client.ExecCommand("pgcli", fmt.Sprintf(
-			"postgres://:@%[1]s:%[2]d/%[3]s?sslmode=%[7]s&sslkey=%[4]s&sslcert=%[5]s&sslrootcert=%[6]s",
-			hostname, info.Port, dbName, info.PrivateKeyPath, info.CertificatePath, certChainPath, sslmode,
-		))
 	},
 }

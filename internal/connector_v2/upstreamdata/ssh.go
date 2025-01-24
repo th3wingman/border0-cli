@@ -19,6 +19,8 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshService(s *models.Socket, c
 		return u.buildUpstreamDataForSshServiceAwsEc2Ic(s, config.AwsEc2ICSshServiceConfiguration)
 	case service.SshServiceTypeKubectlExec:
 		return u.buildUpstreamDataForSshServiceKubectlExec(s, config.KubectlExecSshServiceConfiguration)
+	case service.SshServiceTypeDockerExec:
+		return u.buildUpstreamDataForSshServiceDockerExec(s, config.DockerExecSshServiceConfiguration)
 	case service.SshServiceTypeAwsSsm:
 		return u.buildUpstreamDataForSshServiceAwsSsm(s, config.AwsSsmSshServiceConfiguration)
 	case service.SshServiceTypeConnectorBuiltIn:
@@ -50,6 +52,16 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceAwsEc2Ic(s *models.S
 		// do nothing
 	default:
 		return fmt.Errorf("username provider \"%s\" is not supported", config.UsernameProvider)
+	}
+	return nil
+}
+
+func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceDockerExec(s *models.Socket, config *service.DockerExecSshServiceConfiguration) error {
+	s.ConnectorLocalData.IsDockerExec = true
+
+	// note: config can be nil for docker exec
+	if config != nil {
+		s.ConnectorLocalData.DockerContainerNameAllowlist = config.ContainerNameAllowlist
 	}
 	return nil
 }
@@ -168,7 +180,7 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForSshServiceStandard(s *models.S
 			return fmt.Errorf("username provider \"%s\" is not supported", config.PrivateKeyAuthConfiguration.UsernameProvider)
 		}
 
-		s.ConnectorLocalData.UpstreamIdentityPrivateKey = []byte(u.fetchVariableFromSource(config.PrivateKeyAuthConfiguration.PrivateKey))
+		s.ConnectorLocalData.UpstreamIdentityPrivateKeyVar = config.PrivateKeyAuthConfiguration.PrivateKey
 		return nil
 	case service.StandardSshServiceAuthenticationTypeUsernameAndPassword:
 		if config.UsernameAndPasswordAuthConfiguration == nil {

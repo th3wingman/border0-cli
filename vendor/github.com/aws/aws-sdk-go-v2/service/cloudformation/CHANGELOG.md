@@ -1,3 +1,210 @@
+# v1.54.1 (2024-09-23)
+
+* No change notes available for this release.
+
+# v1.54.0 (2024-09-20)
+
+* **Feature**: Add tracing and metrics support to service clients.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.8 (2024-09-17)
+
+* **Bug Fix**: **BREAKFIX**: Only generate AccountIDEndpointMode config for services that use it. This is a compiler break, but removes no actual functionality, as no services currently use the account ID in endpoint resolution.
+
+# v1.53.7 (2024-09-04)
+
+* No change notes available for this release.
+
+# v1.53.6 (2024-09-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.5 (2024-08-22)
+
+* No change notes available for this release.
+
+# v1.53.4 (2024-08-15)
+
+* **Dependency Update**: Bump minimum Go version to 1.21.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.3 (2024-07-10.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.2 (2024-07-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.1 (2024-06-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.0 (2024-06-26)
+
+* **Feature**: Support list-of-string endpoint parameter.
+
+# v1.52.1 (2024-06-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.52.0 (2024-06-18)
+
+* **Feature**: Track usage of various AWS SDK features in user-agent string.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.4 (2024-06-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.3 (2024-06-07)
+
+* **Bug Fix**: Add clock skew correction on all service clients
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.2 (2024-06-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.1 (2024-05-23)
+
+* No change notes available for this release.
+
+# v1.51.0 (2024-05-22)
+
+* **Feature**: Added DeletionMode FORCE_DELETE_STACK for deleting a stack that is stuck in DELETE_FAILED state due to resource deletion failure.
+
+# v1.50.3 (2024-05-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.50.2 (2024-05-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.50.1 (2024-05-08)
+
+* **Bug Fix**: GoDoc improvement
+
+# v1.50.0 (2024-04-12)
+
+* **Feature**: Adding support for the new parameter "IncludePropertyValues" in the CloudFormation DescribeChangeSet API. When this parameter is included, the DescribeChangeSet response will include more detailed information such as before and after values for the resource properties that will change.
+
+# v1.49.0 (2024-04-03)
+
+* **Feature**: This release would return a new field - PolicyAction in cloudformation's existed DescribeChangeSetResponse, showing actions we are going to apply on the physical resource (e.g., Delete, Retain) according to the user's template
+
+# v1.48.1 (2024-03-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.48.0 (2024-03-18)
+
+* **Feature**: This release supports for a new API ListStackSetAutoDeploymentTargets, which provider auto-deployment configuration as a describable resource. Customers can now view the specific combinations of regions and OUs that are being auto-deployed.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.47.2 (2024-03-12)
+
+* **Documentation**: CloudFormation documentation update for March, 2024
+
+# v1.47.1 (2024-03-07)
+
+* **Bug Fix**: Remove dependency on go-cmp.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.47.0 (2024-03-04)
+
+* **Feature**: Add DetailedStatus field to DescribeStackEvents and DescribeStacks APIs
+
+# v1.46.1 (2024-02-23)
+
+* **Bug Fix**: Move all common, SDK-side middleware stack ops into the service client module to prevent cross-module compatibility issues in the future.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.46.0 (2024-02-22)
+
+* **Feature**: Add middleware stack snapshot tests.
+
+# v1.45.2 (2024-02-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.45.1 (2024-02-20)
+
+* **Bug Fix**: When sourcing values for a service's `EndpointParameters`, the lack of a configured region (i.e. `options.Region == ""`) will now translate to a `nil` value for `EndpointParameters.Region` instead of a pointer to the empty string `""`. This will result in a much more explicit error when calling an operation instead of an obscure hostname lookup failure.
+
+# v1.45.0 (2024-02-16)
+
+* **Feature**: Add new ClientOptions field to waiter config which allows you to extend the config for operation calls made by waiters.
+
+# v1.44.0 (2024-02-13)
+
+* **Feature**: Bump minimum Go version to 1.20 per our language support policy.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.43.0 (2024-01-31)
+
+* **Feature**: CloudFormation IaC generator allows you to scan existing resources in your account and select resources to generate a template for a new or existing CloudFormation stack.
+
+# v1.42.6 (2024-01-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.42.5 (2023-12-20)
+
+* No change notes available for this release.
+
+# v1.42.4 (2023-12-08)
+
+* **Bug Fix**: Reinstate presence of default Retryer in functional options, but still respect max attempts set therein.
+
+# v1.42.3 (2023-12-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.42.2 (2023-12-06)
+
+* **Bug Fix**: Restore pre-refactor auth behavior where all operations could technically be performed anonymously.
+
+# v1.42.1 (2023-12-05)
+
+* **Documentation**: Documentation update, December 2023
+
+# v1.42.0 (2023-12-04)
+
+* **Feature**: Including UPDATE_* states as a success status for CreateStack waiter.
+
+# v1.41.2 (2023-12-01)
+
+* **Bug Fix**: Correct wrapping of errors in authentication workflow.
+* **Bug Fix**: Correctly recognize cache-wrapped instances of AnonymousCredentials at client construction.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.41.1 (2023-11-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.41.0 (2023-11-29)
+
+* **Feature**: Expose Options() accessor on service clients.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.40.3 (2023-11-28.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.40.2 (2023-11-28)
+
+* **Bug Fix**: Respect setting RetryMaxAttempts in functional options at client construction.
+
+# v1.40.1 (2023-11-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.40.0 (2023-11-17)
+
+* **Feature**: This release adds a new flag ImportExistingResources to CreateChangeSet. Specify this parameter on a CREATE- or UPDATE-type change set to import existing resources with custom names instead of recreating them.
+
 # v1.39.1 (2023-11-15)
 
 * **Dependency Update**: Updated to the latest SDK module versions

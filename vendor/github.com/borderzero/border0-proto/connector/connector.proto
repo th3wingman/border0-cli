@@ -1,45 +1,58 @@
+// sets the .proto file syntax version
 syntax = "proto3";
 
+// sets the output golang package name
 option go_package = "github.com/borderzero/border0-proto/connector";
+
+// sets the protobuf package name (i.e. definitions namespace)
 package border0.v1;
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
-
+import "common/messages.proto";
 
 service ConnectorService {
-  rpc ControlStream(stream ControlStreamRequest) returns (stream ControlStreamReponse);
+  rpc ControlStream(stream ControlStreamRequest) returns (stream ControlStreamResponse);
 }
 
 message ControlStreamRequest {
   oneof RequestType {
     Config config = 1;
-    HeartbeatRequest heartbeat = 2;
+    border0.common.v1.HeartbeatMessage heartbeat = 2;
     PluginDiscoveryResults plugin_discovery_results = 3;
     TunnelCertificateSignRequest tunnel_certificate_sign_request = 5;
     Log log = 6;
     ConnectorMetadata metadata = 7;
     AuthorizeRequest authorize = 8;
     SessionUpdateRequest session_update = 9;
-    SshCertifcateSignRequest ssh_certificate_sign_request = 10;
+    SshCertificateSignRequest ssh_certificate_sign_request = 10;
     UploadRecording upload_recording = 11;
-    CertifcateSignRequest certifcate_sign_request = 12;
+    CertificateSignRequest Certificate_sign_request = 12;
+    SessionEvent session_event = 13;
+    border0.common.v1.DiscoveryDetailsMessage discovery_details = 14;
+    AuthorizePeerRequest authorize_peer = 15;
+    SessionRequest session = 16;
+    border0.common.v1.StatsMessage stats = 17;
   }
 }
 
-message ControlStreamReponse {
+message ControlStreamResponse {
   oneof RequestType {
     Init init = 1;
     ConnectorConfig connector_config = 2;
     UpdateConfig update_config = 3;
-    HeartbeatResponse heartbeat = 4;
+    border0.common.v1.HeartbeatMessage heartbeat = 4;
     TunnelCertificateSignResponse tunnel_certificate_sign_response = 5;
     Discover discover = 6;
     Stop stop = 7;
     Disconnect disconnect = 8;
     AuthorizeResponse authorize = 9;
-    SshCertifcateSignResponse ssh_certificate_sign_response = 10;
-    CertifcateSignResponse certifcate_sign_response = 11;
+    SshCertificateSignResponse ssh_certificate_sign_response = 10;
+    CertificateSignResponse Certificate_sign_response = 11;
+    border0.common.v1.NetworkStateMessage network_state = 12;
+    border0.common.v1.PeerOnlineMessage peer_online = 13;
+    border0.common.v1.PeerOfflineMessage peer_offline = 14;
+    SessionResponse session = 16;
   }
 }
 
@@ -66,6 +79,15 @@ message Init {
   ConnectorConfig connector_config = 1;
   repeated SocketConfig sockets = 2;
   repeated PluginConfig plugins = 3;
+
+  // used only for connectors in "device mode"
+  string device_id = 4;
+  string network_cidr_v4 = 5;
+  string network_cidr_v6 = 6;
+  string self_ipv4 = 7;
+  string self_ipv6 = 8;
+  string network_resources_cidr_v4 = 9;
+  string network_resources_cidr_v6 = 10;
 }
 
 message UpdateConfig {
@@ -102,9 +124,6 @@ message Config {
   bool plugins = 3;
 }
 
-message HeartbeatRequest {}
-message HeartbeatResponse {}
-
 message PluginDiscoveryResults {
   string plugin_id = 1;
   string request_id = 2;
@@ -136,6 +155,7 @@ message ConnectorConfig {
  string name = 1;
  int32 heartbeat_interval = 2;
  Organization organization = 3;
+ bool private_network_enabled = 4;
 }
 
 message PluginConfig {
@@ -167,8 +187,21 @@ message AuthorizeRequest {
   string socket_id = 6;
 }
 
+
+message AuthorizePeerRequest {
+  string request_id = 1;
+  string protocol = 2;
+  string public_key = 3;
+  string ip_address = 4;
+  string socket_id = 5;
+}
+
 message actionList {
   repeated string values = 1;
+}
+
+message Permissions {
+  repeated google.protobuf.Struct permissions = 1;
 }
 
 message infoList {
@@ -179,15 +212,54 @@ message AuthorizeResponse {
   string request_id = 1;
   map<string, actionList> allowed_actions = 2;
   map<string, infoList> info = 3;
+  map<string, Permissions> permissions = 5;
+  string email = 6;
+  string entity_uuid = 7;
 }
 
 message SessionUpdateRequest {
   string session_key = 1;
   string socket_id = 2;
   string user_data = 3;
+  string result = 4;
+  string auth_info_failed = 5;
 }
 
-message SshCertifcateSignRequest {
+message SessionRequest {
+  string request_id = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+  google.protobuf.Timestamp last_seen = 4;
+  string email = 5;
+  string log_type = 6;
+  string socket_id = 7;
+  string server_name = 8;
+  string server_port = 9;
+  string client_ip = 10;
+  string client_port = 11;
+  string session_data = 12;
+  string session_key = 13;
+  string result = 14;
+  string auth_info = 15;
+  bytes metadata = 16;
+  string entity_uuid = 17;
+}
+
+message SessionResponse {
+  string request_id = 1;
+  string session_id = 2;
+  bytes ssh_ticket = 3;
+}
+
+message SessionEvent {
+  string session_key = 1;
+  string socket_id = 2;
+  string type = 3;
+  string status = 4;
+  string metadata = 5;
+}
+
+message SshCertificateSignRequest {
   string request_id = 1;
   string socket_id = 2;
   string session_key = 3;
@@ -196,23 +268,24 @@ message SshCertifcateSignRequest {
   bytes ticket = 6;
 }
 
-message SshCertifcateSignResponse {
+message SshCertificateSignResponse {
   string request_id = 1;
   bytes certificate = 2;
 }
 
 message UploadRecording {
-  string session_key = 1;
-  string recording_id = 2;
-  bytes recording = 3;
+  string session_key = 1;    // session identifier (unique globally)
+  string recording_id = 2;   // recording identifier (unique per-session)
+  bytes recording = 3;       // actual recording bytes
+  string recording_type = 4; // type of the recording e.g. asciinema, log, etc...
 }
 
-message CertifcateSignRequest {
+message CertificateSignRequest {
   string request_id = 1;
   bytes certificate_signing_request = 2;
 }
 
-message CertifcateSignResponse {
+message CertificateSignResponse {
   string request_id = 1;
   bytes certificate = 2;
 }

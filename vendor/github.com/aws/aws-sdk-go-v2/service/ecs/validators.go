@@ -1244,6 +1244,11 @@ func validateContainerDefinition(v *types.ContainerDefinition) error {
 			invalidParams.AddNested("RepositoryCredentials", err.(smithy.InvalidParamsError))
 		}
 	}
+	if v.RestartPolicy != nil {
+		if err := validateContainerRestartPolicy(v.RestartPolicy); err != nil {
+			invalidParams.AddNested("RestartPolicy", err.(smithy.InvalidParamsError))
+		}
+	}
 	if v.EnvironmentFiles != nil {
 		if err := validateEnvironmentFiles(v.EnvironmentFiles); err != nil {
 			invalidParams.AddNested("EnvironmentFiles", err.(smithy.InvalidParamsError))
@@ -1392,6 +1397,21 @@ func validateContainerOverrides(v []types.ContainerOverride) error {
 	}
 }
 
+func validateContainerRestartPolicy(v *types.ContainerRestartPolicy) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "ContainerRestartPolicy"}
+	if v.Enabled == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("Enabled"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
 func validateDeploymentAlarms(v *types.DeploymentAlarms) error {
 	if v == nil {
 		return nil
@@ -1478,6 +1498,38 @@ func validateDevicesList(v []types.Device) error {
 	invalidParams := smithy.InvalidParamsError{Context: "DevicesList"}
 	for i := range v {
 		if err := validateDevice(&v[i]); err != nil {
+			invalidParams.AddNested(fmt.Sprintf("[%d]", i), err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateEBSTagSpecification(v *types.EBSTagSpecification) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "EBSTagSpecification"}
+	if len(v.ResourceType) == 0 {
+		invalidParams.Add(smithy.NewErrParamRequired("ResourceType"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateEBSTagSpecifications(v []types.EBSTagSpecification) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "EBSTagSpecifications"}
+	for i := range v {
+		if err := validateEBSTagSpecification(&v[i]); err != nil {
 			invalidParams.AddNested(fmt.Sprintf("[%d]", i), err.(smithy.InvalidParamsError))
 		}
 	}
@@ -1992,6 +2044,11 @@ func validateServiceConnectService(v *types.ServiceConnectService) error {
 			invalidParams.AddNested("ClientAliases", err.(smithy.InvalidParamsError))
 		}
 	}
+	if v.Tls != nil {
+		if err := validateServiceConnectTlsConfiguration(v.Tls); err != nil {
+			invalidParams.AddNested("Tls", err.(smithy.InvalidParamsError))
+		}
+	}
 	if invalidParams.Len() > 0 {
 		return invalidParams
 	} else {
@@ -2016,6 +2073,118 @@ func validateServiceConnectServiceList(v []types.ServiceConnectService) error {
 	}
 }
 
+func validateServiceConnectTlsConfiguration(v *types.ServiceConnectTlsConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "ServiceConnectTlsConfiguration"}
+	if v.IssuerCertificateAuthority == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("IssuerCertificateAuthority"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateServiceManagedEBSVolumeConfiguration(v *types.ServiceManagedEBSVolumeConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "ServiceManagedEBSVolumeConfiguration"}
+	if v.TagSpecifications != nil {
+		if err := validateEBSTagSpecifications(v.TagSpecifications); err != nil {
+			invalidParams.AddNested("TagSpecifications", err.(smithy.InvalidParamsError))
+		}
+	}
+	if v.RoleArn == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("RoleArn"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateServiceVolumeConfiguration(v *types.ServiceVolumeConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "ServiceVolumeConfiguration"}
+	if v.Name == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("Name"))
+	}
+	if v.ManagedEBSVolume != nil {
+		if err := validateServiceManagedEBSVolumeConfiguration(v.ManagedEBSVolume); err != nil {
+			invalidParams.AddNested("ManagedEBSVolume", err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateServiceVolumeConfigurations(v []types.ServiceVolumeConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "ServiceVolumeConfigurations"}
+	for i := range v {
+		if err := validateServiceVolumeConfiguration(&v[i]); err != nil {
+			invalidParams.AddNested(fmt.Sprintf("[%d]", i), err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateTaskManagedEBSVolumeConfiguration(v *types.TaskManagedEBSVolumeConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "TaskManagedEBSVolumeConfiguration"}
+	if v.TagSpecifications != nil {
+		if err := validateEBSTagSpecifications(v.TagSpecifications); err != nil {
+			invalidParams.AddNested("TagSpecifications", err.(smithy.InvalidParamsError))
+		}
+	}
+	if v.RoleArn == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("RoleArn"))
+	}
+	if v.TerminationPolicy != nil {
+		if err := validateTaskManagedEBSVolumeTerminationPolicy(v.TerminationPolicy); err != nil {
+			invalidParams.AddNested("TerminationPolicy", err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateTaskManagedEBSVolumeTerminationPolicy(v *types.TaskManagedEBSVolumeTerminationPolicy) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "TaskManagedEBSVolumeTerminationPolicy"}
+	if v.DeleteOnTermination == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("DeleteOnTermination"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
 func validateTaskOverride(v *types.TaskOverride) error {
 	if v == nil {
 		return nil
@@ -2029,6 +2198,43 @@ func validateTaskOverride(v *types.TaskOverride) error {
 	if v.EphemeralStorage != nil {
 		if err := validateEphemeralStorage(v.EphemeralStorage); err != nil {
 			invalidParams.AddNested("EphemeralStorage", err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateTaskVolumeConfiguration(v *types.TaskVolumeConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "TaskVolumeConfiguration"}
+	if v.Name == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("Name"))
+	}
+	if v.ManagedEBSVolume != nil {
+		if err := validateTaskManagedEBSVolumeConfiguration(v.ManagedEBSVolume); err != nil {
+			invalidParams.AddNested("ManagedEBSVolume", err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateTaskVolumeConfigurations(v []types.TaskVolumeConfiguration) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "TaskVolumeConfigurations"}
+	for i := range v {
+		if err := validateTaskVolumeConfiguration(&v[i]); err != nil {
+			invalidParams.AddNested(fmt.Sprintf("[%d]", i), err.(smithy.InvalidParamsError))
 		}
 	}
 	if invalidParams.Len() > 0 {
@@ -2216,6 +2422,11 @@ func validateOpCreateServiceInput(v *CreateServiceInput) error {
 	if v.ServiceConnectConfiguration != nil {
 		if err := validateServiceConnectConfiguration(v.ServiceConnectConfiguration); err != nil {
 			invalidParams.AddNested("ServiceConnectConfiguration", err.(smithy.InvalidParamsError))
+		}
+	}
+	if v.VolumeConfigurations != nil {
+		if err := validateServiceVolumeConfigurations(v.VolumeConfigurations); err != nil {
+			invalidParams.AddNested("VolumeConfigurations", err.(smithy.InvalidParamsError))
 		}
 	}
 	if invalidParams.Len() > 0 {
@@ -2724,6 +2935,11 @@ func validateOpRunTaskInput(v *RunTaskInput) error {
 	if v.TaskDefinition == nil {
 		invalidParams.Add(smithy.NewErrParamRequired("TaskDefinition"))
 	}
+	if v.VolumeConfigurations != nil {
+		if err := validateTaskVolumeConfigurations(v.VolumeConfigurations); err != nil {
+			invalidParams.AddNested("VolumeConfigurations", err.(smithy.InvalidParamsError))
+		}
+	}
 	if invalidParams.Len() > 0 {
 		return invalidParams
 	} else {
@@ -2751,6 +2967,11 @@ func validateOpStartTaskInput(v *StartTaskInput) error {
 	}
 	if v.TaskDefinition == nil {
 		invalidParams.Add(smithy.NewErrParamRequired("TaskDefinition"))
+	}
+	if v.VolumeConfigurations != nil {
+		if err := validateTaskVolumeConfigurations(v.VolumeConfigurations); err != nil {
+			invalidParams.AddNested("VolumeConfigurations", err.(smithy.InvalidParamsError))
+		}
 	}
 	if invalidParams.Len() > 0 {
 		return invalidParams
@@ -2966,6 +3187,11 @@ func validateOpUpdateServiceInput(v *UpdateServiceInput) error {
 	if v.ServiceConnectConfiguration != nil {
 		if err := validateServiceConnectConfiguration(v.ServiceConnectConfiguration); err != nil {
 			invalidParams.AddNested("ServiceConnectConfiguration", err.(smithy.InvalidParamsError))
+		}
+	}
+	if v.VolumeConfigurations != nil {
+		if err := validateServiceVolumeConfigurations(v.VolumeConfigurations); err != nil {
+			invalidParams.AddNested("VolumeConfigurations", err.(smithy.InvalidParamsError))
 		}
 	}
 	if invalidParams.Len() > 0 {

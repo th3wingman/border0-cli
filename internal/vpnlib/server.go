@@ -3,12 +3,15 @@ package vpnlib
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"runtime"
 
+	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/util"
 	"go.uber.org/zap"
 )
@@ -39,6 +42,8 @@ func RunServer(
 	vpnClientListener net.Listener,
 	dhcpPoolSubnet string,
 	advertisedRoutes []string,
+	border0API border0.Border0API,
+	socket models.Socket,
 	opts ...ServerOption,
 ) error {
 	config := &serverConfig{verbose: false}
@@ -123,6 +128,8 @@ func RunServer(
 				dhcpPool,
 				connMap,
 				advertisedRoutes,
+				border0API,
+				socket,
 			)
 		}
 	}
@@ -136,13 +143,59 @@ func handleIPPacketConn(
 	dhcpPool *IPPool,
 	connMap *ConnectionMap,
 	advertisedRoutes []string,
+	border0API border0.Border0API,
+	socket models.Socket,
 ) {
 	defer client.Close()
+
+	// authz
+	e2eeConn, ok := client.(border0.E2EEncryptionConn)
+	if !ok {
+		logger.Error("failed to cast connection to e2eencryption")
+		return
+	}
+
+	if e2eeConn.Metadata == nil {
+		logger.Error("invalid e2e metadata")
+		return
+	}
+
+	allowed := false
+	for _, action := range e2eeConn.Metadata.AllowedActions {
+		switch permission := action.(type) {
+		case string:
+			allowed = true
+		case models.Permissions:
+			if permission.VPN != nil {
+				allowed = true
+			}
+		}
+
+		if allowed {
+			break
+		}
+	}
+
+	if !allowed {
+		if err := border0API.UpdateSession(models.SessionUpdate{
+			SessionKey:     e2eeConn.Metadata.SessionKey,
+			Socket:         &socket,
+			Result:         models.ResultDenied,
+			AuthInfoFailed: "VPN access denied by Policy",
+		}); err != nil {
+			logger.Error("failed to update session", zap.Error(err))
+		}
+
+		return
+	}
 
 	// allocate a new IP in the pool for the new client
 	clientIP, err := dhcpPool.Allocate()
 	if err != nil {
-		logger.Error("failed to allocate client IP", zap.Error(err))
+		if err := errorEvent(border0API, e2eeConn.Metadata, socket, "vpn_session", fmt.Sprintf("failed to allocate client IP: %s", err)); err != nil {
+			logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 	defer dhcpPool.Release(clientIP)
@@ -151,7 +204,24 @@ func handleIPPacketConn(
 	connMap.Set(clientIP, client)
 	defer connMap.Delete(clientIP)
 
-	logger.Info("new client connected", zap.String("peer_ip", clientIP))
+	metadata, err := json.Marshal(struct {
+		PeerIP string `json:"peer_ip"`
+	}{clientIP})
+	if err != nil {
+		logger.Error("failed to marshal metadata", zap.Error(err))
+		return
+	}
+
+	if err := border0API.CreateSessionEvent(models.SessionEvent{
+		SessionKey: e2eeConn.Metadata.SessionKey,
+		Socket:     &socket,
+		Type:       "vpn_session",
+		Status:     "success",
+		Metadata:   string(metadata),
+	}); err != nil {
+		logger.Error("failed to create session event", zap.Error(err))
+		return
+	}
 
 	// define control message
 	controlMessage := &ControlMessage{
@@ -162,25 +232,36 @@ func handleIPPacketConn(
 	}
 	controlMessageBytes, err := controlMessage.Build()
 	if err != nil {
-		logger.Error("failed to build control message", zap.Error(err))
+		if err := errorEvent(border0API, e2eeConn.Metadata, socket, "vpn_session", fmt.Sprintf("failed to build control message: %s", err)); err != nil {
+			logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 
 	// write control message
 	n, err := client.Write(controlMessageBytes)
 	if err != nil {
-		logger.Error("failed to write control message to net conn", zap.Error(err))
+		if err := errorEvent(border0API, e2eeConn.Metadata, socket, "vpn_session", fmt.Sprintf("failed to write control message to net conn: %s", err)); err != nil {
+			logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 	if n < len(controlMessageBytes) {
-		logger.Error("failed to write entire control message bytes", zap.Int("bytes_written", n), zap.Int("message_length", len(controlMessageBytes)))
+		if err := errorEvent(border0API, e2eeConn.Metadata, socket, "vpn_session", fmt.Sprintf("failed to write entire control message bytes: %s", err)); err != nil {
+			logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 
 	// kick off routine to read packets from clients and forward them to the interface
 	if err = ConnToTunCopy(ctx, logger, client, clientIP, tun); err != nil {
 		if !errors.Is(err, io.EOF) {
-			logger.Error("failed to forward packets between client conn and interface", zap.Error(err))
+			if err := errorEvent(border0API, e2eeConn.Metadata, socket, "vpn_session", fmt.Sprintf("failed to forward packets between client conn and interface: %s", err)); err != nil {
+				logger.Error("failed to create session event", zap.Error(err))
+			}
 		}
 		return
 	}
@@ -262,4 +343,21 @@ func tunToConnMapCopy(
 			}
 		}
 	}
+}
+
+func errorEvent(border0API border0.Border0API, e2eeMetadata *border0.ConnMetadata, socket models.Socket, eventType string, message string) error {
+	metadata, err := json.Marshal(struct {
+		Error string `json:"error"`
+	}{message})
+	if err != nil {
+		return err
+	}
+
+	return border0API.CreateSessionEvent(models.SessionEvent{
+		SessionKey: e2eeMetadata.SessionKey,
+		Socket:     &socket,
+		Type:       eventType,
+		Status:     "error",
+		Metadata:   string(metadata),
+	})
 }

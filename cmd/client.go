@@ -23,6 +23,7 @@ import (
 
 	"github.com/borderzero/border0-cli/client/preference"
 	"github.com/borderzero/border0-cli/cmd/client/db"
+	"github.com/borderzero/border0-cli/cmd/client/kubeconfig"
 	"github.com/borderzero/border0-cli/cmd/client/rdp"
 	"github.com/borderzero/border0-cli/cmd/client/tcp"
 	"github.com/borderzero/border0-cli/cmd/client/vnc"
@@ -52,7 +53,7 @@ var clientCertFetchCmd = &cobra.Command{
 	Short: "Fetch Client certificate",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if crtPath, keyPath, ok := client.IsClientCertValid(); !ok {
-			crtPath, keyPath, _, err := client.FetchCertAndReturnPaths(logger.Logger, hostname)
+			crtPath, keyPath, _, _, err := client.FetchCertAndReturnPaths(logger.Logger, hostname)
 			if err != nil {
 				return err
 			}
@@ -100,16 +101,21 @@ var clientLoginCmd = &cobra.Command{
 			}
 		}
 
-		_, claims, err := client.Login(orgID)
+		token, claims, err := client.Login(orgID)
 		if err != nil {
 			log.Fatal(err)
 		}
+		email := fmt.Sprint(claims["user_email"])
+		orgID := fmt.Sprint(claims["org_id"])
+		orgSubdomain := fmt.Sprint(claims["org_subdomain"])
 
 		// read preference file and write logged in org info back to preference file
-		id, subdomain := fmt.Sprint(claims["org_id"]), fmt.Sprint(claims["org_subdomain"])
-		if err := preference.CreateOrUpdate(id, subdomain); err != nil {
+		if err := preference.CreateOrUpdate(orgID, orgSubdomain); err != nil {
 			fmt.Println(err)
 		}
+
+		// best effort attempt at retrieving and persisting org-wide mTLS certificate
+		client.GetAndPersistCert(token, email, orgID)
 
 		fmt.Println("Login successful")
 	},
@@ -120,7 +126,7 @@ var clientLoginStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check login status, see if token is still valid",
 	Run: func(cmd *cobra.Command, args []string) {
-		valid, _, identity, err := client.IsExistingClientTokenValid("")
+		valid, _, identity, _, err := client.IsExistingClientTokenValid("")
 		if !valid {
 			fmt.Println(err)
 			fmt.Println("Please login again: border0 client login")
@@ -151,4 +157,5 @@ func init() {
 	vnc.AddCommandsTo(clientCmd)
 	vpn.AddCommandsTo(clientCmd)
 	httpproxy.AddCommandsTo(clientCmd)
+	kubeconfig.AddCommandsTo(clientCmd)
 }

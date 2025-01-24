@@ -22,7 +22,7 @@ func (vg *fileVariableUpstream) GetVariable(ctx context.Context, varDefn string)
 	}
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file at path \"%s\"", filePath)
+		return "", fmt.Errorf("failed to read file at path \"%s\": %v", filePath, err)
 	}
 	return strings.TrimSuffix(string(data), "\n"), nil
 }

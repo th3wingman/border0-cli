@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -14,8 +13,9 @@ import (
 
 // Returns a list of tasks. You can filter the results by cluster, task definition
 // family, container instance, launch type, what IAM principal started the task, or
-// by the desired status of the task. Recently stopped tasks might appear in the
-// returned results.
+// by the desired status of the task.
+//
+// Recently stopped tasks might appear in the returned results.
 func (c *Client) ListTasks(ctx context.Context, params *ListTasksInput, optFns ...func(*Options)) (*ListTasksOutput, error) {
 	if params == nil {
 		params = &ListTasksInput{}
@@ -48,9 +48,11 @@ type ListTasksInput struct {
 	// the desired status to STOPPED . This can be useful for debugging tasks that
 	// aren't starting properly or have died or finished. The default status filter is
 	// RUNNING , which shows tasks that Amazon ECS has set the desired status to
-	// RUNNING . Although you can filter results based on a desired status of PENDING ,
-	// this doesn't return any results. Amazon ECS never sets the desired status of a
-	// task to that value (only a task's lastStatus may have a value of PENDING ).
+	// RUNNING .
+	//
+	// Although you can filter results based on a desired status of PENDING , this
+	// doesn't return any results. Amazon ECS never sets the desired status of a task
+	// to that value (only a task's lastStatus may have a value of PENDING ).
 	DesiredStatus types.DesiredStatus
 
 	// The name of the task definition family to use when filtering the ListTasks
@@ -73,9 +75,10 @@ type ListTasksInput struct {
 	// The nextToken value returned from a ListTasks request indicating that more
 	// results are available to fulfill the request and further calls will be needed.
 	// If maxResults was provided, it's possible the number of results to be fewer
-	// than maxResults . This token should be treated as an opaque identifier that is
-	// only used to retrieve the next items in a list and not for other programmatic
-	// purposes.
+	// than maxResults .
+	//
+	// This token should be treated as an opaque identifier that is only used to
+	// retrieve the next items in a list and not for other programmatic purposes.
 	NextToken *string
 
 	// The name of the service to use when filtering the ListTasks results. Specifying
@@ -83,8 +86,10 @@ type ListTasksInput struct {
 	ServiceName *string
 
 	// The startedBy value to filter the task results with. Specifying a startedBy
-	// value limits the results to tasks that were started with that value. When you
-	// specify startedBy as the filter, it must be the only filter that you use.
+	// value limits the results to tasks that were started with that value.
+	//
+	// When you specify startedBy as the filter, it must be the only filter that you
+	// use.
 	StartedBy *string
 
 	noSmithyDocumentSerde
@@ -129,25 +134,28 @@ func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, optio
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
+		return err
+	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
 	if err = addClientUserAgent(stack, options); err != nil {
@@ -162,10 +170,16 @@ func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, optio
 	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListTasks(options.Region), middleware.Before); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecursionDetection(stack); err != nil {
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -180,15 +194,20 @@ func (c *Client) addOperationListTasksMiddlewares(stack *middleware.Stack, optio
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// ListTasksAPIClient is a client that implements the ListTasks operation.
-type ListTasksAPIClient interface {
-	ListTasks(context.Context, *ListTasksInput, ...func(*Options)) (*ListTasksOutput, error)
-}
-
-var _ ListTasksAPIClient = (*Client)(nil)
 
 // ListTasksPaginatorOptions is the paginator options for ListTasks
 type ListTasksPaginatorOptions struct {
@@ -259,6 +278,9 @@ func (p *ListTasksPaginator) NextPage(ctx context.Context, optFns ...func(*Optio
 	}
 	params.MaxResults = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.ListTasks(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -277,6 +299,13 @@ func (p *ListTasksPaginator) NextPage(ctx context.Context, optFns ...func(*Optio
 
 	return result, nil
 }
+
+// ListTasksAPIClient is a client that implements the ListTasks operation.
+type ListTasksAPIClient interface {
+	ListTasks(context.Context, *ListTasksInput, ...func(*Options)) (*ListTasksOutput, error)
+}
+
+var _ ListTasksAPIClient = (*Client)(nil)
 
 func newServiceMetadataMiddleware_opListTasks(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{

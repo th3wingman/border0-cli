@@ -15,11 +15,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/util"
 	jwt "github.com/golang-jwt/jwt"
+	"golang.org/x/term"
 )
 
 const (
@@ -37,6 +39,13 @@ type Client struct {
 	version string
 }
 
+type progressReader struct {
+	io.Reader
+	total      int64
+	downloaded int64
+	lastUpdate time.Time
+}
+
 func WebUrl() string {
 	if os.Getenv("BORDER0_WEB_URL") != "" {
 		return os.Getenv("BORDER0_WEB_URL")
@@ -50,7 +59,6 @@ func TokenFilePath() string {
 }
 
 func tokenfile() string {
-
 	tokenfile := ""
 	if runtime.GOOS == "windows" {
 		tokenfile = fmt.Sprintf("%s/.border0/token", os.Getenv("APPDATA"))
@@ -406,81 +414,91 @@ func GetLatestVersion() (string, error) {
 }
 
 func GetLatestBinary(osname string, osarch string) (string, []byte, error) {
-	var bin_url string
-	var checksum_url string
+	var binaryURL string
+	var checksumURL string
 	switch osname {
 	case "darwin":
 		if osarch == "amd64" {
-			bin_url = download_url + "/darwin_amd64/border0"
-			checksum_url = download_url + "/darwin_amd64/sha256-checksum.txt"
+			binaryURL = download_url + "/darwin_amd64/border0"
+			checksumURL = download_url + "/darwin_amd64/sha256-checksum.txt"
 		} else if osarch == "arm64" {
-			bin_url = download_url + "/darwin_arm64/border0"
-			checksum_url = download_url + "/darwin_arm64/sha256-checksum.txt"
+			binaryURL = download_url + "/darwin_arm64/border0"
+			checksumURL = download_url + "/darwin_arm64/sha256-checksum.txt"
 		}
 	case "linux":
 		if osarch == "arm64" {
-			bin_url = download_url + "/linux_arm64/border0"
-			checksum_url = download_url + "/linux_arm64/sha256-checksum.txt"
+			binaryURL = download_url + "/linux_arm64/border0"
+			checksumURL = download_url + "/linux_arm64/sha256-checksum.txt"
 		} else if osarch == "arm" {
-			bin_url = download_url + "/linux_arm/border0"
-			checksum_url = download_url + "/linux_arm/sha256-checksum.txt"
+			binaryURL = download_url + "/linux_arm/border0"
+			checksumURL = download_url + "/linux_arm/sha256-checksum.txt"
 		} else {
-			bin_url = download_url + "/linux_amd64/border0"
-			checksum_url = download_url + "/linux_amd64/sha256-checksum.txt"
+			binaryURL = download_url + "/linux_amd64/border0"
+			checksumURL = download_url + "/linux_amd64/sha256-checksum.txt"
 		}
 	case "windows":
-		bin_url = download_url + "/windows_amd64/border0.exe"
-		checksum_url = download_url + "/windows_amd64/sha256-checksum.txt"
+		binaryURL = download_url + "/windows_amd64/border0.exe"
+		checksumURL = download_url + "/windows_amd64/sha256-checksum.txt"
 	default:
 		return "", nil, fmt.Errorf("unknown OS: %s", osname)
 	}
 
 	// Download checksum
-	resp, err := http.Get(checksum_url)
+	checksumBytes, err := downloadFile(checksumURL, false)
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("failed to download checksum: %v", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", nil, fmt.Errorf("failed to get latest checksum version (%d)", resp.StatusCode)
-	}
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", nil, err
-	}
-
-	bodyString := string(bodyBytes)
-	checksum := strings.TrimSpace(string(bodyString))
-	checksum = strings.TrimSuffix(checksum, "\n")
+	checksum := strings.TrimSpace(string(checksumBytes))
 
 	// Download binary
-	resp, err = http.Get(bin_url)
+	binaryBytes, err := downloadFile(binaryURL, true)
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("failed to download binary: %v", err)
+	}
+
+	return checksum, binaryBytes, nil
+}
+
+func downloadFile(url string, showProgress bool) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", nil, fmt.Errorf("failed to get latest version (%d)", resp.StatusCode)
+	var reader io.Reader
+	if showProgress && term.IsTerminal(int(os.Stdout.Fd())) {
+		reader = &progressReader{
+			Reader:     resp.Body,
+			total:      resp.ContentLength,
+			lastUpdate: time.Now(),
+		}
+	} else {
+		reader = resp.Body
 	}
 
-	bodyBytes, err2 := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", nil, err2
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download failed (%d)", resp.StatusCode)
 	}
-	return checksum, bodyBytes, nil
+
+	return io.ReadAll(reader)
 }
 
 func GetToken() (string, error) {
+	if os.Getenv("BORDER0_TOKEN") != "" {
+		return os.Getenv("BORDER0_TOKEN"), nil
+	}
+
+	// backwards compatibility
 	if os.Getenv("BORDER0_ADMIN_TOKEN") != "" {
 		return os.Getenv("BORDER0_ADMIN_TOKEN"), nil
 	}
 
-	if _, err := os.Stat(tokenfile()); os.IsNotExist(err) {
-		return "", errors.New("please login first (no token found)")
+	tokenFile := tokenfile()
+	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
+		return "", errors.New("please login first using `border0 login` command")
 	}
-	content, err := os.ReadFile(tokenfile())
+	content, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return "", err
 	}
@@ -598,4 +616,40 @@ func GetUserIDFromAccessToken(accessToken string) (*string, *string, error) {
 	userID := strings.ReplaceAll(tokenUserId, "-", "")
 
 	return &userID, &tokenUserId, nil
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.Reader.Read(p)
+	pr.downloaded += int64(n)
+
+	// Update progress every 100ms to avoid flooding the console
+	if time.Since(pr.lastUpdate) > 100*time.Millisecond || err == io.EOF {
+		pr.showProgress()
+		pr.lastUpdate = time.Now()
+	}
+
+	if err != nil {
+		fmt.Printf("\n")
+	}
+
+	return n, err
+}
+
+func (pr *progressReader) showProgress() {
+	if pr.total > 0 {
+		percentage := float64(pr.downloaded) / float64(pr.total) * 100
+		width := 40
+		completed := int(float64(width) * float64(pr.downloaded) / float64(pr.total))
+
+		fmt.Printf("\r[%s%s] %.1f%% (%.2f/%.2f MB)",
+			strings.Repeat("=", completed),
+			strings.Repeat(" ", width-completed),
+			percentage,
+			float64(pr.downloaded)/1024/1024,
+			float64(pr.total)/1024/1024,
+		)
+	} else {
+		// If total size is unknown
+		fmt.Printf("\rDownloaded: %.2f MB", float64(pr.downloaded)/1024/1024)
+	}
 }

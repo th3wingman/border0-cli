@@ -36,7 +36,7 @@ import (
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/host"
+	gopsutil_host "github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
 
@@ -424,7 +424,7 @@ func processStats(process exec.Cmd) {
 
 		fmt.Fprintf(w, "<hr>")
 		fmt.Fprintf(w, "<h1>Host info</h1>")
-		hi, _ := host.Info()
+		hi, _ := gopsutil_host.Info()
 
 		fmt.Fprintf(w, "hostname:     %s<br>", hi.Hostname)
 		fmt.Fprintf(w, "uptime:       %d<br>", hi.Uptime)

@@ -510,6 +510,26 @@ func (m *validateOpDescribeIdentityProviderConfig) HandleInitialize(ctx context.
 	return next.HandleInitialize(ctx, in)
 }
 
+type validateOpDescribeInsight struct {
+}
+
+func (*validateOpDescribeInsight) ID() string {
+	return "OperationInputValidation"
+}
+
+func (m *validateOpDescribeInsight) HandleInitialize(ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler) (
+	out middleware.InitializeOutput, metadata middleware.Metadata, err error,
+) {
+	input, ok := in.Parameters.(*DescribeInsightInput)
+	if !ok {
+		return out, metadata, fmt.Errorf("unknown input parameters type %T", in.Parameters)
+	}
+	if err := validateOpDescribeInsightInput(input); err != nil {
+		return out, metadata, err
+	}
+	return next.HandleInitialize(ctx, in)
+}
+
 type validateOpDescribeNodegroup struct {
 }
 
@@ -705,6 +725,26 @@ func (m *validateOpListIdentityProviderConfigs) HandleInitialize(ctx context.Con
 		return out, metadata, fmt.Errorf("unknown input parameters type %T", in.Parameters)
 	}
 	if err := validateOpListIdentityProviderConfigsInput(input); err != nil {
+		return out, metadata, err
+	}
+	return next.HandleInitialize(ctx, in)
+}
+
+type validateOpListInsights struct {
+}
+
+func (*validateOpListInsights) ID() string {
+	return "OperationInputValidation"
+}
+
+func (m *validateOpListInsights) HandleInitialize(ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler) (
+	out middleware.InitializeOutput, metadata middleware.Metadata, err error,
+) {
+	input, ok := in.Parameters.(*ListInsightsInput)
+	if !ok {
+		return out, metadata, fmt.Errorf("unknown input parameters type %T", in.Parameters)
+	}
+	if err := validateOpListInsightsInput(input); err != nil {
 		return out, metadata, err
 	}
 	return next.HandleInitialize(ctx, in)
@@ -1110,6 +1150,10 @@ func addOpDescribeIdentityProviderConfigValidationMiddleware(stack *middleware.S
 	return stack.Initialize.Add(&validateOpDescribeIdentityProviderConfig{}, middleware.After)
 }
 
+func addOpDescribeInsightValidationMiddleware(stack *middleware.Stack) error {
+	return stack.Initialize.Add(&validateOpDescribeInsight{}, middleware.After)
+}
+
 func addOpDescribeNodegroupValidationMiddleware(stack *middleware.Stack) error {
 	return stack.Initialize.Add(&validateOpDescribeNodegroup{}, middleware.After)
 }
@@ -1148,6 +1192,10 @@ func addOpListFargateProfilesValidationMiddleware(stack *middleware.Stack) error
 
 func addOpListIdentityProviderConfigsValidationMiddleware(stack *middleware.Stack) error {
 	return stack.Initialize.Add(&validateOpListIdentityProviderConfigs{}, middleware.After)
+}
+
+func addOpListInsightsValidationMiddleware(stack *middleware.Stack) error {
+	return stack.Initialize.Add(&validateOpListInsights{}, middleware.After)
 }
 
 func addOpListNodegroupsValidationMiddleware(stack *middleware.Stack) error {
@@ -1208,6 +1256,41 @@ func addOpUpdateNodegroupVersionValidationMiddleware(stack *middleware.Stack) er
 
 func addOpUpdatePodIdentityAssociationValidationMiddleware(stack *middleware.Stack) error {
 	return stack.Initialize.Add(&validateOpUpdatePodIdentityAssociation{}, middleware.After)
+}
+
+func validateAddonPodIdentityAssociations(v *types.AddonPodIdentityAssociations) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "AddonPodIdentityAssociations"}
+	if v.ServiceAccount == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("ServiceAccount"))
+	}
+	if v.RoleArn == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("RoleArn"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateAddonPodIdentityAssociationsList(v []types.AddonPodIdentityAssociations) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "AddonPodIdentityAssociationsList"}
+	for i := range v {
+		if err := validateAddonPodIdentityAssociations(&v[i]); err != nil {
+			invalidParams.AddNested(fmt.Sprintf("[%d]", i), err.(smithy.InvalidParamsError))
+		}
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
 }
 
 func validateConnectorConfigRequest(v *types.ConnectorConfigRequest) error {
@@ -1377,6 +1460,11 @@ func validateOpCreateAddonInput(v *CreateAddonInput) error {
 	}
 	if v.AddonName == nil {
 		invalidParams.Add(smithy.NewErrParamRequired("AddonName"))
+	}
+	if v.PodIdentityAssociations != nil {
+		if err := validateAddonPodIdentityAssociationsList(v.PodIdentityAssociations); err != nil {
+			invalidParams.AddNested("PodIdentityAssociations", err.(smithy.InvalidParamsError))
+		}
 	}
 	if invalidParams.Len() > 0 {
 		return invalidParams
@@ -1757,6 +1845,24 @@ func validateOpDescribeIdentityProviderConfigInput(v *DescribeIdentityProviderCo
 	}
 }
 
+func validateOpDescribeInsightInput(v *DescribeInsightInput) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "DescribeInsightInput"}
+	if v.ClusterName == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("ClusterName"))
+	}
+	if v.Id == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("Id"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
 func validateOpDescribeNodegroupInput(v *DescribeNodegroupInput) error {
 	if v == nil {
 		return nil
@@ -1932,6 +2038,21 @@ func validateOpListIdentityProviderConfigsInput(v *ListIdentityProviderConfigsIn
 	}
 }
 
+func validateOpListInsightsInput(v *ListInsightsInput) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "ListInsightsInput"}
+	if v.ClusterName == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("ClusterName"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
 func validateOpListNodegroupsInput(v *ListNodegroupsInput) error {
 	if v == nil {
 		return nil
@@ -2078,6 +2199,11 @@ func validateOpUpdateAddonInput(v *UpdateAddonInput) error {
 	}
 	if v.AddonName == nil {
 		invalidParams.Add(smithy.NewErrParamRequired("AddonName"))
+	}
+	if v.PodIdentityAssociations != nil {
+		if err := validateAddonPodIdentityAssociationsList(v.PodIdentityAssociations); err != nil {
+			invalidParams.AddNested("PodIdentityAssociations", err.(smithy.InvalidParamsError))
+		}
 	}
 	if invalidParams.Len() > 0 {
 		return invalidParams

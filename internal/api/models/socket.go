@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/borderzero/border0-go/types/common"
+	"github.com/borderzero/border0-go/types/service"
 )
 
 const (
@@ -46,7 +47,7 @@ type ConnectorLocalData struct {
 	UpstreamCACertBlock            []byte
 	UpstreamTLS                    *bool
 	UpstreamIdentifyFile           string
-	UpstreamIdentityPrivateKey     []byte
+	UpstreamIdentityPrivateKeyVar  string
 	SqlAuthProxy                   bool
 	RdsIAMAuth                     bool
 	AWSRegion                      string
@@ -63,6 +64,8 @@ type ConnectorLocalData struct {
 	AwsEC2InstanceId               string
 	AWSEC2InstanceConnectEnabled   bool
 	AwsCredentials                 *common.AwsCredentials
+	IsDockerExec                   bool
+	DockerContainerNameAllowlist   []string
 	IsKubectlExec                  bool
 	K8sNamespaceAllowlist          []string
 	K8sNamespaceSelectorsAllowlist map[string]map[string][]string
@@ -76,6 +79,12 @@ type ConnectorLocalData struct {
 	// vpn sockets
 	DHCPPoolSubnet   string
 	AdvertisedRoutes []string
+
+	// kubernetes sockets
+	KubernetesAPISettings *service.KubernetesServiceConfiguration
+
+	// http sockets
+	HttpServiceConfiguration *service.HttpServiceConfiguration
 }
 
 func (c *ConnectorData) Tags() map[string]string {
@@ -162,6 +171,7 @@ type Socket struct {
 	CloudSQLInstance      string `json:"-"`
 	GoogleCredentialsFile string `json:"-"`
 	SSHServer             bool   `json:"-"`
+	PrivateNetworkEnabled bool   `json:"-"`
 }
 
 func (s *Socket) SanitizeName() {
@@ -280,4 +290,8 @@ type Tunnel struct {
 	TunnelID     string `json:"tunnel_id,omitempty"`
 	LocalPort    int    `json:"local_port,omitempty"`
 	TunnelServer string `json:"tunnel_server,omitempty"`
+}
+
+func (s *Socket) IsPrimaryProxy() bool {
+	return s.EndToEndEncryptionEnabled || s.PrivateNetworkEnabled
 }

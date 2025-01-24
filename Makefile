@@ -12,12 +12,17 @@ DATE := $(shell git log -1 --format=%cd --date=format:"%Y%m%d")
 BORDER0_VERSION ?= $(shell git describe --long --dirty --tags)
 VERSION=$(BORDER0_VERSION)
 INTERNAL_PKG=github.com/borderzero/border0-cli/internal
+GO123_CHECKLINKNAME:=0# required if building with go 1.23, until https://github.com/vitessio/vitess/issues/16015 is closed
 # strip debugging information with -s and -w linker flags
 # -s: disable symbol table
 # -w: disable DWARF generation
-FLAGS := -ldflags "-s -w -X $(INTERNAL_PKG).Version=$(VERSION) -X $(INTERNAL_PKG).Date=$(DATE)"
+FLAGS := -ldflags " -s -w -X $(INTERNAL_PKG).Version=$(VERSION) -X $(INTERNAL_PKG).Date=$(DATE) -checklinkname=$(GO123_CHECKLINKNAME)"
 
 all: lint moddownload test build
+
+.PHONY: mocks
+mocks:
+	mockery --with-expecter --dir internal/api --name=API --case snake --output=mocks
 
 # Release for all platforms.
 release:
@@ -170,7 +175,7 @@ lint:
 	$(GOFMT) -w .
 
 test:
-	$(GOTEST) -cover ./...
+	$(GOTEST) $(FLAGS) -cover ./...
 
 clean:
 	$(GOCLEAN)

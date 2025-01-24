@@ -13,6 +13,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -51,6 +52,8 @@ func ExecCmd(ctx context.Context, channel gossh.Channel, command string, ptyTerm
 			cmd.Path = loginCmd
 			if hasBusyBoxLogin(loginCmd) {
 				cmd.Args = []string{loginCmd, "-p", "-h", "Border0", "-f", username}
+			} else if isUsingSystemdResolved() {
+				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0.com", "-f", username}, cmd.Args...)
 			} else {
 				cmd.Args = append([]string{loginCmd, "-p", "-h", "Border0", "-f", username}, cmd.Args...)
 			}
@@ -180,6 +183,11 @@ func setWinsize(f *os.File, w, h int) {
 		uintptr(unsafe.Pointer(&struct{ h, w, x, y uint16 }{uint16(h), uint16(w), 0, 0})))
 }
 
+func isUsingSystemdResolved() bool {
+	target, _ := os.Readlink("/etc/resolv.conf")
+	return strings.Contains(target, "/run/systemd/")
+}
+
 func hasBusyBoxLogin(loginCmd string) bool {
 	fileInfo, err := os.Lstat(loginCmd)
 	if err != nil {
@@ -220,6 +228,16 @@ func StartChildProcess(ctx context.Context, s io.ReadWriteCloser, process, usern
 	executable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("could not get executable path: %s", err)
+	}
+
+	// after running border0 verion upgrade the executable is renamed to .bak
+	// so we need to check if the executable is renamed and use the correct path
+	if strings.HasSuffix(executable, ".bak") {
+		// check if the executable exists
+		if _, err := os.Stat(executable); err != nil {
+			executable = strings.TrimSuffix(executable, ".bak")
+
+		}
 	}
 
 	groups, err := user.GroupIds()

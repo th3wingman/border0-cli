@@ -18,13 +18,21 @@ type Config struct {
 	CAPath      string // cert chain path
 	SSLCertPath string // cert pem file path
 	SSLKeyPath  string // key pem file path
+
+	PrivateNetworkEnabled bool // VPN enabled
 }
 
 func DataSourcesXML(c *Config) (string, error) {
-	// convert the key pem file to PKCS#8 format
-	pkcs8KeyPath, err := keyPEMToPKCS8(c.SSLKeyPath)
-	if err != nil {
-		return "", fmt.Errorf("unable to convert key PEM to PKCS8: %w", err)
+	var (
+		pkcs8KeyPath string
+		err          error
+	)
+	if !c.PrivateNetworkEnabled {
+		// convert the key pem file to PKCS#8 format
+		pkcs8KeyPath, err = keyPEMToPKCS8(c.SSLKeyPath)
+		if err != nil {
+			return "", fmt.Errorf("unable to convert key PEM to PKCS8: %w", err)
+		}
 	}
 
 	var (
@@ -36,11 +44,15 @@ func DataSourcesXML(c *Config) (string, error) {
 	case "mysql":
 		jdbcDriver = "com.mysql.cj.jdbc.Driver"
 		jdbcURL = fmt.Sprintf("jdbc:mysql://%s:%d/%s", c.Host, c.Port, c.Database)
-		sslConf = ssl{
-			ClientCert: c.SSLCertPath,
-			ClientKey:  pkcs8KeyPath,
-			Enabled:    true,
-			Mode:       "REQUIRE",
+		if c.PrivateNetworkEnabled {
+			sslConf = ssl{Enabled: false}
+		} else {
+			sslConf = ssl{
+				ClientCert: c.SSLCertPath,
+				ClientKey:  pkcs8KeyPath,
+				Enabled:    true,
+				Mode:       "REQUIRE",
+			}
 		}
 	case "mssql":
 		jdbcDriver = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
@@ -54,11 +66,15 @@ func DataSourcesXML(c *Config) (string, error) {
 				Value: "verify-ca",
 			},
 		}
-		sslConf = ssl{
-			CACert:     c.CAPath,
-			ClientCert: c.SSLCertPath,
-			ClientKey:  pkcs8KeyPath,
-			Enabled:    true,
+		if c.PrivateNetworkEnabled {
+			sslConf = ssl{Enabled: false}
+		} else {
+			sslConf = ssl{
+				CACert:     c.CAPath,
+				ClientCert: c.SSLCertPath,
+				ClientKey:  pkcs8KeyPath,
+				Enabled:    true,
+			}
 		}
 	default:
 		return "", fmt.Errorf("unsupported database type: %s", c.Type)

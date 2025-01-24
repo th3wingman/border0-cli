@@ -28,6 +28,7 @@ import (
 	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
@@ -52,23 +53,27 @@ const (
 type Border0API interface {
 	GetUserID() (string, error)
 	SignSSHKey(ctx context.Context, socketID string, publicKey []byte) (string, string, error)
-	Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) ([]string, map[string][]string, error)
+	Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) ([]any, map[string][]string, error)
+	EvaluatePeer(ctx context.Context, socket *models.Socket, clientIP, publicKey string) (string, string, []any, map[string][]string, error)
 	UpdateSession(updates models.SessionUpdate) error
+	CreateSession(session models.Session) (*models.SessionCreateResult, error)
+	EndSession(session models.Session) error
+	CreateSessionEvent(event models.SessionEvent) error
 	SignSshOrgCertificate(ctx context.Context, socketID, sessionID, userEmail string, ticket []byte, publicKey []byte) ([]byte, error)
-	UploadRecording(content []byte, socketID, sessionKey, recordingID string) error
+	UploadRecording(content []byte, socketID, sessionKey, recordingID, recordingType string) error
 }
 
-type E2EEncryptionMetadata struct {
-	ClientIP       string   `json:"client_ip"`
-	UserEmail      string   `json:"user_email"`
-	SessionKey     string   `json:"session_key"`
-	SshTicket      []byte   `json:"ssh_ticket,omitempty"`
-	AllowedActions []string `json:"allowed_actions,omitempty"`
+type ConnMetadata struct {
+	ClientIP       string `json:"client_ip"`
+	UserEmail      string `json:"user_email"`
+	SessionKey     string `json:"session_key"`
+	SshTicket      []byte `json:"ssh_ticket,omitempty"`
+	AllowedActions []any  `json:"allowed_actions,omitempty"`
 }
 
 type E2EEncryptionConn struct {
 	*tls.Conn
-	Metadata *E2EEncryptionMetadata
+	Metadata *ConnMetadata
 }
 
 type Socket struct {
@@ -98,6 +103,9 @@ type Socket struct {
 	ConfigHash                       string
 	logger                           *zap.Logger
 	certificate                      *tls.Certificate
+	PrivateNetworkEnabled            bool
+	PrivateNetworkIPv4               net.IP
+	PrivateNetworkIPv6               net.IP
 }
 
 type connWithError struct {
@@ -186,9 +194,9 @@ func NewSocketFromConnectorAPI(ctx context.Context, border0API Border0API, socke
 		logger:                         logger,
 		certificate:                    certificate,
 		version:                        internal.Version,
-
-		context: newCtx,
-		cancel:  cancel,
+		PrivateNetworkEnabled:          socket.PrivateNetworkEnabled,
+		context:                        newCtx,
+		cancel:                         cancel,
 	}, nil
 }
 
@@ -290,7 +298,9 @@ func (s *Socket) Listen() (net.Listener, error) {
 					s.acceptChan <- connWithError{conn, nil}
 				}
 			case <-s.context.Done():
-				s.listener.Close()
+				if s.listener != nil {
+					s.listener.Close()
+				}
 				return
 			}
 		}
@@ -321,10 +331,13 @@ func (s *Socket) tunnelConnect() {
 	ebackoff := backoff.NewExponentialBackOff()
 	ebackoff.MaxElapsedTime = 0
 	ebackoff.MaxInterval = 5 * time.Minute
+	suppressionPeriod := 1 * time.Minute
 
 	err = backoff.Retry(func() error {
 		if err := s.refreshSSHCert(); err != nil {
-			s.errChan <- fmt.Errorf("failed to refresh tunnel certificate: %s", err)
+			if ebackoff.GetElapsedTime() > suppressionPeriod {
+				s.errChan <- fmt.Errorf("failed to refresh tunnel certificate: %s", err)
+			}
 			return err
 		}
 
@@ -332,7 +345,9 @@ func (s *Socket) tunnelConnect() {
 		sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(s.sshSigner)}
 
 		if err = s.sshConnect(sshConfig, ebackoff); err != nil {
-			s.errChan <- fmt.Errorf("failed to connect to server: %s", err)
+			if ebackoff.GetElapsedTime() > suppressionPeriod {
+				s.errChan <- fmt.Errorf("failed to connect to server: %s", err)
+			}
 			return err
 		}
 
@@ -385,7 +400,6 @@ func (s *Socket) sshConnect(config *ssh.ClientConfig, b backoff.BackOff) error {
 	if err != nil {
 		return fmt.Errorf("failed to open listener on tunnel server: %w", err)
 	}
-
 	defer s.listener.Close()
 
 	session, err := client.NewSession()
@@ -424,7 +438,6 @@ func (s *Socket) sshConnect(config *ssh.ClientConfig, b backoff.BackOff) error {
 		if err != nil {
 			b.Reset()
 		}
-
 		return err
 	}
 }
@@ -620,9 +633,9 @@ func (s *Socket) endToEndEncryptionHandshake(conn net.Conn) {
 	s.acceptChan <- connWithError{E2EEncryptionConn{tlsConn, md}, nil}
 }
 
-func e2EEncryptionMetadata(ctx context.Context, conn net.Conn) (*E2EEncryptionMetadata, error) {
+func e2EEncryptionMetadata(ctx context.Context, conn net.Conn) (*ConnMetadata, error) {
 
-	resultChan := make(chan *E2EEncryptionMetadata)
+	resultChan := make(chan *ConnMetadata)
 	errChan := make(chan error)
 
 	go func() {
@@ -657,7 +670,7 @@ func e2EEncryptionMetadata(ctx context.Context, conn net.Conn) (*E2EEncryptionMe
 		}
 
 		// decode control message JSON
-		var md *E2EEncryptionMetadata
+		var md *ConnMetadata
 		if err = json.Unmarshal(metadataBuffer, &md); err != nil {
 			errChan <- fmt.Errorf("failed to decode control message JSON: %v", err)
 			return
@@ -688,6 +701,10 @@ func (s *Socket) Close() error {
 	}
 
 	return nil
+}
+
+func (s *Socket) SetListener(l net.Listener) {
+	s.listener = l
 }
 
 func (s *Socket) connectorAuthentication(ctx context.Context, conn net.Conn) (*tls.Conn, error) {
@@ -727,7 +744,7 @@ func (s *Socket) connectorAuthentication(ctx context.Context, conn net.Conn) (*t
 	return tlsConn, nil
 }
 
-func (s *Socket) endToEndEncryptionAuthentication(ctx context.Context, conn net.Conn, md *E2EEncryptionMetadata) (*tls.Conn, error) {
+func (s *Socket) endToEndEncryptionAuthentication(ctx context.Context, conn net.Conn, md *ConnMetadata) (*tls.Conn, error) {
 	tlsConn := tls.Server(conn, s.ConnectorAuthenticationTLSConfig)
 	if tlsConn == nil {
 		return nil, fmt.Errorf("failed to create tls connection")
@@ -759,7 +776,12 @@ func (s *Socket) endToEndEncryptionAuthentication(ctx context.Context, conn net.
 	nctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	actions, _, err := s.border0API.Evaluate(nctx, s.Socket, md.ClientIP, md.UserEmail, md.SessionKey)
+	clientIP, _, err := net.SplitHostPort(md.ClientIP)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse client ip: %w", err)
+	}
+
+	actions, _, err := s.border0API.Evaluate(nctx, s.Socket, clientIP, md.UserEmail, md.SessionKey)
 	if err != nil {
 		return nil, fmt.Errorf("error: failed to authorize: %s", err)
 	}
@@ -851,25 +873,132 @@ func ProxyConnection(client net.Conn, remote net.Conn) {
 	<-chDone
 }
 
-func Serve(logger *zap.Logger, l net.Listener, hostname string, port int) error {
+func Serve(logger *zap.Logger, l net.Listener, hostname string, port int, socketType string, border0API Border0API, socket *models.Socket) error {
 	for {
 		rconn, err := l.Accept()
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return nil
 			}
-			return fmt.Errorf("failed to accept connection: %s", err)
+
+			if _, ok := err.(border0NetError); ok {
+				logger.Error("failed to accept connection", zap.Error(err))
+				continue
+			}
 		}
 
 		go func() {
-			lconn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", hostname, port), 5*time.Second)
+			defer rconn.Close()
+			// authz
+			var metadata *ConnMetadata
+			if socket.IsPrimaryProxy() {
+				switch {
+				case socket.PrivateNetworkEnabled:
+					pnConn, ok := rconn.(*PrivateNetworkConn)
+					if !ok {
+						logger.Error("failed to cast connection to private network")
+						return
+					}
+
+					if pnConn.Metadata == nil {
+						logger.Error("invalid private network metadata")
+						return
+					}
+
+					defer func() {
+						if err := border0API.EndSession(models.Session{
+							SessionKey: pnConn.Metadata.SessionKey,
+							SocketID:   socket.SocketID,
+							EndTime:    pointer.To(time.Now()),
+						}); err != nil {
+							logger.Error("failed to end session", zap.Error(err))
+						}
+					}()
+
+					metadata = pnConn.Metadata
+				case socket.EndToEndEncryptionEnabled:
+					e2eeConn, ok := rconn.(E2EEncryptionConn)
+					if !ok {
+						logger.Error("failed to cast to E2EEncryptionConn")
+						return
+					}
+
+					if e2eeConn.Metadata == nil {
+						logger.Error("failed to read metadata from net conn")
+						return
+					}
+
+					metadata = e2eeConn.Metadata
+				}
+
+				allowed := false
+				for _, action := range metadata.AllowedActions {
+					switch permission := action.(type) {
+					case string:
+						allowed = true
+					case models.Permissions:
+						switch socketType {
+						case "rdp":
+							if permission.RDP != nil {
+								allowed = true
+							}
+						case "vnc":
+							if permission.VNC != nil {
+								allowed = true
+							}
+						case "tls":
+							if permission.TLS != nil {
+								allowed = true
+							}
+						}
+					}
+
+					if allowed {
+						break
+					}
+				}
+
+				if !allowed {
+					if err := border0API.UpdateSession(models.SessionUpdate{
+						SessionKey:     metadata.SessionKey,
+						Socket:         socket,
+						Result:         models.ResultDenied,
+						AuthInfoFailed: "access denied by policy",
+					}); err != nil {
+						logger.Error("failed to update session", zap.Error(err))
+					}
+
+					return
+				}
+			}
+
+			lconn, err := net.DialTimeout("tcp", net.JoinHostPort(hostname, strconv.Itoa(port)), 5*time.Second)
 			if err != nil {
-				logger.Sugar().Errorf("failed to connect to local service: %s", err)
-				rconn.Close()
+				if metadata != nil {
+					eventMetadata, err := json.Marshal(struct {
+						Error string `json:"error"`
+					}{fmt.Sprintf("failed to connect to local service: %s", err)})
+					if err != nil {
+						logger.Sugar().Errorf("failed to marshal metadata: %s", err)
+					} else {
+						if err := border0API.CreateSessionEvent(models.SessionEvent{
+							SessionKey: metadata.SessionKey,
+							Socket:     socket,
+							Type:       fmt.Sprintf("%s_session", socketType),
+							Status:     "error",
+							Metadata:   string(eventMetadata),
+						}); err != nil {
+							logger.Error("failed to create session event", zap.Error(err))
+						}
+					}
+				} else {
+					logger.Error("failed to connect to local service", zap.Error(err))
+				}
+
 				return
 			}
 
-			go ProxyConnection(rconn, lconn)
+			ProxyConnection(rconn, lconn)
 		}()
 	}
 }

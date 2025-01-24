@@ -14,10 +14,20 @@ import (
 	"github.com/aws/smithy-go/middleware"
 	"github.com/aws/smithy-go/ptr"
 	smithytime "github.com/aws/smithy-go/time"
+	"github.com/aws/smithy-go/tracing"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"io"
 	"strings"
+	"time"
 )
+
+func deserializeS3Expires(v string) (*time.Time, error) {
+	t, err := smithytime.ParseHTTPDate(v)
+	if err != nil {
+		return nil, nil
+	}
+	return &t, nil
+}
 
 type awsRestjson1_deserializeOpAssociateAccessPolicy struct {
 }
@@ -34,6 +44,10 @@ func (m *awsRestjson1_deserializeOpAssociateAccessPolicy) HandleDeserialize(ctx 
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -73,6 +87,7 @@ func (m *awsRestjson1_deserializeOpAssociateAccessPolicy) HandleDeserialize(ctx 
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -208,6 +223,10 @@ func (m *awsRestjson1_deserializeOpAssociateEncryptionConfig) HandleDeserialize(
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -247,6 +266,7 @@ func (m *awsRestjson1_deserializeOpAssociateEncryptionConfig) HandleDeserialize(
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -370,6 +390,10 @@ func (m *awsRestjson1_deserializeOpAssociateIdentityProviderConfig) HandleDeseri
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -409,6 +433,7 @@ func (m *awsRestjson1_deserializeOpAssociateIdentityProviderConfig) HandleDeseri
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -537,6 +562,10 @@ func (m *awsRestjson1_deserializeOpCreateAccessEntry) HandleDeserialize(ctx cont
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -576,6 +605,7 @@ func (m *awsRestjson1_deserializeOpCreateAccessEntry) HandleDeserialize(ctx cont
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -699,6 +729,10 @@ func (m *awsRestjson1_deserializeOpCreateAddon) HandleDeserialize(ctx context.Co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -738,6 +772,7 @@ func (m *awsRestjson1_deserializeOpCreateAddon) HandleDeserialize(ctx context.Co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -861,6 +896,10 @@ func (m *awsRestjson1_deserializeOpCreateCluster) HandleDeserialize(ctx context.
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -900,6 +939,7 @@ func (m *awsRestjson1_deserializeOpCreateCluster) HandleDeserialize(ctx context.
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1026,6 +1066,10 @@ func (m *awsRestjson1_deserializeOpCreateEksAnywhereSubscription) HandleDeserial
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1065,6 +1109,7 @@ func (m *awsRestjson1_deserializeOpCreateEksAnywhereSubscription) HandleDeserial
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1185,6 +1230,10 @@ func (m *awsRestjson1_deserializeOpCreateFargateProfile) HandleDeserialize(ctx c
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1224,6 +1273,7 @@ func (m *awsRestjson1_deserializeOpCreateFargateProfile) HandleDeserialize(ctx c
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1347,6 +1397,10 @@ func (m *awsRestjson1_deserializeOpCreateNodegroup) HandleDeserialize(ctx contex
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1386,6 +1440,7 @@ func (m *awsRestjson1_deserializeOpCreateNodegroup) HandleDeserialize(ctx contex
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1512,6 +1567,10 @@ func (m *awsRestjson1_deserializeOpCreatePodIdentityAssociation) HandleDeseriali
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1551,6 +1610,7 @@ func (m *awsRestjson1_deserializeOpCreatePodIdentityAssociation) HandleDeseriali
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1674,6 +1734,10 @@ func (m *awsRestjson1_deserializeOpDeleteAccessEntry) HandleDeserialize(ctx cont
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1685,6 +1749,7 @@ func (m *awsRestjson1_deserializeOpDeleteAccessEntry) HandleDeserialize(ctx cont
 	output := &DeleteAccessEntryOutput{}
 	out.Result = output
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1763,6 +1828,10 @@ func (m *awsRestjson1_deserializeOpDeleteAddon) HandleDeserialize(ctx context.Co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1802,6 +1871,7 @@ func (m *awsRestjson1_deserializeOpDeleteAddon) HandleDeserialize(ctx context.Co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -1922,6 +1992,10 @@ func (m *awsRestjson1_deserializeOpDeleteCluster) HandleDeserialize(ctx context.
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -1961,6 +2035,7 @@ func (m *awsRestjson1_deserializeOpDeleteCluster) HandleDeserialize(ctx context.
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -2081,6 +2156,10 @@ func (m *awsRestjson1_deserializeOpDeleteEksAnywhereSubscription) HandleDeserial
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -2120,6 +2199,7 @@ func (m *awsRestjson1_deserializeOpDeleteEksAnywhereSubscription) HandleDeserial
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -2237,6 +2317,10 @@ func (m *awsRestjson1_deserializeOpDeleteFargateProfile) HandleDeserialize(ctx c
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -2276,6 +2360,7 @@ func (m *awsRestjson1_deserializeOpDeleteFargateProfile) HandleDeserialize(ctx c
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -2393,6 +2478,10 @@ func (m *awsRestjson1_deserializeOpDeleteNodegroup) HandleDeserialize(ctx contex
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -2432,6 +2521,7 @@ func (m *awsRestjson1_deserializeOpDeleteNodegroup) HandleDeserialize(ctx contex
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -2555,6 +2645,10 @@ func (m *awsRestjson1_deserializeOpDeletePodIdentityAssociation) HandleDeseriali
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -2594,6 +2688,7 @@ func (m *awsRestjson1_deserializeOpDeletePodIdentityAssociation) HandleDeseriali
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -2711,6 +2806,10 @@ func (m *awsRestjson1_deserializeOpDeregisterCluster) HandleDeserialize(ctx cont
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -2750,6 +2849,7 @@ func (m *awsRestjson1_deserializeOpDeregisterCluster) HandleDeserialize(ctx cont
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -2873,6 +2973,10 @@ func (m *awsRestjson1_deserializeOpDescribeAccessEntry) HandleDeserialize(ctx co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -2912,6 +3016,7 @@ func (m *awsRestjson1_deserializeOpDescribeAccessEntry) HandleDeserialize(ctx co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3026,6 +3131,10 @@ func (m *awsRestjson1_deserializeOpDescribeAddon) HandleDeserialize(ctx context.
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -3065,6 +3174,7 @@ func (m *awsRestjson1_deserializeOpDescribeAddon) HandleDeserialize(ctx context.
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3185,6 +3295,10 @@ func (m *awsRestjson1_deserializeOpDescribeAddonConfiguration) HandleDeserialize
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -3224,6 +3338,7 @@ func (m *awsRestjson1_deserializeOpDescribeAddonConfiguration) HandleDeserialize
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3336,6 +3451,11 @@ func awsRestjson1_deserializeOpDocumentDescribeAddonConfigurationOutput(v **Desc
 				sv.ConfigurationSchema = ptr.String(jtv)
 			}
 
+		case "podIdentityConfiguration":
+			if err := awsRestjson1_deserializeDocumentAddonPodIdentityConfigurationList(&sv.PodIdentityConfiguration, value); err != nil {
+				return err
+			}
+
 		default:
 			_, _ = key, value
 
@@ -3360,6 +3480,10 @@ func (m *awsRestjson1_deserializeOpDescribeAddonVersions) HandleDeserialize(ctx 
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -3399,6 +3523,7 @@ func (m *awsRestjson1_deserializeOpDescribeAddonVersions) HandleDeserialize(ctx 
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3522,6 +3647,10 @@ func (m *awsRestjson1_deserializeOpDescribeCluster) HandleDeserialize(ctx contex
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -3561,6 +3690,7 @@ func (m *awsRestjson1_deserializeOpDescribeCluster) HandleDeserialize(ctx contex
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3678,6 +3808,10 @@ func (m *awsRestjson1_deserializeOpDescribeEksAnywhereSubscription) HandleDeseri
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -3717,6 +3851,7 @@ func (m *awsRestjson1_deserializeOpDescribeEksAnywhereSubscription) HandleDeseri
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3834,6 +3969,10 @@ func (m *awsRestjson1_deserializeOpDescribeFargateProfile) HandleDeserialize(ctx
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -3873,6 +4012,7 @@ func (m *awsRestjson1_deserializeOpDescribeFargateProfile) HandleDeserialize(ctx
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -3990,6 +4130,10 @@ func (m *awsRestjson1_deserializeOpDescribeIdentityProviderConfig) HandleDeseria
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4029,6 +4173,7 @@ func (m *awsRestjson1_deserializeOpDescribeIdentityProviderConfig) HandleDeseria
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -4134,6 +4279,167 @@ func awsRestjson1_deserializeOpDocumentDescribeIdentityProviderConfigOutput(v **
 	return nil
 }
 
+type awsRestjson1_deserializeOpDescribeInsight struct {
+}
+
+func (*awsRestjson1_deserializeOpDescribeInsight) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsRestjson1_deserializeOpDescribeInsight) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsRestjson1_deserializeOpErrorDescribeInsight(response, &metadata)
+	}
+	output := &DescribeInsightOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+
+	body := io.TeeReader(response.Body, ringBuffer)
+
+	decoder := json.NewDecoder(body)
+	decoder.UseNumber()
+	var shape interface{}
+	if err := decoder.Decode(&shape); err != nil && err != io.EOF {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	err = awsRestjson1_deserializeOpDocumentDescribeInsightOutput(&output, shape)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body with invalid JSON, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	span.End()
+	return out, metadata, err
+}
+
+func awsRestjson1_deserializeOpErrorDescribeInsight(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	headerCode := response.Header.Get("X-Amzn-ErrorType")
+	if len(headerCode) != 0 {
+		errorCode = restjson.SanitizeErrorCode(headerCode)
+	}
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+
+	body := io.TeeReader(errorBody, ringBuffer)
+	decoder := json.NewDecoder(body)
+	decoder.UseNumber()
+	jsonCode, message, err := restjson.GetErrorInfo(decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return err
+	}
+
+	errorBody.Seek(0, io.SeekStart)
+	if len(headerCode) == 0 && len(jsonCode) != 0 {
+		errorCode = restjson.SanitizeErrorCode(jsonCode)
+	}
+	if len(message) != 0 {
+		errorMessage = message
+	}
+
+	switch {
+	case strings.EqualFold("InvalidParameterException", errorCode):
+		return awsRestjson1_deserializeErrorInvalidParameterException(response, errorBody)
+
+	case strings.EqualFold("InvalidRequestException", errorCode):
+		return awsRestjson1_deserializeErrorInvalidRequestException(response, errorBody)
+
+	case strings.EqualFold("ResourceNotFoundException", errorCode):
+		return awsRestjson1_deserializeErrorResourceNotFoundException(response, errorBody)
+
+	case strings.EqualFold("ServerException", errorCode):
+		return awsRestjson1_deserializeErrorServerException(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+func awsRestjson1_deserializeOpDocumentDescribeInsightOutput(v **DescribeInsightOutput, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *DescribeInsightOutput
+	if *v == nil {
+		sv = &DescribeInsightOutput{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "insight":
+			if err := awsRestjson1_deserializeDocumentInsight(&sv.Insight, value); err != nil {
+				return err
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
 type awsRestjson1_deserializeOpDescribeNodegroup struct {
 }
 
@@ -4149,6 +4455,10 @@ func (m *awsRestjson1_deserializeOpDescribeNodegroup) HandleDeserialize(ctx cont
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4188,6 +4498,7 @@ func (m *awsRestjson1_deserializeOpDescribeNodegroup) HandleDeserialize(ctx cont
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -4308,6 +4619,10 @@ func (m *awsRestjson1_deserializeOpDescribePodIdentityAssociation) HandleDeseria
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4347,6 +4662,7 @@ func (m *awsRestjson1_deserializeOpDescribePodIdentityAssociation) HandleDeseria
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -4464,6 +4780,10 @@ func (m *awsRestjson1_deserializeOpDescribeUpdate) HandleDeserialize(ctx context
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4503,6 +4823,7 @@ func (m *awsRestjson1_deserializeOpDescribeUpdate) HandleDeserialize(ctx context
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -4620,6 +4941,10 @@ func (m *awsRestjson1_deserializeOpDisassociateAccessPolicy) HandleDeserialize(c
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4631,6 +4956,7 @@ func (m *awsRestjson1_deserializeOpDisassociateAccessPolicy) HandleDeserialize(c
 	output := &DisassociateAccessPolicyOutput{}
 	out.Result = output
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -4709,6 +5035,10 @@ func (m *awsRestjson1_deserializeOpDisassociateIdentityProviderConfig) HandleDes
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4748,6 +5078,7 @@ func (m *awsRestjson1_deserializeOpDisassociateIdentityProviderConfig) HandleDes
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -4871,6 +5202,10 @@ func (m *awsRestjson1_deserializeOpListAccessEntries) HandleDeserialize(ctx cont
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -4910,6 +5245,7 @@ func (m *awsRestjson1_deserializeOpListAccessEntries) HandleDeserialize(ctx cont
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -5036,6 +5372,10 @@ func (m *awsRestjson1_deserializeOpListAccessPolicies) HandleDeserialize(ctx con
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -5075,6 +5415,7 @@ func (m *awsRestjson1_deserializeOpListAccessPolicies) HandleDeserialize(ctx con
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -5192,6 +5533,10 @@ func (m *awsRestjson1_deserializeOpListAddons) HandleDeserialize(ctx context.Con
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -5231,6 +5576,7 @@ func (m *awsRestjson1_deserializeOpListAddons) HandleDeserialize(ctx context.Con
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -5360,6 +5706,10 @@ func (m *awsRestjson1_deserializeOpListAssociatedAccessPolicies) HandleDeseriali
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -5399,6 +5749,7 @@ func (m *awsRestjson1_deserializeOpListAssociatedAccessPolicies) HandleDeseriali
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -5540,6 +5891,10 @@ func (m *awsRestjson1_deserializeOpListClusters) HandleDeserialize(ctx context.C
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -5579,6 +5934,7 @@ func (m *awsRestjson1_deserializeOpListClusters) HandleDeserialize(ctx context.C
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -5705,6 +6061,10 @@ func (m *awsRestjson1_deserializeOpListEksAnywhereSubscriptions) HandleDeseriali
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -5744,6 +6104,7 @@ func (m *awsRestjson1_deserializeOpListEksAnywhereSubscriptions) HandleDeseriali
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -5870,6 +6231,10 @@ func (m *awsRestjson1_deserializeOpListFargateProfiles) HandleDeserialize(ctx co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -5909,6 +6274,7 @@ func (m *awsRestjson1_deserializeOpListFargateProfiles) HandleDeserialize(ctx co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -6035,6 +6401,10 @@ func (m *awsRestjson1_deserializeOpListIdentityProviderConfigs) HandleDeserializ
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -6074,6 +6444,7 @@ func (m *awsRestjson1_deserializeOpListIdentityProviderConfigs) HandleDeserializ
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -6188,6 +6559,176 @@ func awsRestjson1_deserializeOpDocumentListIdentityProviderConfigsOutput(v **Lis
 	return nil
 }
 
+type awsRestjson1_deserializeOpListInsights struct {
+}
+
+func (*awsRestjson1_deserializeOpListInsights) ID() string {
+	return "OperationDeserializer"
+}
+
+func (m *awsRestjson1_deserializeOpListInsights) HandleDeserialize(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+	out middleware.DeserializeOutput, metadata middleware.Metadata, err error,
+) {
+	out, metadata, err = next.HandleDeserialize(ctx, in)
+	if err != nil {
+		return out, metadata, err
+	}
+
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
+	response, ok := out.RawResponse.(*smithyhttp.Response)
+	if !ok {
+		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return out, metadata, awsRestjson1_deserializeOpErrorListInsights(response, &metadata)
+	}
+	output := &ListInsightsOutput{}
+	out.Result = output
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+
+	body := io.TeeReader(response.Body, ringBuffer)
+
+	decoder := json.NewDecoder(body)
+	decoder.UseNumber()
+	var shape interface{}
+	if err := decoder.Decode(&shape); err != nil && err != io.EOF {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return out, metadata, err
+	}
+
+	err = awsRestjson1_deserializeOpDocumentListInsightsOutput(&output, shape)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		return out, metadata, &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body with invalid JSON, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+	}
+
+	span.End()
+	return out, metadata, err
+}
+
+func awsRestjson1_deserializeOpErrorListInsights(response *smithyhttp.Response, metadata *middleware.Metadata) error {
+	var errorBuffer bytes.Buffer
+	if _, err := io.Copy(&errorBuffer, response.Body); err != nil {
+		return &smithy.DeserializationError{Err: fmt.Errorf("failed to copy error response body, %w", err)}
+	}
+	errorBody := bytes.NewReader(errorBuffer.Bytes())
+
+	errorCode := "UnknownError"
+	errorMessage := errorCode
+
+	headerCode := response.Header.Get("X-Amzn-ErrorType")
+	if len(headerCode) != 0 {
+		errorCode = restjson.SanitizeErrorCode(headerCode)
+	}
+
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+
+	body := io.TeeReader(errorBody, ringBuffer)
+	decoder := json.NewDecoder(body)
+	decoder.UseNumber()
+	jsonCode, message, err := restjson.GetErrorInfo(decoder)
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return err
+	}
+
+	errorBody.Seek(0, io.SeekStart)
+	if len(headerCode) == 0 && len(jsonCode) != 0 {
+		errorCode = restjson.SanitizeErrorCode(jsonCode)
+	}
+	if len(message) != 0 {
+		errorMessage = message
+	}
+
+	switch {
+	case strings.EqualFold("InvalidParameterException", errorCode):
+		return awsRestjson1_deserializeErrorInvalidParameterException(response, errorBody)
+
+	case strings.EqualFold("InvalidRequestException", errorCode):
+		return awsRestjson1_deserializeErrorInvalidRequestException(response, errorBody)
+
+	case strings.EqualFold("ResourceNotFoundException", errorCode):
+		return awsRestjson1_deserializeErrorResourceNotFoundException(response, errorBody)
+
+	case strings.EqualFold("ServerException", errorCode):
+		return awsRestjson1_deserializeErrorServerException(response, errorBody)
+
+	default:
+		genericError := &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: errorMessage,
+		}
+		return genericError
+
+	}
+}
+
+func awsRestjson1_deserializeOpDocumentListInsightsOutput(v **ListInsightsOutput, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *ListInsightsOutput
+	if *v == nil {
+		sv = &ListInsightsOutput{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "insights":
+			if err := awsRestjson1_deserializeDocumentInsightSummaries(&sv.Insights, value); err != nil {
+				return err
+			}
+
+		case "nextToken":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.NextToken = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
 type awsRestjson1_deserializeOpListNodegroups struct {
 }
 
@@ -6203,6 +6744,10 @@ func (m *awsRestjson1_deserializeOpListNodegroups) HandleDeserialize(ctx context
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -6242,6 +6787,7 @@ func (m *awsRestjson1_deserializeOpListNodegroups) HandleDeserialize(ctx context
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -6371,6 +6917,10 @@ func (m *awsRestjson1_deserializeOpListPodIdentityAssociations) HandleDeserializ
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -6410,6 +6960,7 @@ func (m *awsRestjson1_deserializeOpListPodIdentityAssociations) HandleDeserializ
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -6536,6 +7087,10 @@ func (m *awsRestjson1_deserializeOpListTagsForResource) HandleDeserialize(ctx co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -6575,6 +7130,7 @@ func (m *awsRestjson1_deserializeOpListTagsForResource) HandleDeserialize(ctx co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -6686,6 +7242,10 @@ func (m *awsRestjson1_deserializeOpListUpdates) HandleDeserialize(ctx context.Co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -6725,6 +7285,7 @@ func (m *awsRestjson1_deserializeOpListUpdates) HandleDeserialize(ctx context.Co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -6851,6 +7412,10 @@ func (m *awsRestjson1_deserializeOpRegisterCluster) HandleDeserialize(ctx contex
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -6890,6 +7455,7 @@ func (m *awsRestjson1_deserializeOpRegisterCluster) HandleDeserialize(ctx contex
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7019,6 +7585,10 @@ func (m *awsRestjson1_deserializeOpTagResource) HandleDeserialize(ctx context.Co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7030,6 +7600,7 @@ func (m *awsRestjson1_deserializeOpTagResource) HandleDeserialize(ctx context.Co
 	output := &TagResourceOutput{}
 	out.Result = output
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7105,6 +7676,10 @@ func (m *awsRestjson1_deserializeOpUntagResource) HandleDeserialize(ctx context.
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7116,6 +7691,7 @@ func (m *awsRestjson1_deserializeOpUntagResource) HandleDeserialize(ctx context.
 	output := &UntagResourceOutput{}
 	out.Result = output
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7191,6 +7767,10 @@ func (m *awsRestjson1_deserializeOpUpdateAccessEntry) HandleDeserialize(ctx cont
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7230,6 +7810,7 @@ func (m *awsRestjson1_deserializeOpUpdateAccessEntry) HandleDeserialize(ctx cont
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7347,6 +7928,10 @@ func (m *awsRestjson1_deserializeOpUpdateAddon) HandleDeserialize(ctx context.Co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7386,6 +7971,7 @@ func (m *awsRestjson1_deserializeOpUpdateAddon) HandleDeserialize(ctx context.Co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7509,6 +8095,10 @@ func (m *awsRestjson1_deserializeOpUpdateClusterConfig) HandleDeserialize(ctx co
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7548,6 +8138,7 @@ func (m *awsRestjson1_deserializeOpUpdateClusterConfig) HandleDeserialize(ctx co
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7671,6 +8262,10 @@ func (m *awsRestjson1_deserializeOpUpdateClusterVersion) HandleDeserialize(ctx c
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7710,6 +8305,7 @@ func (m *awsRestjson1_deserializeOpUpdateClusterVersion) HandleDeserialize(ctx c
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7833,6 +8429,10 @@ func (m *awsRestjson1_deserializeOpUpdateEksAnywhereSubscription) HandleDeserial
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -7872,6 +8472,7 @@ func (m *awsRestjson1_deserializeOpUpdateEksAnywhereSubscription) HandleDeserial
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -7992,6 +8593,10 @@ func (m *awsRestjson1_deserializeOpUpdateNodegroupConfig) HandleDeserialize(ctx 
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -8031,6 +8636,7 @@ func (m *awsRestjson1_deserializeOpUpdateNodegroupConfig) HandleDeserialize(ctx 
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -8154,6 +8760,10 @@ func (m *awsRestjson1_deserializeOpUpdateNodegroupVersion) HandleDeserialize(ctx
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -8193,6 +8803,7 @@ func (m *awsRestjson1_deserializeOpUpdateNodegroupVersion) HandleDeserialize(ctx
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -8316,6 +8927,10 @@ func (m *awsRestjson1_deserializeOpUpdatePodIdentityAssociation) HandleDeseriali
 		return out, metadata, err
 	}
 
+	_, span := tracing.StartSpan(ctx, "OperationDeserializer")
+	endTimer := startMetricTimer(ctx, "client.call.deserialization_duration")
+	defer endTimer()
+	defer span.End()
 	response, ok := out.RawResponse.(*smithyhttp.Response)
 	if !ok {
 		return out, metadata, &smithy.DeserializationError{Err: fmt.Errorf("unknown transport type %T", out.RawResponse)}
@@ -8355,6 +8970,7 @@ func (m *awsRestjson1_deserializeOpUpdatePodIdentityAssociation) HandleDeseriali
 		}
 	}
 
+	span.End()
 	return out, metadata, err
 }
 
@@ -9260,6 +9876,42 @@ func awsRestjson1_deserializeDocumentAccessScope(v **types.AccessScope, value in
 	return nil
 }
 
+func awsRestjson1_deserializeDocumentAdditionalInfoMap(v *map[string]string, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var mv map[string]string
+	if *v == nil {
+		mv = map[string]string{}
+	} else {
+		mv = *v
+	}
+
+	for key, value := range shape {
+		var parsedVal string
+		if value != nil {
+			jtv, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("expected String to be of type string, got %T instead", value)
+			}
+			parsedVal = jtv
+		}
+		mv[key] = parsedVal
+
+	}
+	*v = mv
+	return nil
+}
+
 func awsRestjson1_deserializeDocumentAddon(v **types.Addon, value interface{}) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -9376,6 +10028,11 @@ func awsRestjson1_deserializeDocumentAddon(v **types.Addon, value interface{}) e
 					return fmt.Errorf("expected String to be of type string, got %T instead", value)
 				}
 				sv.Owner = ptr.String(jtv)
+			}
+
+		case "podIdentityAssociations":
+			if err := awsRestjson1_deserializeDocumentStringList(&sv.PodIdentityAssociations, value); err != nil {
+				return err
 			}
 
 		case "publisher":
@@ -9620,6 +10277,85 @@ func awsRestjson1_deserializeDocumentAddonIssueList(v *[]types.AddonIssue, value
 	return nil
 }
 
+func awsRestjson1_deserializeDocumentAddonPodIdentityConfiguration(v **types.AddonPodIdentityConfiguration, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.AddonPodIdentityConfiguration
+	if *v == nil {
+		sv = &types.AddonPodIdentityConfiguration{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "recommendedManagedPolicies":
+			if err := awsRestjson1_deserializeDocumentStringList(&sv.RecommendedManagedPolicies, value); err != nil {
+				return err
+			}
+
+		case "serviceAccount":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.ServiceAccount = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentAddonPodIdentityConfigurationList(v *[]types.AddonPodIdentityConfiguration, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var cv []types.AddonPodIdentityConfiguration
+	if *v == nil {
+		cv = []types.AddonPodIdentityConfiguration{}
+	} else {
+		cv = *v
+	}
+
+	for _, value := range shape {
+		var col types.AddonPodIdentityConfiguration
+		destAddr := &col
+		if err := awsRestjson1_deserializeDocumentAddonPodIdentityConfiguration(&destAddr, value); err != nil {
+			return err
+		}
+		col = *destAddr
+		cv = append(cv, col)
+
+	}
+	*v = cv
+	return nil
+}
+
 func awsRestjson1_deserializeDocumentAddons(v *[]types.AddonInfo, value interface{}) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -9702,6 +10438,15 @@ func awsRestjson1_deserializeDocumentAddonVersionInfo(v **types.AddonVersionInfo
 					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", value)
 				}
 				sv.RequiresConfiguration = jtv
+			}
+
+		case "requiresIamPermissions":
+			if value != nil {
+				jtv, ok := value.(bool)
+				if !ok {
+					return fmt.Errorf("expected Boolean to be of type *bool, got %T instead", value)
+				}
+				sv.RequiresIamPermissions = jtv
 			}
 
 		default:
@@ -10088,6 +10833,109 @@ func awsRestjson1_deserializeDocumentClientException(v **types.ClientException, 
 	return nil
 }
 
+func awsRestjson1_deserializeDocumentClientStat(v **types.ClientStat, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.ClientStat
+	if *v == nil {
+		sv = &types.ClientStat{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "lastRequestTime":
+			if value != nil {
+				switch jtv := value.(type) {
+				case json.Number:
+					f64, err := jtv.Float64()
+					if err != nil {
+						return err
+					}
+					sv.LastRequestTime = ptr.Time(smithytime.ParseEpochSeconds(f64))
+
+				default:
+					return fmt.Errorf("expected Timestamp to be a JSON Number, got %T instead", value)
+
+				}
+			}
+
+		case "numberOfRequestsLast30Days":
+			if value != nil {
+				jtv, ok := value.(json.Number)
+				if !ok {
+					return fmt.Errorf("expected Integer to be json.Number, got %T instead", value)
+				}
+				i64, err := jtv.Int64()
+				if err != nil {
+					return err
+				}
+				sv.NumberOfRequestsLast30Days = int32(i64)
+			}
+
+		case "userAgent":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.UserAgent = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentClientStats(v *[]types.ClientStat, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var cv []types.ClientStat
+	if *v == nil {
+		cv = []types.ClientStat{}
+	} else {
+		cv = *v
+	}
+
+	for _, value := range shape {
+		var col types.ClientStat
+		destAddr := &col
+		if err := awsRestjson1_deserializeDocumentClientStat(&destAddr, value); err != nil {
+			return err
+		}
+		col = *destAddr
+		cv = append(cv, col)
+
+	}
+	*v = cv
+	return nil
+}
+
 func awsRestjson1_deserializeDocumentCluster(v **types.Cluster, value interface{}) error {
 	if v == nil {
 		return fmt.Errorf("unexpected nil of type %T", v)
@@ -10250,6 +11098,11 @@ func awsRestjson1_deserializeDocumentCluster(v **types.Cluster, value interface{
 
 		case "tags":
 			if err := awsRestjson1_deserializeDocumentTagMap(&sv.Tags, value); err != nil {
+				return err
+			}
+
+		case "upgradePolicy":
+			if err := awsRestjson1_deserializeDocumentUpgradePolicyResponse(&sv.UpgradePolicy, value); err != nil {
 				return err
 			}
 
@@ -10603,6 +11456,112 @@ func awsRestjson1_deserializeDocumentControlPlanePlacementResponse(v **types.Con
 		}
 	}
 	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentDeprecationDetail(v **types.DeprecationDetail, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.DeprecationDetail
+	if *v == nil {
+		sv = &types.DeprecationDetail{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "clientStats":
+			if err := awsRestjson1_deserializeDocumentClientStats(&sv.ClientStats, value); err != nil {
+				return err
+			}
+
+		case "replacedWith":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.ReplacedWith = ptr.String(jtv)
+			}
+
+		case "startServingReplacementVersion":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.StartServingReplacementVersion = ptr.String(jtv)
+			}
+
+		case "stopServingVersion":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.StopServingVersion = ptr.String(jtv)
+			}
+
+		case "usage":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Usage = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentDeprecationDetails(v *[]types.DeprecationDetail, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var cv []types.DeprecationDetail
+	if *v == nil {
+		cv = []types.DeprecationDetail{}
+	} else {
+		cv = *v
+	}
+
+	for _, value := range shape {
+		var col types.DeprecationDetail
+		destAddr := &col
+		if err := awsRestjson1_deserializeDocumentDeprecationDetail(&destAddr, value); err != nil {
+			return err
+		}
+		col = *destAddr
+		cv = append(cv, col)
+
+	}
+	*v = cv
 	return nil
 }
 
@@ -11073,6 +12032,11 @@ func awsRestjson1_deserializeDocumentFargateProfile(v **types.FargateProfile, va
 				sv.FargateProfileName = ptr.String(jtv)
 			}
 
+		case "health":
+			if err := awsRestjson1_deserializeDocumentFargateProfileHealth(&sv.Health, value); err != nil {
+				return err
+			}
+
 		case "podExecutionRoleArn":
 			if value != nil {
 				jtv, ok := value.(string)
@@ -11112,6 +12076,130 @@ func awsRestjson1_deserializeDocumentFargateProfile(v **types.FargateProfile, va
 		}
 	}
 	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentFargateProfileHealth(v **types.FargateProfileHealth, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.FargateProfileHealth
+	if *v == nil {
+		sv = &types.FargateProfileHealth{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "issues":
+			if err := awsRestjson1_deserializeDocumentFargateProfileIssueList(&sv.Issues, value); err != nil {
+				return err
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentFargateProfileIssue(v **types.FargateProfileIssue, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.FargateProfileIssue
+	if *v == nil {
+		sv = &types.FargateProfileIssue{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "code":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected FargateProfileIssueCode to be of type string, got %T instead", value)
+				}
+				sv.Code = types.FargateProfileIssueCode(jtv)
+			}
+
+		case "message":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Message = ptr.String(jtv)
+			}
+
+		case "resourceIds":
+			if err := awsRestjson1_deserializeDocumentStringList(&sv.ResourceIds, value); err != nil {
+				return err
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentFargateProfileIssueList(v *[]types.FargateProfileIssue, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var cv []types.FargateProfileIssue
+	if *v == nil {
+		cv = []types.FargateProfileIssue{}
+	} else {
+		cv = *v
+	}
+
+	for _, value := range shape {
+		var col types.FargateProfileIssue
+		destAddr := &col
+		if err := awsRestjson1_deserializeDocumentFargateProfileIssue(&destAddr, value); err != nil {
+			return err
+		}
+		col = *destAddr
+		cv = append(cv, col)
+
+	}
+	*v = cv
 	return nil
 }
 
@@ -11382,6 +12470,463 @@ func awsRestjson1_deserializeDocumentIdentityProviderConfigs(v *[]types.Identity
 
 	}
 	*v = cv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsight(v **types.Insight, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.Insight
+	if *v == nil {
+		sv = &types.Insight{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "additionalInfo":
+			if err := awsRestjson1_deserializeDocumentAdditionalInfoMap(&sv.AdditionalInfo, value); err != nil {
+				return err
+			}
+
+		case "category":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected Category to be of type string, got %T instead", value)
+				}
+				sv.Category = types.Category(jtv)
+			}
+
+		case "categorySpecificSummary":
+			if err := awsRestjson1_deserializeDocumentInsightCategorySpecificSummary(&sv.CategorySpecificSummary, value); err != nil {
+				return err
+			}
+
+		case "description":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Description = ptr.String(jtv)
+			}
+
+		case "id":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Id = ptr.String(jtv)
+			}
+
+		case "insightStatus":
+			if err := awsRestjson1_deserializeDocumentInsightStatus(&sv.InsightStatus, value); err != nil {
+				return err
+			}
+
+		case "kubernetesVersion":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.KubernetesVersion = ptr.String(jtv)
+			}
+
+		case "lastRefreshTime":
+			if value != nil {
+				switch jtv := value.(type) {
+				case json.Number:
+					f64, err := jtv.Float64()
+					if err != nil {
+						return err
+					}
+					sv.LastRefreshTime = ptr.Time(smithytime.ParseEpochSeconds(f64))
+
+				default:
+					return fmt.Errorf("expected Timestamp to be a JSON Number, got %T instead", value)
+
+				}
+			}
+
+		case "lastTransitionTime":
+			if value != nil {
+				switch jtv := value.(type) {
+				case json.Number:
+					f64, err := jtv.Float64()
+					if err != nil {
+						return err
+					}
+					sv.LastTransitionTime = ptr.Time(smithytime.ParseEpochSeconds(f64))
+
+				default:
+					return fmt.Errorf("expected Timestamp to be a JSON Number, got %T instead", value)
+
+				}
+			}
+
+		case "name":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Name = ptr.String(jtv)
+			}
+
+		case "recommendation":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Recommendation = ptr.String(jtv)
+			}
+
+		case "resources":
+			if err := awsRestjson1_deserializeDocumentInsightResourceDetails(&sv.Resources, value); err != nil {
+				return err
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsightCategorySpecificSummary(v **types.InsightCategorySpecificSummary, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.InsightCategorySpecificSummary
+	if *v == nil {
+		sv = &types.InsightCategorySpecificSummary{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "deprecationDetails":
+			if err := awsRestjson1_deserializeDocumentDeprecationDetails(&sv.DeprecationDetails, value); err != nil {
+				return err
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsightResourceDetail(v **types.InsightResourceDetail, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.InsightResourceDetail
+	if *v == nil {
+		sv = &types.InsightResourceDetail{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "arn":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Arn = ptr.String(jtv)
+			}
+
+		case "insightStatus":
+			if err := awsRestjson1_deserializeDocumentInsightStatus(&sv.InsightStatus, value); err != nil {
+				return err
+			}
+
+		case "kubernetesResourceUri":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.KubernetesResourceUri = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsightResourceDetails(v *[]types.InsightResourceDetail, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var cv []types.InsightResourceDetail
+	if *v == nil {
+		cv = []types.InsightResourceDetail{}
+	} else {
+		cv = *v
+	}
+
+	for _, value := range shape {
+		var col types.InsightResourceDetail
+		destAddr := &col
+		if err := awsRestjson1_deserializeDocumentInsightResourceDetail(&destAddr, value); err != nil {
+			return err
+		}
+		col = *destAddr
+		cv = append(cv, col)
+
+	}
+	*v = cv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsightStatus(v **types.InsightStatus, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.InsightStatus
+	if *v == nil {
+		sv = &types.InsightStatus{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "reason":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Reason = ptr.String(jtv)
+			}
+
+		case "status":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected InsightStatusValue to be of type string, got %T instead", value)
+				}
+				sv.Status = types.InsightStatusValue(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsightSummaries(v *[]types.InsightSummary, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var cv []types.InsightSummary
+	if *v == nil {
+		cv = []types.InsightSummary{}
+	} else {
+		cv = *v
+	}
+
+	for _, value := range shape {
+		var col types.InsightSummary
+		destAddr := &col
+		if err := awsRestjson1_deserializeDocumentInsightSummary(&destAddr, value); err != nil {
+			return err
+		}
+		col = *destAddr
+		cv = append(cv, col)
+
+	}
+	*v = cv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentInsightSummary(v **types.InsightSummary, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.InsightSummary
+	if *v == nil {
+		sv = &types.InsightSummary{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "category":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected Category to be of type string, got %T instead", value)
+				}
+				sv.Category = types.Category(jtv)
+			}
+
+		case "description":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Description = ptr.String(jtv)
+			}
+
+		case "id":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Id = ptr.String(jtv)
+			}
+
+		case "insightStatus":
+			if err := awsRestjson1_deserializeDocumentInsightStatus(&sv.InsightStatus, value); err != nil {
+				return err
+			}
+
+		case "kubernetesVersion":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.KubernetesVersion = ptr.String(jtv)
+			}
+
+		case "lastRefreshTime":
+			if value != nil {
+				switch jtv := value.(type) {
+				case json.Number:
+					f64, err := jtv.Float64()
+					if err != nil {
+						return err
+					}
+					sv.LastRefreshTime = ptr.Time(smithytime.ParseEpochSeconds(f64))
+
+				default:
+					return fmt.Errorf("expected Timestamp to be a JSON Number, got %T instead", value)
+
+				}
+			}
+
+		case "lastTransitionTime":
+			if value != nil {
+				switch jtv := value.(type) {
+				case json.Number:
+					f64, err := jtv.Float64()
+					if err != nil {
+						return err
+					}
+					sv.LastTransitionTime = ptr.Time(smithytime.ParseEpochSeconds(f64))
+
+				default:
+					return fmt.Errorf("expected Timestamp to be a JSON Number, got %T instead", value)
+
+				}
+			}
+
+		case "name":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Name = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
 	return nil
 }
 
@@ -12757,6 +14302,15 @@ func awsRestjson1_deserializeDocumentPodIdentityAssociation(v **types.PodIdentit
 				sv.Namespace = ptr.String(jtv)
 			}
 
+		case "ownerArn":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.OwnerArn = ptr.String(jtv)
+			}
+
 		case "roleArn":
 			if value != nil {
 				jtv, ok := value.(string)
@@ -12879,6 +14433,15 @@ func awsRestjson1_deserializeDocumentPodIdentityAssociationSummary(v **types.Pod
 					return fmt.Errorf("expected String to be of type string, got %T instead", value)
 				}
 				sv.Namespace = ptr.String(jtv)
+			}
+
+		case "ownerArn":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.OwnerArn = ptr.String(jtv)
 			}
 
 		case "serviceAccount":
@@ -13786,6 +15349,46 @@ func awsRestjson1_deserializeDocumentUpdateParams(v *[]types.UpdateParam, value 
 
 	}
 	*v = cv
+	return nil
+}
+
+func awsRestjson1_deserializeDocumentUpgradePolicyResponse(v **types.UpgradePolicyResponse, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.UpgradePolicyResponse
+	if *v == nil {
+		sv = &types.UpgradePolicyResponse{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "supportType":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected SupportType to be of type string, got %T instead", value)
+				}
+				sv.SupportType = types.SupportType(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
 	return nil
 }
 

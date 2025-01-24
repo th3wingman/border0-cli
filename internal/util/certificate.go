@@ -8,8 +8,34 @@ import (
 	"os/user"
 )
 
+// GetEndToEndEncryptionCertificate returns the org-wide-ca-signed mTLS certificate for a given org or connector.
 func GetEndToEndEncryptionCertificate(orgID, connectorID string) (*tls.Certificate, error) {
-	privateKeyFile, certificateFile, err := generateNames(orgID, connectorID)
+	if connectorID != "" {
+		return getCertificate(orgID, "connector", connectorID)
+	}
+	return getCertificate(orgID, "org", "")
+}
+
+// StoreConnectorCertificate stores the org-wide-ca-signed mTLS certificate for a given org or connector.
+func StoreConnectorCertificate(privateKey []byte, certificate []byte, orgID, connectorID string) error {
+	if connectorID != "" {
+		return storeCertificate(privateKey, certificate, orgID, "connector", connectorID)
+	}
+	return storeCertificate(privateKey, certificate, orgID, "org", "")
+}
+
+// GetSocketTLSCertificate returns the org-wide-ca-signed TLS certificate for a given socket.
+func GetSocketTLSCertificate(orgID, socketID string) (*tls.Certificate, error) {
+	return getCertificate(orgID, "socket", socketID)
+}
+
+// StoreConnectorSocketCertificate stores the org-wide-ca-signed TLS certificate for a given socket.
+func StoreConnectorSocketCertificate(privateKey []byte, certificate []byte, orgID, socketID string) error {
+	return storeCertificate(privateKey, certificate, orgID, "socket", socketID)
+}
+
+func getCertificate(orgID, resourceType, resourceID string) (*tls.Certificate, error) {
+	privateKeyFile, certificateFile, err := generateNames(orgID, resourceType, resourceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate names: %s", err)
 	}
@@ -71,10 +97,10 @@ func readCertificate(keyFilePath, certFilePath string) (*tls.Certificate, error)
 	return &certificate, nil
 }
 
-func generateNames(orgID, connectorID string) (string, string, error) {
+func generateNames(orgID, resourceType, resourceID string) (string, string, error) {
 	name := orgID
-	if connectorID != "" {
-		name = fmt.Sprintf("%s%s", orgID, connectorID)
+	if resourceID != "" {
+		name = fmt.Sprintf("%s%s", orgID, resourceID)
 	} else {
 		hostname, err := os.Hostname()
 		if err == nil {
@@ -90,13 +116,35 @@ func generateNames(orgID, connectorID string) (string, string, error) {
 
 	hashBytes := hasher.Sum(nil)
 	shortHash := fmt.Sprintf("%x", hashBytes)[:8]
-	privateKeyFile := fmt.Sprintf("connector-%s.key", shortHash)
-	certificateFile := fmt.Sprintf("connector-%s.crt", shortHash)
+	privateKeyFile := fmt.Sprintf("%s-%s.key", resourceType, shortHash)
+	certificateFile := fmt.Sprintf("%s-%s.crt", resourceType, shortHash)
 
 	return privateKeyFile, certificateFile, nil
 }
 
-func StoreCertificateFiles(key []byte, certficate []byte, path, keyFileName, certificateFileName string) error {
+func storeCertificate(privateKey []byte, certificate []byte, orgID, resourceType, resourceID string) error {
+	privateKeyFile, certificateFile, err := generateNames(orgID, resourceType, resourceID)
+	if err != nil {
+		return fmt.Errorf("failed to generate names: %s", err)
+	}
+
+	serviceConfigPathErr := storeCertificateFiles(privateKey, certificate, serviceConfigPath, privateKeyFile, certificateFile)
+	if serviceConfigPathErr != nil {
+		u, err := user.Current()
+		if err != nil {
+			return fmt.Errorf("failed to store the Certificate files %s %s", err, serviceConfigPathErr)
+		}
+
+		err = storeCertificateFiles(privateKey, certificate, u.HomeDir+"/.border0/", privateKeyFile, certificateFile)
+		if err != nil {
+			return fmt.Errorf("failed to store the Certificate files %s %s", err, serviceConfigPathErr)
+		}
+	}
+
+	return nil
+}
+
+func storeCertificateFiles(key []byte, certficate []byte, path, keyFileName, certificateFileName string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if err := os.MkdirAll(path, 0700); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", path, err)
@@ -111,27 +159,5 @@ func StoreCertificateFiles(key []byte, certficate []byte, path, keyFileName, cer
 	if err := os.WriteFile(path+certificateFileName, certficate, 0600); err != nil {
 		return fmt.Errorf("failed to write certificate file: %w", err)
 	}
-	return nil
-}
-
-func StoreConnectorCertifcate(privateKey []byte, certificate []byte, orgID, connectorID string) error {
-	privateKeyFile, certificateFile, err := generateNames(orgID, connectorID)
-	if err != nil {
-		return fmt.Errorf("failed to generate names: %s", err)
-	}
-
-	serviceConfigPathErr := StoreCertificateFiles(privateKey, certificate, serviceConfigPath, privateKeyFile, certificateFile)
-	if serviceConfigPathErr != nil {
-		u, err := user.Current()
-		if err != nil {
-			return fmt.Errorf("failed to store the certifcate files %s %s", err, serviceConfigPathErr)
-		}
-
-		err = StoreCertificateFiles(privateKey, certificate, u.HomeDir+"/.border0/", privateKeyFile, certificateFile)
-		if err != nil {
-			return fmt.Errorf("failed to store the certifcate files %s %s", err, serviceConfigPathErr)
-		}
-	}
-
 	return nil
 }

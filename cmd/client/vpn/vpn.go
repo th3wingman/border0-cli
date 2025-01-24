@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
@@ -175,7 +176,7 @@ func runClient(parentCtx context.Context, logger *zap.Logger, hostname string) (
 		ServerName:   hostname,
 	}
 
-	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), &tlsConfig, info.CaCertificate, useWsProxy)
+	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, net.JoinHostPort(hostname, strconv.Itoa(info.Port)), &tlsConfig, info.CaCertificate, useWsProxy)
 	if err != nil {
 		return established, fmt.Errorf("failed to connect: %v", err)
 	}

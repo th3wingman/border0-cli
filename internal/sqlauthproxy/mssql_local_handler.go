@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
+	"github.com/borderzero/border0-cli/internal/util/recorder"
 	"github.com/borderzero/border0-go/lib/types/pointer"
+	"github.com/borderzero/border0-go/types/recordings"
 	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/pkg/errors"
 	"github.com/xwb1989/sqlparser"
@@ -35,12 +38,13 @@ var reverseMap = map[int]string{
 
 type mssqlLocalHandler struct {
 	logger         *zap.Logger
-	metadata       *border0.E2EEncryptionMetadata
+	metadata       *border0.ConnMetadata
 	border0API     border0.Border0API
 	socket         models.Socket
 	database       string
 	upstreamConn   *mssql.Client
 	downstreamConn *mssql.ServerSession
+	serverConn     net.Conn
 	lastAuth       time.Time
 	recordingChan  chan message
 }
@@ -53,17 +57,12 @@ func (h *mssqlLocalHandler) HandleConnection(ctx context.Context) {
 	}()
 
 	if h.socket.RecordingEnabled {
-		r, err := newRecording(h.logger, h.socket.SocketID, h.metadata.SessionKey, h.border0API)
+		r, err := recorder.NewJSONLRecorder[message](h.logger, h.border0API, h.socket.SocketID, h.metadata.SessionKey, recordings.RecordingTypeDatabaseQueryLog)
 		if err != nil {
 			h.logger.Error("failed to record session", zap.Error(err))
 			return
 		}
-
-		if err := r.Record(h.recordingChan); err != nil {
-			h.logger.Error("failed to record session", zap.Error(err))
-			return
-		}
-
+		r.Record(h.recordingChan)
 		defer close(h.recordingChan)
 	}
 
@@ -129,6 +128,8 @@ func (h *mssqlLocalHandler) handleSqlBatch(ctx context.Context) error {
 		return err
 	}
 
+	h.database = h.upstreamConn.Database()
+
 	// check action allowed
 	allowed, err := h.isAllowed(ctx, sqlparser.StmtType(sqlparser.Preview(query)))
 	if err != nil {
@@ -143,10 +144,6 @@ func (h *mssqlLocalHandler) handleSqlBatch(ctx context.Context) error {
 	res, err := h.upstreamConn.SendSqlBatch(ctx, h.downstreamConn, query, headers, false)
 	if err != nil {
 		return fmt.Errorf("failed to send sqlBatch: %w", err)
-	}
-
-	if h.upstreamConn.Database() != h.database {
-		h.database = h.upstreamConn.Database()
 	}
 
 	for _, done := range res {
@@ -280,7 +277,22 @@ func (h *mssqlLocalHandler) record(command string, status *uint16, result *strin
 
 func (h *mssqlLocalHandler) isAllowed(ctx context.Context, stmtType string) (bool, error) {
 	if time.Since(h.lastAuth) > authTTL {
-		actions, _, err := h.border0API.Evaluate(ctx, &h.socket, h.metadata.ClientIP, h.metadata.UserEmail, h.metadata.SessionKey)
+		var clientIP string
+		if conn, ok := h.serverConn.(*border0.PrivateNetworkConn); ok {
+			if ip, err := conn.GetPeerIP(); err != nil {
+				return false, fmt.Errorf("failed to get peer IP: %w", err)
+			} else {
+				clientIP = ip
+			}
+		} else {
+			if ip, _, err := net.SplitHostPort(h.metadata.ClientIP); err != nil {
+				return false, fmt.Errorf("failed to parse client ip: %w", err)
+			} else {
+				clientIP = ip
+			}
+		}
+
+		actions, _, err := h.border0API.Evaluate(ctx, &h.socket, clientIP, h.metadata.UserEmail, h.metadata.SessionKey)
 		if err != nil {
 			return false, err
 		}
@@ -290,8 +302,43 @@ func (h *mssqlLocalHandler) isAllowed(ctx context.Context, stmtType string) (boo
 	}
 
 	for _, aa := range h.metadata.AllowedActions {
-		if strings.EqualFold(aa, stmtType) || aa == "*" {
-			return true, nil
+		switch aa := aa.(type) {
+		case string:
+			if strings.EqualFold(aa, stmtType) || aa == "*" {
+				return true, nil
+			}
+		case models.Permissions:
+			if aa.Database != nil {
+				if aa.Database.AllowedDatabases == nil {
+					return true, nil
+				}
+
+				for _, db := range *aa.Database.AllowedDatabases {
+					if db.Database == h.database || db.Database == "*" {
+						if db.AllowedQueryTypes == nil {
+							return true, nil
+						}
+
+						for _, qt := range *db.AllowedQueryTypes {
+							switch qt {
+							case "ReadWrite":
+								return true, nil
+							case "ReadOnly":
+								switch stmtType {
+								case "SELECT", "SHOW", "SET", "USE", "OTHER":
+									return true, nil
+								}
+							default:
+								if strings.EqualFold(qt, stmtType) {
+									return true, nil
+								}
+							}
+						}
+					}
+				}
+			}
+		default:
+			return false, fmt.Errorf("unknown action type: %T", aa)
 		}
 	}
 

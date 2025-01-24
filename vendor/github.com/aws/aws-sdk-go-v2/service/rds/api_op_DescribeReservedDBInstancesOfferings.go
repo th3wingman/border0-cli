@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -35,8 +34,9 @@ type DescribeReservedDBInstancesOfferingsInput struct {
 	DBInstanceClass *string
 
 	// Duration filter value, specified in years or seconds. Specify this parameter to
-	// show only reservations for this duration. Valid Values: 1 | 3 | 31536000 |
-	// 94608000
+	// show only reservations for this duration.
+	//
+	// Valid Values: 1 | 3 | 31536000 | 94608000
 	Duration *string
 
 	// This parameter isn't currently supported.
@@ -49,7 +49,10 @@ type DescribeReservedDBInstancesOfferingsInput struct {
 
 	// The maximum number of records to include in the response. If more than the
 	// MaxRecords value is available, a pagination token called a marker is included in
-	// the response so you can retrieve the remaining results. Default: 100
+	// the response so you can retrieve the remaining results.
+	//
+	// Default: 100
+	//
 	// Constraints: Minimum 20, maximum 100.
 	MaxRecords *int32
 
@@ -57,18 +60,21 @@ type DescribeReservedDBInstancesOfferingsInput struct {
 	MultiAZ *bool
 
 	// The offering type filter value. Specify this parameter to show only the
-	// available offerings matching the specified offering type. Valid Values:
-	// "Partial Upfront" | "All Upfront" | "No Upfront"
+	// available offerings matching the specified offering type.
+	//
+	// Valid Values: "Partial Upfront" | "All Upfront" | "No Upfront"
 	OfferingType *string
 
 	// Product description filter value. Specify this parameter to show only the
-	// available offerings that contain the specified product description. The results
-	// show offerings that partially match the filter value.
+	// available offerings that contain the specified product description.
+	//
+	// The results show offerings that partially match the filter value.
 	ProductDescription *string
 
 	// The offering identifier filter value. Specify this parameter to show only the
-	// available offering that matches the specified reservation identifier. Example:
-	// 438012d3-4052-4cc7-b2e3-8d3372e0e706
+	// available offering that matches the specified reservation identifier.
+	//
+	// Example: 438012d3-4052-4cc7-b2e3-8d3372e0e706
 	ReservedDBInstancesOfferingId *string
 
 	noSmithyDocumentSerde
@@ -114,25 +120,28 @@ func (c *Client) addOperationDescribeReservedDBInstancesOfferingsMiddlewares(sta
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
+		return err
+	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
 	if err = addClientUserAgent(stack, options); err != nil {
@@ -147,13 +156,19 @@ func (c *Client) addOperationDescribeReservedDBInstancesOfferingsMiddlewares(sta
 	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = addOpDescribeReservedDBInstancesOfferingsValidationMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeReservedDBInstancesOfferings(options.Region), middleware.Before); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecursionDetection(stack); err != nil {
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -168,23 +183,30 @@ func (c *Client) addOperationDescribeReservedDBInstancesOfferingsMiddlewares(sta
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// DescribeReservedDBInstancesOfferingsAPIClient is a client that implements the
-// DescribeReservedDBInstancesOfferings operation.
-type DescribeReservedDBInstancesOfferingsAPIClient interface {
-	DescribeReservedDBInstancesOfferings(context.Context, *DescribeReservedDBInstancesOfferingsInput, ...func(*Options)) (*DescribeReservedDBInstancesOfferingsOutput, error)
-}
-
-var _ DescribeReservedDBInstancesOfferingsAPIClient = (*Client)(nil)
 
 // DescribeReservedDBInstancesOfferingsPaginatorOptions is the paginator options
 // for DescribeReservedDBInstancesOfferings
 type DescribeReservedDBInstancesOfferingsPaginatorOptions struct {
 	// The maximum number of records to include in the response. If more than the
 	// MaxRecords value is available, a pagination token called a marker is included in
-	// the response so you can retrieve the remaining results. Default: 100
+	// the response so you can retrieve the remaining results.
+	//
+	// Default: 100
+	//
 	// Constraints: Minimum 20, maximum 100.
 	Limit int32
 
@@ -248,6 +270,9 @@ func (p *DescribeReservedDBInstancesOfferingsPaginator) NextPage(ctx context.Con
 	}
 	params.MaxRecords = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.DescribeReservedDBInstancesOfferings(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -266,6 +291,14 @@ func (p *DescribeReservedDBInstancesOfferingsPaginator) NextPage(ctx context.Con
 
 	return result, nil
 }
+
+// DescribeReservedDBInstancesOfferingsAPIClient is a client that implements the
+// DescribeReservedDBInstancesOfferings operation.
+type DescribeReservedDBInstancesOfferingsAPIClient interface {
+	DescribeReservedDBInstancesOfferings(context.Context, *DescribeReservedDBInstancesOfferingsInput, ...func(*Options)) (*DescribeReservedDBInstancesOfferingsOutput, error)
+}
+
+var _ DescribeReservedDBInstancesOfferingsAPIClient = (*Client)(nil)
 
 func newServiceMetadataMiddleware_opDescribeReservedDBInstancesOfferings(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{

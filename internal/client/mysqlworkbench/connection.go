@@ -4,18 +4,27 @@ import (
 	"encoding/xml"
 	"fmt"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 func ConnectionsXML(name string, host string, port int, sslCertPath, sslKeyPath, dbName string) (string, error) {
-	id := uuid.NewV4().String()
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "", fmt.Errorf("error generating UUID: %w", err)
+	}
+
+	var useSSL int
+	if sslCertPath != "" && sslKeyPath != "" {
+		useSSL = 1
+	}
+
 	conns := xmlDoc{
 		GrtFormat: "2.0",
 		Connections: conns{
 			attrs: attrs{Ptr: "abc123", Type: "list", ContentType: "object", ContentStructName: "db.mgmt.Connection"},
 			Connections: []conn{
 				{
-					attrs: attrs{Type: "object", StructName: "db.mgmt.Connection", ID: id, StructChecksum: "def456"},
+					attrs: attrs{Type: "object", StructName: "db.mgmt.Connection", ID: id.String(), StructChecksum: "def456"},
 					Link: link{
 						attrs: attrs{Type: "object", StructName: "db.mgmt.Driver", Key: "driver"},
 						Data:  "com.mysql.rdbms.mysql.driver.native",
@@ -71,7 +80,7 @@ func ConnectionsXML(name string, host string, port int, sslCertPath, sslKeyPath,
 								},
 								{
 									attrs: attrs{Type: "int", Key: "useSSL"},
-									Data:  "1",
+									Data:  fmt.Sprint(useSSL),
 								},
 								{
 									attrs: attrs{Type: "string", Key: "userName"},

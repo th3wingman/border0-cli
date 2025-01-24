@@ -10,6 +10,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/cloudsql"
+	"github.com/borderzero/border0-cli/internal/device/state"
 	"github.com/borderzero/border0-go/types/common"
 	"go.uber.org/zap"
 )
@@ -45,6 +46,7 @@ type Config struct {
 	E2eEncryptionEnabled bool
 	Socket               models.Socket
 	Border0API           border0.Border0API
+	PrivateNetworkState  state.State
 }
 
 func Serve(l net.Listener, config Config) error {
@@ -83,7 +85,7 @@ func Serve(l net.Listener, config Config) error {
 	}
 }
 
-func BuildHandlerConfig(logger *zap.Logger, socket models.Socket, border0API border0.Border0API) (*Config, error) {
+func BuildHandlerConfig(logger *zap.Logger, socket models.Socket, border0API border0.Border0API, state state.State) (*Config, error) {
 	upstreamTLS := true
 	if socket.ConnectorLocalData.UpstreamTLS != nil {
 		upstreamTLS = *socket.ConnectorLocalData.UpstreamTLS
@@ -111,6 +113,7 @@ func BuildHandlerConfig(logger *zap.Logger, socket models.Socket, border0API bor
 		Border0API:           border0API,
 		AzureAD:              socket.ConnectorLocalData.AzureAD,
 		Kerberos:             socket.ConnectorLocalData.Kerberos,
+		PrivateNetworkState:  state,
 	}
 
 	if socket.ConnectorLocalData.CloudSQLConnector {
@@ -136,4 +139,27 @@ func BuildHandlerConfig(logger *zap.Logger, socket models.Socket, border0API bor
 	}
 
 	return handlerConfig, nil
+}
+
+func isDatabaseAllowed(policies []any, database string) bool {
+	for _, aa := range policies {
+		switch aa := aa.(type) {
+		case string:
+			return true
+		case models.Permissions:
+			if aa.Database != nil {
+				if aa.Database.AllowedDatabases == nil {
+					return true
+				}
+
+				for _, db := range *aa.Database.AllowedDatabases {
+					if db.Database == database || db.Database == "*" {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
 }

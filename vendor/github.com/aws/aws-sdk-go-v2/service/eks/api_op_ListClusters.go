@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
@@ -31,9 +30,10 @@ func (c *Client) ListClusters(ctx context.Context, params *ListClustersInput, op
 type ListClustersInput struct {
 
 	// Indicates whether external clusters are included in the returned list. Use ' all
-	// ' to return https://docs.aws.amazon.com/eks/latest/userguide/eks-connector.html (https://docs.aws.amazon.com/eks/latest/userguide/eks-connector.html)
-	// connected clusters, or blank to return only Amazon EKS clusters. ' all ' must be
-	// in lowercase otherwise an error occurs.
+	// ' to return [https://docs.aws.amazon.com/eks/latest/userguide/eks-connector.html]connected clusters, or blank to return only Amazon EKS clusters. '
+	// all ' must be in lowercase otherwise an error occurs.
+	//
+	// [https://docs.aws.amazon.com/eks/latest/userguide/eks-connector.html]: https://docs.aws.amazon.com/eks/latest/userguide/eks-connector.html
 	Include []string
 
 	// The maximum number of results, returned in paginated output. You receive
@@ -47,9 +47,10 @@ type ListClustersInput struct {
 	// The nextToken value returned from a previous paginated request, where maxResults
 	// was used and the results exceeded the value of that parameter. Pagination
 	// continues from the end of the previous results that returned the nextToken
-	// value. This value is null when there are no more results to return. This token
-	// should be treated as an opaque identifier that is used only to retrieve the next
-	// items in a list and not for other programmatic purposes.
+	// value. This value is null when there are no more results to return.
+	//
+	// This token should be treated as an opaque identifier that is used only to
+	// retrieve the next items in a list and not for other programmatic purposes.
 	NextToken *string
 
 	noSmithyDocumentSerde
@@ -64,9 +65,10 @@ type ListClustersOutput struct {
 	// The nextToken value returned from a previous paginated request, where maxResults
 	// was used and the results exceeded the value of that parameter. Pagination
 	// continues from the end of the previous results that returned the nextToken
-	// value. This value is null when there are no more results to return. This token
-	// should be treated as an opaque identifier that is used only to retrieve the next
-	// items in a list and not for other programmatic purposes.
+	// value. This value is null when there are no more results to return.
+	//
+	// This token should be treated as an opaque identifier that is used only to
+	// retrieve the next items in a list and not for other programmatic purposes.
 	NextToken *string
 
 	// Metadata pertaining to the operation's result.
@@ -97,25 +99,28 @@ func (c *Client) addOperationListClustersMiddlewares(stack *middleware.Stack, op
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
+		return err
+	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
 	if err = addClientUserAgent(stack, options); err != nil {
@@ -130,10 +135,16 @@ func (c *Client) addOperationListClustersMiddlewares(stack *middleware.Stack, op
 	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListClusters(options.Region), middleware.Before); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecursionDetection(stack); err != nil {
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -148,15 +159,20 @@ func (c *Client) addOperationListClustersMiddlewares(stack *middleware.Stack, op
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// ListClustersAPIClient is a client that implements the ListClusters operation.
-type ListClustersAPIClient interface {
-	ListClusters(context.Context, *ListClustersInput, ...func(*Options)) (*ListClustersOutput, error)
-}
-
-var _ ListClustersAPIClient = (*Client)(nil)
 
 // ListClustersPaginatorOptions is the paginator options for ListClusters
 type ListClustersPaginatorOptions struct {
@@ -226,6 +242,9 @@ func (p *ListClustersPaginator) NextPage(ctx context.Context, optFns ...func(*Op
 	}
 	params.MaxResults = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.ListClusters(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -244,6 +263,13 @@ func (p *ListClustersPaginator) NextPage(ctx context.Context, optFns ...func(*Op
 
 	return result, nil
 }
+
+// ListClustersAPIClient is a client that implements the ListClusters operation.
+type ListClustersAPIClient interface {
+	ListClusters(context.Context, *ListClustersInput, ...func(*Options)) (*ListClustersOutput, error)
+}
+
+var _ ListClustersAPIClient = (*Client)(nil)
 
 func newServiceMetadataMiddleware_opListClusters(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{

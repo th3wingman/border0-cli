@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -30,19 +29,34 @@ func (c *Client) DescribeOptionGroupOptions(ctx context.Context, params *Describ
 
 type DescribeOptionGroupOptionsInput struct {
 
-	// The name of the engine to describe options for. Valid Values:
+	// The name of the engine to describe options for.
+	//
+	// Valid Values:
+	//
 	//   - db2-ae
+	//
 	//   - db2-se
+	//
 	//   - mariadb
+	//
 	//   - mysql
+	//
 	//   - oracle-ee
+	//
 	//   - oracle-ee-cdb
+	//
 	//   - oracle-se2
+	//
 	//   - oracle-se2-cdb
+	//
 	//   - postgres
+	//
 	//   - sqlserver-ee
+	//
 	//   - sqlserver-se
+	//
 	//   - sqlserver-ex
+	//
 	//   - sqlserver-web
 	//
 	// This member is required.
@@ -63,7 +77,10 @@ type DescribeOptionGroupOptionsInput struct {
 	// The maximum number of records to include in the response. If more records exist
 	// than the specified MaxRecords value, a pagination token called a marker is
 	// included in the response so that you can retrieve the remaining results.
-	// Default: 100 Constraints: Minimum 20, maximum 100.
+	//
+	// Default: 100
+	//
+	// Constraints: Minimum 20, maximum 100.
 	MaxRecords *int32
 
 	noSmithyDocumentSerde
@@ -107,25 +124,28 @@ func (c *Client) addOperationDescribeOptionGroupOptionsMiddlewares(stack *middle
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
+		return err
+	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
 	if err = addClientUserAgent(stack, options); err != nil {
@@ -140,13 +160,19 @@ func (c *Client) addOperationDescribeOptionGroupOptionsMiddlewares(stack *middle
 	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = addOpDescribeOptionGroupOptionsValidationMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeOptionGroupOptions(options.Region), middleware.Before); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecursionDetection(stack); err != nil {
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -161,16 +187,20 @@ func (c *Client) addOperationDescribeOptionGroupOptionsMiddlewares(stack *middle
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// DescribeOptionGroupOptionsAPIClient is a client that implements the
-// DescribeOptionGroupOptions operation.
-type DescribeOptionGroupOptionsAPIClient interface {
-	DescribeOptionGroupOptions(context.Context, *DescribeOptionGroupOptionsInput, ...func(*Options)) (*DescribeOptionGroupOptionsOutput, error)
-}
-
-var _ DescribeOptionGroupOptionsAPIClient = (*Client)(nil)
 
 // DescribeOptionGroupOptionsPaginatorOptions is the paginator options for
 // DescribeOptionGroupOptions
@@ -178,7 +208,10 @@ type DescribeOptionGroupOptionsPaginatorOptions struct {
 	// The maximum number of records to include in the response. If more records exist
 	// than the specified MaxRecords value, a pagination token called a marker is
 	// included in the response so that you can retrieve the remaining results.
-	// Default: 100 Constraints: Minimum 20, maximum 100.
+	//
+	// Default: 100
+	//
+	// Constraints: Minimum 20, maximum 100.
 	Limit int32
 
 	// Set to true if pagination should stop if the service returns a pagination token
@@ -241,6 +274,9 @@ func (p *DescribeOptionGroupOptionsPaginator) NextPage(ctx context.Context, optF
 	}
 	params.MaxRecords = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.DescribeOptionGroupOptions(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -259,6 +295,14 @@ func (p *DescribeOptionGroupOptionsPaginator) NextPage(ctx context.Context, optF
 
 	return result, nil
 }
+
+// DescribeOptionGroupOptionsAPIClient is a client that implements the
+// DescribeOptionGroupOptions operation.
+type DescribeOptionGroupOptionsAPIClient interface {
+	DescribeOptionGroupOptions(context.Context, *DescribeOptionGroupOptionsInput, ...func(*Options)) (*DescribeOptionGroupOptionsOutput, error)
+}
+
+var _ DescribeOptionGroupOptionsAPIClient = (*Client)(nil)
 
 func newServiceMetadataMiddleware_opDescribeOptionGroupOptions(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{

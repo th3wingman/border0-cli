@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -24,8 +25,9 @@ import (
 	"github.com/borderzero/border0-cli/cmd/logger"
 	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-go/client"
 	"github.com/borderzero/border0-go/lib/types/pointer"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/table"
 
 	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/spf13/cobra"
@@ -34,69 +36,111 @@ import (
 const domainSuffix = "border0.io"
 
 var (
-	email                   string
-	mfaCode                 string
-	name                    string
-	description             string
-	socketType              string
-	password                string
-	port                    int
-	hostname                string
-	orgID                   string
-	socketID                string
-	tunnelID                string
-	policyName              string
-	policyTestEmail         string
-	policyTestIpAddress     string
-	policyDescription       string
-	policyFile              string
-	identityFile            string //deprecated
-	cloudauth_addresses     string
-	cloudauth_domains       string
-	proxyHost               string
-	upstream_username       string
-	upstream_password       string
-	upstream_http_hostname  string
-	upstream_type           string
-	httpserver              bool
-	httpserver_dir          string
-	localssh                bool
-	orgName                 string
-	sso                     string
-	serviceFlag             string
-	connectorConfig         string
-	perPage                 int64
-	page                    int64
-	orgwide                 bool
-	runcommand              string
-	connectorAuthEnabled    bool
-	orgCustomDomain         string
-	upstream_cert_file      string
-	upstream_key_file       string
-	upstream_ca_file        string
-	cloudSqlCredentialsFile string
-	cloudSqlInstance        string
-	cloudSqlIAM             bool
-	cloudSqlConnector       bool
-	rdsIAM                  bool
-	aws                     bool
-	awsRegion               string
-	awsProfile              string
-	upstream_tls            bool
-	upstream_identify_file  string
-	awsECSCluster           string
-	awsECSServices          []string
-	awsECSTasks             []string
-	awsECSContainers        []string
-	disableBrowser          bool
-	qr                      bool
-	awsEc2InstanceId        string
-	awsEc2InstanceConnect   bool
-	vpnSubnet               string   // used in the socket connect vpn command
-	routes                  []string // used in the socket connect vpn command
-	allowedProxyHosts       []string // used in the socket connect proxy command
-	azureAD                 bool
-	kerberos                bool
+	email                       string
+	mfaCode                     string
+	name                        string
+	description                 string
+	socketType                  string
+	password                    string
+	port                        int
+	hostname                    string
+	orgID                       string
+	socketID                    string
+	tunnelID                    string
+	policyName                  string
+	policyTestEmail             string
+	policyTestIpAddress         string
+	policyDescription           string
+	policyFile                  string
+	policyVersion               string
+	identityFile                string //deprecated
+	proxyHost                   string
+	upstream_username           string
+	upstream_password           string
+	upstream_http_hostname      string
+	upstream_type               string
+	httpserver                  bool
+	httpserver_dir              string
+	localssh                    bool
+	orgName                     string
+	sso                         string
+	serviceFlag                 string
+	connectorConfig             string
+	perPage                     int64
+	page                        int64
+	orgwide                     bool
+	runcommand                  string
+	connectorAuthEnabled        bool
+	orgCustomDomain             string
+	upstream_cert_file          string
+	upstream_key_file           string
+	upstream_ca_file            string
+	cloudSqlCredentialsFile     string
+	cloudSqlInstance            string
+	cloudSqlIAM                 bool
+	cloudSqlConnector           bool
+	rdsIAM                      bool
+	aws                         bool
+	awsRegion                   string
+	awsProfile                  string
+	upstream_tls                bool
+	upstream_identify_file      string
+	awsECSCluster               string
+	awsECSServices              []string
+	awsECSTasks                 []string
+	awsECSContainers            []string
+	disableBrowser              bool
+	qr                          bool
+	awsEc2InstanceId            string
+	awsEc2InstanceConnect       bool
+	vpnSubnet                   string   // used in the socket connect vpn command
+	routes                      []string // used in the socket connect vpn command
+	allowedProxyHosts           []string // used in the socket connect proxy command
+	azureAD                     bool
+	kerberos                    bool
+	connectorID                 string
+	tokenName                   string
+	tokenID                     string
+	withSSH                     bool // used in connector create
+	jsonOutput                  bool
+	lifetimeDays                int
+	host                        string
+	recordingEnabled            bool
+	http_hostname               string
+	tags                        map[string]string
+	connector                   string
+	jsonInput                   bool
+	username                    string
+	authType                    string
+	sshKey                      string
+	usernameType                string
+	ssmTargetType               string
+	awsEC2InstanceID            string
+	awsEC2Region                string
+	awsECSService               string
+	awsECSRegion                string
+	awsAccessKeyId              string
+	awsSecretAccessKey          string
+	awsSessionToken             string
+	allowedDockerContainers     []string
+	kubectlExecType             string
+	awsEKSCluster               string
+	awsEKSRegion                string
+	kubectlExecMasterUrl        string
+	kubectlExecKubeConfigPath   string
+	allowedNamespaces           []string
+	namespaceSelectorsAllowlist string
+	sshPort                     uint16
+	caCertificate               string
+	clientCertificate           string
+	clientKey                   string
+	awsRdsRegion                string
+	gcpCloudSQLInstanceID       string
+	gcpCredentialsJson          string
+	dhcpPoolSubnet              string
+	advertisedRoutes            []string
+	vncPort                     uint16
+	rdpPort                     uint16
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -127,6 +171,8 @@ func Execute() {
 
 func init() {
 	rootCmd.SetVersionTemplate(fmt.Sprintf("border0:\nversion: %s\ndate: %s\n", internal.Version, internal.Date))
+	rootCmd.PersistentFlags().BoolVarP(&jsonInput, "print_input_json", "", false, "Print input in JSON format")
+	rootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "", false, "Print output in JSON format")
 }
 
 func splitLongLines(b string, maxLength int) string {
@@ -215,4 +261,69 @@ func print_socket(s models.Socket, policies []models.Policy) string {
 	}
 
 	return socket_output
+}
+
+func print_sdk_socket(s *client.Socket, policies []client.Policy, connectors *client.SocketConnectors) string {
+	socket_output := ""
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Socket ID", "Name", "DNS Name", "Socket Type", "Upstream Type", "Description", "Recordings Enabled"})
+
+	t.AppendRow(table.Row{s.SocketID, s.Name, s.DNS, s.SocketType, s.UpstreamType, s.Description, s.RecordingEnabled})
+	t.SetStyle(table.StyleLight)
+	socket_output = socket_output + fmt.Sprintf("%s\n", t.Render())
+
+	// print tags
+	if len(s.Tags) > 0 {
+		tt := table.NewWriter()
+		tt.AppendHeader(table.Row{"Key", "Value"})
+		for k, v := range s.Tags {
+			tt.AppendRow(table.Row{k, v})
+		}
+		tt.SetStyle(table.StyleLight)
+		socket_output = socket_output + fmt.Sprintf("\nTags:\n%s\n", tt.Render())
+	}
+
+	// print connectors
+	if connectors != nil {
+		tc := table.NewWriter()
+		tc.AppendHeader(table.Row{"Connector ID", "Connector Name"})
+		for _, c := range connectors.List {
+			tc.AppendRow(table.Row{c.ConnectorID, c.ConnectorName})
+		}
+		tc.SetStyle(table.StyleLight)
+		socket_output = socket_output + fmt.Sprintf("\nConnectors:\n%s\n", tc.Render())
+	}
+
+	// print policies
+	policies = append(policies, s.Policies...)
+	if len(policies) == 0 {
+		socket_output = socket_output + "\n⚠️ Warning: No policies\n"
+		socket_output = socket_output + "No policies are attached to this socket. This means that no one will be able to connect to this socket.\n"
+		socket_output = socket_output + "To resolve this, attach a Policy, or create an Organization-wide Policy.\n"
+	} else {
+		tp := table.NewWriter()
+		tp.AppendHeader(table.Row{"Policy Name", "Policy Description", "Organization Wide"})
+		for _, p := range policies {
+			orgWide := "No"
+
+			if p.OrgWide {
+				orgWide = "Yes"
+			}
+			tp.AppendRow(table.Row{p.Name, p.Description, orgWide})
+		}
+		tp.SetStyle(table.StyleLight)
+		socket_output = socket_output + fmt.Sprintf("\nPolicies:\n%s\n", tp.Render())
+	}
+
+	return socket_output
+}
+
+func prettyPrintJSON(obj any) error {
+	jsonBytes, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(jsonBytes))
+	return nil
 }

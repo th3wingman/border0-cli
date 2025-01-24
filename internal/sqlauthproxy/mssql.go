@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
+	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/borderzero/border0-go/lib/types/pointer"
@@ -103,8 +104,8 @@ func newMssqlHandler(c Config) (*mssqlHandler, error) {
 		}
 	}
 
-	if !c.E2eEncryptionEnabled {
-		return nil, fmt.Errorf("mssql proxy wihtout e2e encryption is not supported")
+	if !c.Socket.IsPrimaryProxy() {
+		return nil, fmt.Errorf("mssql proxy wihtout e2e encryption or private network is not supported")
 	}
 
 	server, err := mssql.NewServer(mssql.ServerConfig{
@@ -141,6 +142,51 @@ func (h mssqlHandler) handleClient(c net.Conn) {
 	session, login, err := h.server.ReadLogin(c)
 	if err != nil {
 		h.Logger.Error("failed to handle login", zap.String("client", c.LocalAddr().String()), zap.Error(err))
+		return
+	}
+
+	var metadata *border0.ConnMetadata
+	switch {
+	case h.Socket.PrivateNetworkEnabled:
+		pnConn, ok := c.(*border0.PrivateNetworkConn)
+		if !ok {
+			h.Logger.Error("failed to cast connection to private network")
+			return
+		}
+
+		if pnConn.Metadata == nil {
+			h.Logger.Error("invalid private network metadata")
+			return
+		}
+
+		defer func() {
+			if err := h.Config.Border0API.EndSession(models.Session{
+				SessionKey: pnConn.Metadata.SessionKey,
+				SocketID:   h.Config.Socket.SocketID,
+				EndTime:    pointer.To(time.Now()),
+			}); err != nil {
+				h.Logger.Error("failed to end session", zap.Error(err))
+			}
+		}()
+
+		metadata = pnConn.Metadata
+	case h.Config.E2eEncryptionEnabled:
+		e2eeConn, ok := c.(border0.E2EEncryptionConn)
+		if !ok {
+			c.Close()
+			h.Logger.Error("failed to cast connection to e2eencryption")
+			return
+		}
+
+		if e2eeConn.Metadata == nil {
+			h.Logger.Error("invalid e2e metadata")
+			return
+		}
+		metadata = e2eeConn.Metadata
+	}
+
+	if !isDatabaseAllowed(metadata.AllowedActions, login.Database) {
+		h.Logger.Error("database access denied by policy", zap.String("database", login.Database), zap.String("user", metadata.UserEmail))
 		return
 	}
 
@@ -188,26 +234,22 @@ func (h mssqlHandler) handleClient(c net.Conn) {
 
 	defer upstreamConn.Close()
 
+	if login.Database != upstreamConn.Database() {
+		login.Database = upstreamConn.Database()
+		if !isDatabaseAllowed(metadata.AllowedActions, login.Database) {
+			h.Logger.Error("database access denied by policy", zap.String("database", login.Database), zap.String("user", metadata.UserEmail))
+			return
+		}
+	}
+
 	if err := h.server.WriteLogin(session, upstreamConn.LoginEnvBytes()); err != nil {
 		h.Logger.Error("failed to write login", zap.Error(err))
 		return
 	}
 
-	e2EEncryptionConn, ok := c.(border0.E2EEncryptionConn)
-	if !ok {
-		c.Close()
-		h.Logger.Error("failed to cast connection to e2eencryption")
-		return
-	}
-
-	if e2EEncryptionConn.Metadata == nil {
-		h.Logger.Error("invalid e2e metadata")
-		return
-	}
-
 	serverHandler := &mssqlLocalHandler{
-		logger:         h.Logger.With(zap.String("session_key", e2EEncryptionConn.Metadata.SessionKey)),
-		metadata:       e2EEncryptionConn.Metadata,
+		logger:         h.Logger.With(zap.String("session_key", metadata.SessionKey)),
+		metadata:       metadata,
 		border0API:     h.Border0API,
 		socket:         h.Socket,
 		lastAuth:       time.Now(),
@@ -215,6 +257,7 @@ func (h mssqlHandler) handleClient(c net.Conn) {
 		upstreamConn:   upstreamConn,
 		downstreamConn: session,
 		database:       login.Database,
+		serverConn:     c,
 	}
 
 	serverHandler.HandleConnection(ctx)

@@ -19,6 +19,10 @@ type ClientResource struct {
 	SshType                        string   `json:"ssh_type,omitempty"`
 	ConnectorAuthenticationEnabled bool     `json:"connector_authentication_enabled,omitempty"`
 	EndToEndEncryptionEnabled      bool     `json:"end_to_end_encryption_enabled,omitempty"`
+	PrivateNetworkEnabled          bool     `json:"private_network_enabled,omitempty"`
+	PrivateNetworkIPv4             string   `json:"private_network_ipv4,omitempty"`
+	PrivateNetworkIPv6             string   `json:"private_network_ipv6,omitempty"`
+	HasUpstreamUsername            bool     `json:"has_upstream_username,omitempty"`
 }
 
 func (c ClientResource) Hostname() string {
@@ -72,6 +76,19 @@ func (c ClientResource) Instruction() string {
 		instruction = fmt.Sprintf("border0 client db --host %s", firstDomain)
 	}
 	return instruction
+}
+
+func (c ClientResource) PrivateNetworkIP() string {
+	if c.PrivateNetworkEnabled {
+		if c.PrivateNetworkIPv4 != "" {
+			return c.PrivateNetworkIPv4
+		}
+		if c.PrivateNetworkIPv6 != "" {
+			return c.PrivateNetworkIPv6
+		}
+	}
+
+	return ""
 }
 
 type ClientResources struct {

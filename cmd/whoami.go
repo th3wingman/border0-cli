@@ -21,7 +21,7 @@ import (
 
 	"github.com/borderzero/border0-cli/internal"
 	"github.com/borderzero/border0-cli/internal/api"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/table"
 
 	"github.com/spf13/cobra"
 )

@@ -24,9 +24,15 @@ import (
 )
 
 var (
-	// common cache shared across all instances of all plugins that perform network reachability checks.
-	reachabilityResultsCache         = gcache.New[string, bool](gcache.WithJanitorInterval[string, bool](time.Hour))
-	reachabilityResultsCacheItemOpts = []gcache.ItemOption{gcache.WithExpiration(30 * time.Minute)}
+	// common cache shared across all instances of all plugins
+	// that perform network reachability checks on ec2 instances.
+	ec2InstanceReachabilityResultsCache         = gcache.New(gcache.WithJanitorInterval[string, bool](time.Hour))
+	ec2InstanceReachabilityResultsCacheItemOpts = []gcache.ItemOption{gcache.WithExpiration(30 * time.Minute)}
+
+	// common cache shared across all instances of all plugins
+	// that perform network reachability checks on rds instances.
+	rdsInstanceReachabilityResultsCache         = gcache.New(gcache.WithJanitorInterval[string, bool](time.Hour))
+	rdsInstanceReachabilityResultsCacheItemOpts = []gcache.ItemOption{gcache.WithExpiration(24 * time.Hour)}
 )
 
 func newPlugin(id string, logger *zap.Logger, engine discovery.Engine) Plugin {
@@ -67,13 +73,11 @@ func newAwsEc2DiscoveryPlugin(
 				),
 				discoverers.WithAwsEc2DiscovererInclusionInstanceTags(config.IncludeWithTags),
 				discoverers.WithAwsEc2DiscovererExclusionInstanceTags(config.ExcludeWithTags),
-
-				// TODO: add to config eventually under some kind of "advanced settings"
 				discoverers.WithAwsEc2DiscovererNetworkReachabilityCheck(true),
 				discoverers.WithAwsEc2DiscovererReachabilityRequired(false),
 				discoverers.WithAwsEc2DiscovererNetworkReachabilityCheckCache(
-					reachabilityResultsCache,
-					reachabilityResultsCacheItemOpts...,
+					ec2InstanceReachabilityResultsCache,
+					ec2InstanceReachabilityResultsCacheItemOpts...,
 				),
 			),
 			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
@@ -171,6 +175,12 @@ func newAwsRdsDiscoveryPlugin(
 				discoverers.WithAwsRdsDiscovererIncludedInstanceStatuses(config.IncludeWithStatuses...),
 				discoverers.WithAwsRdsDiscovererInclusionInstanceTags(config.IncludeWithTags),
 				discoverers.WithAwsRdsDiscovererExclusionInstanceTags(config.ExcludeWithTags),
+				discoverers.WithAwsRdsDiscovererNetworkReachabilityCheck(true),
+				discoverers.WithAwsRdsDiscovererReachabilityRequired(false),
+				discoverers.WithAwsRdsDiscovererNetworkReachabilityCheckCache(
+					rdsInstanceReachabilityResultsCache,
+					rdsInstanceReachabilityResultsCacheItemOpts...,
+				),
 			),
 			engines.WithInitialInterval(time.Duration(config.ScanIntervalMinutes)*time.Minute),
 		))
@@ -180,7 +190,8 @@ func newAwsRdsDiscoveryPlugin(
 	return newPlugin(pluginId, logger, engine), nil
 }
 
-func newKubernetesDiscoveryPlugin(ctx context.Context,
+func newKubernetesDiscoveryPlugin(
+	ctx context.Context,
 	logger *zap.Logger,
 	pluginId string,
 	config *connector.KubernetesDiscoveryPluginConfiguration,

@@ -168,26 +168,34 @@ func MTLSLogin(logger *zap.Logger, hostname string) (string, jwt.MapClaims, erro
 	return token, claims, nil
 }
 
-func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, caCert *x509.Certificate, crtPath string, keyPath, caPath string, err error) {
+func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, caCert *x509.Certificate, crtPath, keyPath, caPath, proxyAndOrgCasPath string, err error) {
 	home, err := util.GetUserHomeDir()
 	if err != nil {
 		err = fmt.Errorf("error: failed to get homedir : %w", err)
 		return
 	}
+	dotDir := filepath.Join(home, ".border0")
 
-	caPath = filepath.Join(home, ".border0", orgID+"-ca.crt")
+	crtPath = filepath.Join(dotDir, fmt.Sprintf("%s.crt", orgID))
+	keyPath = filepath.Join(dotDir, fmt.Sprintf("%s.key", orgID))
+	caPath = filepath.Join(dotDir, fmt.Sprintf("%s-ca.crt", orgID))
+	proxyAndOrgCasPath = filepath.Join(dotDir, fmt.Sprintf("%s-proxy-ca.crt", orgID))
+
+	if _, err = os.Stat(proxyAndOrgCasPath); os.IsNotExist(err) {
+		err = fmt.Errorf("error: proxy + org ca certificates file %s not found", caPath)
+		return
+	}
+
 	if _, err = os.Stat(caPath); os.IsNotExist(err) {
 		err = fmt.Errorf("error: ca certificate file %s not found", caPath)
 		return
 	}
 
-	crtPath = filepath.Join(home, ".border0", orgID+".crt")
 	if _, err = os.Stat(crtPath); os.IsNotExist(err) {
 		err = fmt.Errorf("error: certificate file %s not found", crtPath)
 		return
 	}
 
-	keyPath = filepath.Join(home, ".border0", orgID+".key")
 	if _, err = os.Stat(crtPath); os.IsNotExist(err) {
 		err = fmt.Errorf("error: key file %s not found", keyPath)
 		return
@@ -256,7 +264,91 @@ func ReadOrgCert(orgID string) (cert *x509.Certificate, key *rsa.PrivateKey, caC
 	return
 }
 
-func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyPath, caPath string, err error) {
+// getProxyPublicCaCerts returns the x509.Certificate objects for the CA certs
+// of the issuers of the Border0 proxy's TLS certificates i.e. Let's Encrypt.
+//
+// In the future these may be returned by the API to avoid requiring clients
+// to update their CLI when these certs expire and new ones are rolled in,
+// or in the unlikley event of them being revoked.
+//
+// For now we have >5 years until this becomes a minor issue...
+func getProxyPublicCaCerts() []string {
+	pemCerts := map[string][]byte{
+		// expires on 2030-06-04
+		"Let's Encrypt ISRG Root X1": []byte(`-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----`),
+		// expires on 2030-06-04
+		"Let's Encrypt ISRG Root X2": []byte(`-----BEGIN CERTIFICATE-----
+MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
+CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
+R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
+MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
+ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
+EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
++1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
+ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
+AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
+zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
+tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
+/q4AaOeMSQ+2b1tbFfLn
+-----END CERTIFICATE-----`),
+	}
+
+	// Used for local development only - not meant for external use.
+	// This shall remain undocumented and may be changed or removed without notice.
+	if certOverridePath := os.Getenv("BORDER0_HTTP_PROXY_CERT"); certOverridePath != "" {
+		certOverridePEM, err := os.ReadFile(certOverridePath)
+		if err != nil {
+			log.Fatalf("failed to read override certificate from %s: %v", certOverridePath, err)
+		}
+		pemCerts["BORDER0_HTTP_PROXY_CERT"] = certOverridePEM
+	}
+
+	x509Certs := []string{}
+	for label, certPEM := range pemCerts {
+		block, _ := pem.Decode(certPEM)
+		if block == nil {
+			log.Fatalf("failed to decode %s certificate PEM", label)
+		}
+		_, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			log.Fatalf("failed to parse %s certificate as an x509 certificate: %v", label, err)
+		}
+		x509Certs = append(x509Certs, string(certPEM))
+	}
+	return x509Certs
+}
+
+func WriteCertToFile(cert *CertificateResponse, orgID string) (crtPath, keyPath, caPath, proxyAndOrgCasPath string, err error) {
 	home, err := util.GetUserHomeDir()
 	if err != nil {
 		err = fmt.Errorf("error: failed to get homedir : %w", err)
@@ -272,17 +364,18 @@ func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyP
 		}
 	}
 
-	caPath = filepath.Join(dotDir, socketDNS+"-ca.crt")
-	crtPath = filepath.Join(dotDir, socketDNS+".crt")
-	keyPath = filepath.Join(dotDir, socketDNS+".key")
-
-	if err = os.WriteFile(keyPath, []byte(cert.PrivateKey), 0600); err != nil {
-		err = fmt.Errorf("error: failed to write key file : %w", err)
-		return
-	}
+	crtPath = filepath.Join(dotDir, fmt.Sprintf("%s.crt", orgID))
+	keyPath = filepath.Join(dotDir, fmt.Sprintf("%s.key", orgID))
+	caPath = filepath.Join(dotDir, fmt.Sprintf("%s-ca.crt", orgID))
+	proxyAndOrgCasPath = filepath.Join(dotDir, fmt.Sprintf("%s-proxy-ca.crt", orgID))
 
 	if err = os.WriteFile(crtPath, []byte(cert.Certificate), 0600); err != nil {
 		err = fmt.Errorf("error: failed to write certificate file : %w", err)
+		return
+	}
+
+	if err = os.WriteFile(keyPath, []byte(cert.PrivateKey), 0600); err != nil {
+		err = fmt.Errorf("error: failed to write key file : %w", err)
 		return
 	}
 
@@ -291,7 +384,14 @@ func WriteCertToFile(cert *CertificateResponse, socketDNS string) (crtPath, keyP
 		return
 	}
 
-	return crtPath, keyPath, caPath, nil
+	// NOTE: cert.CaCertificate has a leading newline character
+	proxyAndOrgCaCerts := fmt.Sprintf("%s\n%s", strings.Join(getProxyPublicCaCerts(), "\n"), cert.CaCertificate)
+	if err = os.WriteFile(proxyAndOrgCasPath, []byte(proxyAndOrgCaCerts), 0600); err != nil {
+		err = fmt.Errorf("error: failed to write proxy + org ca certificates file : %w", err)
+		return
+	}
+
+	return crtPath, keyPath, caPath, proxyAndOrgCasPath, nil
 }
 
 func GetSocketPort(name string, token string) (socketPort int, err error) {
@@ -306,20 +406,29 @@ func GetSocketPort(name string, token string) (socketPort int, err error) {
 
 func OrgIDFromToken() (orgID string) {
 	tokenfile := MTLSTokenFile()
-	if _, err := os.Stat(tokenfile); os.IsNotExist(err) {
-		return
-	} else {
-		content, _ := os.ReadFile(tokenfile)
-		if err == nil {
-			tokenString := strings.TrimRight(string(content), "\n")
-			jwtToken, _ := jwt.Parse(tokenString, nil)
-			if jwtToken != nil {
-				claims := jwtToken.Claims.(jwt.MapClaims)
+	var token string
 
-				if _, ok := claims["org_id"]; ok {
-					orgID = claims["org_id"].(string)
-				}
+	if os.Getenv("BORDER0_CLIENT_TOKEN") != "" {
+		token = os.Getenv("BORDER0_CLIENT_TOKEN")
+	} else {
+		if _, err := os.Stat(tokenfile); os.IsNotExist(err) {
+			return
+		} else {
+			content, _ := os.ReadFile(tokenfile)
+			if err != nil {
+				return
 			}
+
+			token = strings.TrimRight(string(content), "\n")
+		}
+	}
+
+	jwtToken, _ := jwt.Parse(token, nil)
+	if jwtToken != nil {
+		claims := jwtToken.Claims.(jwt.MapClaims)
+
+		if _, ok := claims["org_id"]; ok {
+			orgID = claims["org_id"].(string)
 		}
 	}
 
@@ -333,7 +442,7 @@ func IsClientCertValid() (crtPath, keyPath string, valid bool) {
 		return
 	}
 
-	cert, _, _, crtPath, keyPath, _, err := ReadOrgCert(orgID)
+	cert, _, _, crtPath, keyPath, _, _, err := ReadOrgCert(orgID)
 	if err != nil {
 		return
 	}
@@ -345,7 +454,7 @@ func IsClientCertValid() (crtPath, keyPath string, valid bool) {
 	return
 }
 
-func FetchCertAndReturnPaths(logger *zap.Logger, hostname string) (crtPath, keyPath, caPath string, err error) {
+func FetchCertAndReturnPaths(logger *zap.Logger, hostname string) (crtPath, keyPath, caPath, proxyAndOrgCasPath string, err error) {
 	token, claims, err := MTLSLogin(logger, hostname)
 	if err != nil {
 		return
@@ -354,12 +463,12 @@ func FetchCertAndReturnPaths(logger *zap.Logger, hostname string) (crtPath, keyP
 	userEmail := fmt.Sprint(claims["user_email"])
 	orgID := fmt.Sprint(claims["org_id"])
 
-	cert := GetCert(token, userEmail)
-	crtPath, keyPath, caPath, err = WriteCertToFile(cert, orgID)
-	if err != nil {
-		return
-	}
+	return GetAndPersistCert(token, userEmail, orgID)
+}
 
+func GetAndPersistCert(token, email, orgID string) (crtPath, keyPath, caPath, proxyAndOrgCasPath string, err error) {
+	cert := GetCert(token, email)
+	crtPath, keyPath, caPath, proxyAndOrgCasPath, err = WriteCertToFile(cert, orgID)
 	return
 }
 
@@ -370,9 +479,12 @@ type ResourceInfo struct {
 	CertificatePath                string
 	PrivateKeyPath                 string
 	CaCertificatePath              string
+	ProxyAndOrgCaCertificatesPath  string
 	Port                           int
 	ConnectorAuthenticationEnabled bool
 	EndToEndEncryptionEnabled      bool
+	PrivateNetworkEnabled          bool
+	SocketName                     string
 }
 
 func (info *ResourceInfo) SetupTLSCertificate() tls.Certificate {
@@ -390,26 +502,38 @@ func GetResourceInfo(logger *zap.Logger, hostname string) (info ResourceInfo, er
 		return
 	}
 
-	var ok bool
-	if info.CertificatePath, info.PrivateKeyPath, ok = IsClientCertValid(); !ok {
-		info.CertificatePath, info.PrivateKeyPath, info.CaCertificatePath, err = FetchCertAndReturnPaths(logger, hostname)
-		if err != nil {
-			return
-		}
-	}
-
 	resource, err := FetchResource(token, hostname)
 	if err != nil {
 		return
 	}
 
+	info.SocketName = resource.SocketName
+	info.PrivateNetworkEnabled = resource.PrivateNetworkEnabled
 	info.Port = resource.SocketPorts[0]
-	info.ConnectorAuthenticationEnabled = resource.ConnectorAuthenticationEnabled
-	info.EndToEndEncryptionEnabled = resource.EndToEndEncryptionEnabled
 
-	info.Certficate, info.PrivateKey, info.CaCertificate, _, _, _, err = ReadOrgCert(claims["org_id"].(string))
-	if err != nil {
-		return
+	if !info.PrivateNetworkEnabled {
+		var ok bool
+		if info.CertificatePath, info.PrivateKeyPath, ok = IsClientCertValid(); !ok {
+			info.CertificatePath, info.PrivateKeyPath, info.CaCertificatePath, info.ProxyAndOrgCaCertificatesPath, err = FetchCertAndReturnPaths(logger, hostname)
+			if err != nil {
+				return
+			}
+		}
+
+		info.ConnectorAuthenticationEnabled = resource.ConnectorAuthenticationEnabled
+		info.EndToEndEncryptionEnabled = resource.EndToEndEncryptionEnabled
+
+		info.Certficate,
+			info.PrivateKey,
+			info.CaCertificate,
+			info.CertificatePath,
+			info.PrivateKeyPath,
+			info.CaCertificatePath,
+			info.ProxyAndOrgCaCertificatesPath,
+			err = ReadOrgCert(claims["org_id"].(string))
+		if err != nil {
+			return
+		}
 	}
 
 	return
@@ -881,7 +1005,7 @@ func StartConnectorAuthListener(hostname string, port int, certificate tls.Certi
 		return 0, fmt.Errorf("unable to start local TLS listener, %s", err)
 	}
 
-	addr := fmt.Sprintf("%s:%d", hostname, port)
+	addr := net.JoinHostPort(hostname, strconv.Itoa(port))
 
 	go func() {
 		defer l.Close()

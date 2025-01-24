@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,13 +23,21 @@ import (
 	"github.com/borderzero/border0-go/types/connector"
 	"github.com/borderzero/border0-go/types/service"
 	"github.com/golang-jwt/jwt"
+	"github.com/mitchellh/mapstructure"
 	"golang.org/x/sync/errgroup"
+
+	sdk "github.com/borderzero/border0-go/client"
 )
 
 const APIUrl = "https://api.border0.com/api/v1"
 
 var ErrUnauthorized = errors.New("invalid token, please login")
 var ErrNotFound = errors.New("resource not found")
+
+const (
+	connectorInviteExchangeTimeoutMaxAttempts          = 3
+	connectorInviteExchangeTiemoutSleepBetweenAttempts = time.Second * 2
+)
 
 type API interface {
 	GetOrganizationInfo(ctx context.Context) (*models.Organization, error)
@@ -50,10 +57,14 @@ type API interface {
 	GetAccessToken() string
 	SignSSHKey(ctx context.Context, socketID string, key []byte) (string, string, error)
 	GetUserID() (string, error)
-	Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) (allowedActions []string, info map[string][]string, err error)
+	Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) (allowedActions []any, info map[string][]string, err error)
+	EvaluatePeer(ctx context.Context, socket *models.Socket, clientIP, publicKey string) (email, entityUUID string, allowedActions []any, info map[string][]string, err error)
 	UpdateSession(update models.SessionUpdate) error
+	CreateSession(session models.Session) (*models.SessionCreateResult, error)
+	EndSession(session models.Session) error
+	CreateSessionEvent(event models.SessionEvent) error
 	SignSshOrgCertificate(ctx context.Context, socketID, sessionID, userEmail string, ticket, publicKey []byte) ([]byte, error)
-	UploadRecording(content []byte, socketID, sessionKey, recordingID string) error
+	UploadRecording(content []byte, socketID, sessionKey, recordingID, recordingType string) error
 	ServerOrgCertificate(ctx context.Context, name string, csr []byte) ([]byte, error)
 }
 
@@ -406,13 +417,18 @@ func (a *Border0API) CreateConnectorWithInstallToken(
 		InstallToken: installToken,
 	}
 
-	var reply models.ConnectorWithInstallTokenResponse
-	err := a.Request(http.MethodPost, "connector/create_with_token", &reply, payload, true)
-	if err != nil {
-		return nil, err
+	for attempts := 1; ; attempts++ {
+		var reply models.ConnectorWithInstallTokenResponse
+		err := a.Request(http.MethodPost, "connector/create_with_token", &reply, payload, true)
+		if err != nil {
+			if attempts < connectorInviteExchangeTimeoutMaxAttempts {
+				time.Sleep(connectorInviteExchangeTiemoutSleepBetweenAttempts)
+				continue
+			}
+			return nil, fmt.Errorf("failed to exchange install-code for connector token after %d attempts: %v", connectorInviteExchangeTimeoutMaxAttempts, err)
+		}
+		return &reply, nil
 	}
-
-	return &reply, nil
 }
 
 // ListConnectors lists an organization's connectors (v2)
@@ -660,7 +676,19 @@ func (a *Border0API) GetUserID() (string, error) {
 	return strings.ReplaceAll(tokenUserIdStr, "-", ""), nil
 }
 
-func (a *Border0API) Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) (allowedActions []string, info map[string][]string, err error) {
+func (a *Border0API) EvaluatePeer(ctx context.Context, socket *models.Socket, clientIP, publicKey string) (email, entityUUID string, allowedActions []any, info map[string][]string, err error) {
+	return "", "", nil, nil, fmt.Errorf("not supported for this API")
+}
+
+func (a *Border0API) CreateSession(session models.Session) (*models.SessionCreateResult, error) {
+	return nil, fmt.Errorf("not supported for this API")
+}
+
+func (a *Border0API) EndSession(session models.Session) error {
+	return fmt.Errorf("not supported for this API")
+}
+
+func (a *Border0API) Evaluate(ctx context.Context, socket *models.Socket, clientIP, userEmail, sessionKey string) (allowedActions []any, info map[string][]string, err error) {
 	if socket == nil {
 		err = fmt.Errorf("socket is nil")
 		return
@@ -668,12 +696,6 @@ func (a *Border0API) Evaluate(ctx context.Context, socket *models.Socket, client
 
 	if clientIP == "" || userEmail == "" || sessionKey == "" {
 		err = fmt.Errorf("metadata is invalid")
-		return
-	}
-
-	clientIP, _, err = net.SplitHostPort(clientIP)
-	if err != nil {
-		err = fmt.Errorf("failed to parse client ip: %w", err)
 		return
 	}
 
@@ -699,6 +721,20 @@ func (a *Border0API) Evaluate(ctx context.Context, socket *models.Socket, client
 		}
 	}
 
+	for app, permissions := range evaluateResponse.Permissions {
+		if strings.EqualFold(socket.SocketType, app) || app == "*" {
+			for _, permission := range permissions {
+				permissions, err := decodePermission(permission, app)
+				if err != nil {
+					fmt.Printf("failed to decode permission: %v\n", err)
+					continue
+				}
+
+				allowedActions = append(allowedActions, permissions)
+			}
+		}
+	}
+
 	return
 }
 
@@ -708,19 +744,103 @@ func (a *Border0API) UpdateSession(update models.SessionUpdate) (err error) {
 		return
 	}
 
-	evaluateRequest := &models.UpdateSessionRequest{
-		SessionKey: update.SessionKey,
-		UserData:   update.UserData,
+	updateRequest := &models.UpdateSessionRequest{
+		SessionKey:     update.SessionKey,
+		UserData:       update.UserData,
+		Result:         string(update.Result),
+		AuthInfoFailed: update.AuthInfoFailed,
 	}
 
 	url := fmt.Sprintf("socket/%s/update_session", update.Socket.SocketID)
 
-	if err = a.Request("POST", url, nil, evaluateRequest, true); err != nil {
+	if err = a.Request("POST", url, nil, updateRequest, true); err != nil {
 		err = fmt.Errorf("update session request failed: %w", err)
 		return
 	}
 
 	return
+}
+
+func (a *Border0API) CreateSessionEvent(event models.SessionEvent) error {
+	if event.Socket == nil {
+		return fmt.Errorf("socket is nil")
+	}
+
+	if event.SessionKey == "" {
+		return fmt.Errorf("session key is empty")
+	}
+
+	sessionEventRequest := &models.SessionEventRequest{
+		Type:     event.Type,
+		Status:   event.Status,
+		Metadata: event.Metadata,
+	}
+
+	url := fmt.Sprintf("session/%s/%s/session_event", event.Socket.SocketID, event.SessionKey)
+	if err := a.Request("POST", url, nil, sessionEventRequest, true); err != nil {
+		return fmt.Errorf("session event request failed: %w", err)
+	}
+
+	return nil
+}
+
+func decodePermission(permission any, permissionType string) (models.Permissions, error) {
+	var permissions models.Permissions
+	var p any
+
+	switch permissionType {
+	case service.ServiceTypeSsh:
+		p = &models.SSHPermissions{}
+	case service.ServiceTypeDatabase:
+		p = &models.DatabasePermissions{}
+	case service.ServiceTypeTls:
+		p = &sdk.TLSPermissions{}
+	case service.ServiceTypeRdp:
+		p = &sdk.RDPPermissions{}
+	case service.ServiceTypeVnc:
+		p = &sdk.VNCPermissions{}
+	case service.ServiceTypeVpn:
+		p = &sdk.VPNPermissions{}
+	case service.ServiceTypeHttp:
+		p = &sdk.HTTPPermissions{}
+	case service.ServiceTypeKubernetes:
+		p = &sdk.KubernetesPermissions{}
+	default:
+		return permissions, fmt.Errorf("unknown permission type: %s", permissionType)
+	}
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:  p,
+		TagName: "json",
+	})
+	if err != nil {
+		return permissions, fmt.Errorf("failed to create decoder: %v", err)
+	}
+
+	if err := decoder.Decode(permission); err != nil {
+		return permissions, fmt.Errorf("failed to decode permission: %v", err)
+	}
+
+	switch permissionType {
+	case service.ServiceTypeSsh:
+		permissions.SSH = p.(*models.SSHPermissions)
+	case service.ServiceTypeDatabase:
+		permissions.Database = p.(*models.DatabasePermissions)
+	case service.ServiceTypeTls:
+		permissions.TLS = p.(*sdk.TLSPermissions)
+	case service.ServiceTypeRdp:
+		permissions.RDP = p.(*sdk.RDPPermissions)
+	case service.ServiceTypeVnc:
+		permissions.VNC = p.(*sdk.VNCPermissions)
+	case service.ServiceTypeVpn:
+		permissions.VPN = p.(*sdk.VPNPermissions)
+	case service.ServiceTypeHttp:
+		permissions.HTTP = p.(*sdk.HTTPPermissions)
+	case service.ServiceTypeKubernetes:
+		permissions.Kubernetes = p.(*sdk.KubernetesPermissions)
+	}
+
+	return permissions, nil
 }
 
 func (a *Border0API) SignSshOrgCertificate(ctx context.Context, socketID, sessionID, userEmail string, ticket, publicKey []byte) ([]byte, error) {
@@ -740,11 +860,13 @@ func (a *Border0API) SignSshOrgCertificate(ctx context.Context, socketID, sessio
 	return []byte(signSshOrgCertificateResponse.Certificate), nil
 }
 
-func (a *Border0API) UploadRecording(content []byte, socketID, sessionKey, recordingID string) error {
+func (a *Border0API) UploadRecording(content []byte, socketID, sessionKey, recordingID, recordingType string) error {
 	jsonData, err := json.Marshal(struct {
-		RecordingId string `json:"recording_id"`
+		RecordingId   string `json:"recording_id"`
+		RecordingType string `json:"recording_type"`
 	}{
-		RecordingId: recordingID,
+		RecordingId:   recordingID,
+		RecordingType: recordingType,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to marshal request body: %w", err)

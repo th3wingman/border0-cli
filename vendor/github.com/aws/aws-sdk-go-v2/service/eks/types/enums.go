@@ -11,8 +11,9 @@ const (
 )
 
 // Values returns all known values for AccessScopeType. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (AccessScopeType) Values() []AccessScopeType {
 	return []AccessScopeType{
 		"cluster",
@@ -32,11 +33,14 @@ const (
 	AddonIssueCodeAdmissionRequestDenied       AddonIssueCode = "AdmissionRequestDenied"
 	AddonIssueCodeUnsupportedAddonModification AddonIssueCode = "UnsupportedAddonModification"
 	AddonIssueCodeK8sResourceNotFound          AddonIssueCode = "K8sResourceNotFound"
+	AddonIssueCodeAddonSubscriptionNeeded      AddonIssueCode = "AddonSubscriptionNeeded"
+	AddonIssueCodeAddonPermissionFailure       AddonIssueCode = "AddonPermissionFailure"
 )
 
 // Values returns all known values for AddonIssueCode. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (AddonIssueCode) Values() []AddonIssueCode {
 	return []AddonIssueCode{
 		"AccessDenied",
@@ -47,6 +51,8 @@ func (AddonIssueCode) Values() []AddonIssueCode {
 		"AdmissionRequestDenied",
 		"UnsupportedAddonModification",
 		"K8sResourceNotFound",
+		"AddonSubscriptionNeeded",
+		"AddonPermissionFailure",
 	}
 }
 
@@ -65,8 +71,9 @@ const (
 )
 
 // Values returns all known values for AddonStatus. Note that this can be expanded
-// in the future, and so it is only as up to date as the client. The ordering of
-// this slice is not guaranteed to be stable across updates.
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (AddonStatus) Values() []AddonStatus {
 	return []AddonStatus{
 		"CREATING",
@@ -96,11 +103,16 @@ const (
 	AMITypesWindowsFull2019X8664    AMITypes = "WINDOWS_FULL_2019_x86_64"
 	AMITypesWindowsCore2022X8664    AMITypes = "WINDOWS_CORE_2022_x86_64"
 	AMITypesWindowsFull2022X8664    AMITypes = "WINDOWS_FULL_2022_x86_64"
+	AMITypesAl2023X8664Standard     AMITypes = "AL2023_x86_64_STANDARD"
+	AMITypesAl2023Arm64Standard     AMITypes = "AL2023_ARM_64_STANDARD"
+	AMITypesAl2023X8664Neuron       AMITypes = "AL2023_x86_64_NEURON"
+	AMITypesAl2023X8664Nvidia       AMITypes = "AL2023_x86_64_NVIDIA"
 )
 
 // Values returns all known values for AMITypes. Note that this can be expanded in
-// the future, and so it is only as up to date as the client. The ordering of this
-// slice is not guaranteed to be stable across updates.
+// the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (AMITypes) Values() []AMITypes {
 	return []AMITypes{
 		"AL2_x86_64",
@@ -115,6 +127,10 @@ func (AMITypes) Values() []AMITypes {
 		"WINDOWS_FULL_2019_x86_64",
 		"WINDOWS_CORE_2022_x86_64",
 		"WINDOWS_FULL_2022_x86_64",
+		"AL2023_x86_64_STANDARD",
+		"AL2023_ARM_64_STANDARD",
+		"AL2023_x86_64_NEURON",
+		"AL2023_x86_64_NVIDIA",
 	}
 }
 
@@ -128,8 +144,9 @@ const (
 )
 
 // Values returns all known values for AuthenticationMode. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (AuthenticationMode) Values() []AuthenticationMode {
 	return []AuthenticationMode{
 		"API",
@@ -142,17 +159,37 @@ type CapacityTypes string
 
 // Enum values for CapacityTypes
 const (
-	CapacityTypesOnDemand CapacityTypes = "ON_DEMAND"
-	CapacityTypesSpot     CapacityTypes = "SPOT"
+	CapacityTypesOnDemand      CapacityTypes = "ON_DEMAND"
+	CapacityTypesSpot          CapacityTypes = "SPOT"
+	CapacityTypesCapacityBlock CapacityTypes = "CAPACITY_BLOCK"
 )
 
 // Values returns all known values for CapacityTypes. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (CapacityTypes) Values() []CapacityTypes {
 	return []CapacityTypes{
 		"ON_DEMAND",
 		"SPOT",
+		"CAPACITY_BLOCK",
+	}
+}
+
+type Category string
+
+// Enum values for Category
+const (
+	CategoryUpgradeReadiness Category = "UPGRADE_READINESS"
+)
+
+// Values returns all known values for Category. Note that this can be expanded in
+// the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (Category) Values() []Category {
+	return []Category{
+		"UPGRADE_READINESS",
 	}
 }
 
@@ -182,8 +219,9 @@ const (
 )
 
 // Values returns all known values for ClusterIssueCode. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (ClusterIssueCode) Values() []ClusterIssueCode {
 	return []ClusterIssueCode{
 		"AccessDenied",
@@ -221,8 +259,9 @@ const (
 )
 
 // Values returns all known values for ClusterStatus. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (ClusterStatus) Values() []ClusterStatus {
 	return []ClusterStatus{
 		"CREATING",
@@ -244,8 +283,9 @@ const (
 )
 
 // Values returns all known values for ConfigStatus. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (ConfigStatus) Values() []ConfigStatus {
 	return []ConfigStatus{
 		"CREATING",
@@ -270,8 +310,9 @@ const (
 )
 
 // Values returns all known values for ConnectorConfigProvider. Note that this can
-// be expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (ConnectorConfigProvider) Values() []ConnectorConfigProvider {
 	return []ConnectorConfigProvider{
 		"EKS_ANYWHERE",
@@ -295,8 +336,9 @@ const (
 
 // Values returns all known values for EksAnywhereSubscriptionLicenseType. Note
 // that this can be expanded in the future, and so it is only as up to date as the
-// client. The ordering of this slice is not guaranteed to be stable across
-// updates.
+// client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (EksAnywhereSubscriptionLicenseType) Values() []EksAnywhereSubscriptionLicenseType {
 	return []EksAnywhereSubscriptionLicenseType{
 		"Cluster",
@@ -317,8 +359,9 @@ const (
 
 // Values returns all known values for EksAnywhereSubscriptionStatus. Note that
 // this can be expanded in the future, and so it is only as up to date as the
-// client. The ordering of this slice is not guaranteed to be stable across
-// updates.
+// client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (EksAnywhereSubscriptionStatus) Values() []EksAnywhereSubscriptionStatus {
 	return []EksAnywhereSubscriptionStatus{
 		"CREATING",
@@ -339,8 +382,9 @@ const (
 
 // Values returns all known values for EksAnywhereSubscriptionTermUnit. Note that
 // this can be expanded in the future, and so it is only as up to date as the
-// client. The ordering of this slice is not guaranteed to be stable across
-// updates.
+// client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (EksAnywhereSubscriptionTermUnit) Values() []EksAnywhereSubscriptionTermUnit {
 	return []EksAnywhereSubscriptionTermUnit{
 		"MONTHS",
@@ -371,8 +415,9 @@ const (
 )
 
 // Values returns all known values for ErrorCode. Note that this can be expanded
-// in the future, and so it is only as up to date as the client. The ordering of
-// this slice is not guaranteed to be stable across updates.
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (ErrorCode) Values() []ErrorCode {
 	return []ErrorCode{
 		"SubnetNotFound",
@@ -395,6 +440,29 @@ func (ErrorCode) Values() []ErrorCode {
 	}
 }
 
+type FargateProfileIssueCode string
+
+// Enum values for FargateProfileIssueCode
+const (
+	FargateProfileIssueCodePodExecutionRoleAlreadyInUse FargateProfileIssueCode = "PodExecutionRoleAlreadyInUse"
+	FargateProfileIssueCodeAccessDenied                 FargateProfileIssueCode = "AccessDenied"
+	FargateProfileIssueCodeClusterUnreachable           FargateProfileIssueCode = "ClusterUnreachable"
+	FargateProfileIssueCodeInternalFailure              FargateProfileIssueCode = "InternalFailure"
+)
+
+// Values returns all known values for FargateProfileIssueCode. Note that this can
+// be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (FargateProfileIssueCode) Values() []FargateProfileIssueCode {
+	return []FargateProfileIssueCode{
+		"PodExecutionRoleAlreadyInUse",
+		"AccessDenied",
+		"ClusterUnreachable",
+		"InternalFailure",
+	}
+}
+
 type FargateProfileStatus string
 
 // Enum values for FargateProfileStatus
@@ -407,8 +475,9 @@ const (
 )
 
 // Values returns all known values for FargateProfileStatus. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (FargateProfileStatus) Values() []FargateProfileStatus {
 	return []FargateProfileStatus{
 		"CREATING",
@@ -416,6 +485,29 @@ func (FargateProfileStatus) Values() []FargateProfileStatus {
 		"DELETING",
 		"CREATE_FAILED",
 		"DELETE_FAILED",
+	}
+}
+
+type InsightStatusValue string
+
+// Enum values for InsightStatusValue
+const (
+	InsightStatusValuePassing InsightStatusValue = "PASSING"
+	InsightStatusValueWarning InsightStatusValue = "WARNING"
+	InsightStatusValueError   InsightStatusValue = "ERROR"
+	InsightStatusValueUnknown InsightStatusValue = "UNKNOWN"
+)
+
+// Values returns all known values for InsightStatusValue. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (InsightStatusValue) Values() []InsightStatusValue {
+	return []InsightStatusValue{
+		"PASSING",
+		"WARNING",
+		"ERROR",
+		"UNKNOWN",
 	}
 }
 
@@ -428,8 +520,9 @@ const (
 )
 
 // Values returns all known values for IpFamily. Note that this can be expanded in
-// the future, and so it is only as up to date as the client. The ordering of this
-// slice is not guaranteed to be stable across updates.
+// the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (IpFamily) Values() []IpFamily {
 	return []IpFamily{
 		"ipv4",
@@ -449,8 +542,9 @@ const (
 )
 
 // Values returns all known values for LogType. Note that this can be expanded in
-// the future, and so it is only as up to date as the client. The ordering of this
-// slice is not guaranteed to be stable across updates.
+// the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (LogType) Values() []LogType {
 	return []LogType{
 		"api",
@@ -465,44 +559,47 @@ type NodegroupIssueCode string
 
 // Enum values for NodegroupIssueCode
 const (
-	NodegroupIssueCodeAutoScalingGroupNotFound              NodegroupIssueCode = "AutoScalingGroupNotFound"
-	NodegroupIssueCodeAutoScalingGroupInvalidConfiguration  NodegroupIssueCode = "AutoScalingGroupInvalidConfiguration"
-	NodegroupIssueCodeEc2SecurityGroupNotFound              NodegroupIssueCode = "Ec2SecurityGroupNotFound"
-	NodegroupIssueCodeEc2SecurityGroupDeletionFailure       NodegroupIssueCode = "Ec2SecurityGroupDeletionFailure"
-	NodegroupIssueCodeEc2LaunchTemplateNotFound             NodegroupIssueCode = "Ec2LaunchTemplateNotFound"
-	NodegroupIssueCodeEc2LaunchTemplateVersionMismatch      NodegroupIssueCode = "Ec2LaunchTemplateVersionMismatch"
-	NodegroupIssueCodeEc2SubnetNotFound                     NodegroupIssueCode = "Ec2SubnetNotFound"
-	NodegroupIssueCodeEc2SubnetInvalidConfiguration         NodegroupIssueCode = "Ec2SubnetInvalidConfiguration"
-	NodegroupIssueCodeIamInstanceProfileNotFound            NodegroupIssueCode = "IamInstanceProfileNotFound"
-	NodegroupIssueCodeEc2SubnetMissingIpv6Assignment        NodegroupIssueCode = "Ec2SubnetMissingIpv6Assignment"
-	NodegroupIssueCodeIamLimitExceeded                      NodegroupIssueCode = "IamLimitExceeded"
-	NodegroupIssueCodeIamNodeRoleNotFound                   NodegroupIssueCode = "IamNodeRoleNotFound"
-	NodegroupIssueCodeNodeCreationFailure                   NodegroupIssueCode = "NodeCreationFailure"
-	NodegroupIssueCodeAsgInstanceLaunchFailures             NodegroupIssueCode = "AsgInstanceLaunchFailures"
-	NodegroupIssueCodeInstanceLimitExceeded                 NodegroupIssueCode = "InstanceLimitExceeded"
-	NodegroupIssueCodeInsufficientFreeAddresses             NodegroupIssueCode = "InsufficientFreeAddresses"
-	NodegroupIssueCodeAccessDenied                          NodegroupIssueCode = "AccessDenied"
-	NodegroupIssueCodeInternalFailure                       NodegroupIssueCode = "InternalFailure"
-	NodegroupIssueCodeClusterUnreachable                    NodegroupIssueCode = "ClusterUnreachable"
-	NodegroupIssueCodeAmiIdNotFound                         NodegroupIssueCode = "AmiIdNotFound"
-	NodegroupIssueCodeAutoScalingGroupOptInRequired         NodegroupIssueCode = "AutoScalingGroupOptInRequired"
-	NodegroupIssueCodeAutoScalingGroupRateLimitExceeded     NodegroupIssueCode = "AutoScalingGroupRateLimitExceeded"
-	NodegroupIssueCodeEc2LaunchTemplateDeletionFailure      NodegroupIssueCode = "Ec2LaunchTemplateDeletionFailure"
-	NodegroupIssueCodeEc2LaunchTemplateInvalidConfiguration NodegroupIssueCode = "Ec2LaunchTemplateInvalidConfiguration"
-	NodegroupIssueCodeEc2LaunchTemplateMaxLimitExceeded     NodegroupIssueCode = "Ec2LaunchTemplateMaxLimitExceeded"
-	NodegroupIssueCodeEc2SubnetListTooLong                  NodegroupIssueCode = "Ec2SubnetListTooLong"
-	NodegroupIssueCodeIamThrottling                         NodegroupIssueCode = "IamThrottling"
-	NodegroupIssueCodeNodeTerminationFailure                NodegroupIssueCode = "NodeTerminationFailure"
-	NodegroupIssueCodePodEvictionFailure                    NodegroupIssueCode = "PodEvictionFailure"
-	NodegroupIssueCodeSourceEc2LaunchTemplateNotFound       NodegroupIssueCode = "SourceEc2LaunchTemplateNotFound"
-	NodegroupIssueCodeLimitExceeded                         NodegroupIssueCode = "LimitExceeded"
-	NodegroupIssueCodeUnknown                               NodegroupIssueCode = "Unknown"
-	NodegroupIssueCodeAutoScalingGroupInstanceRefreshActive NodegroupIssueCode = "AutoScalingGroupInstanceRefreshActive"
+	NodegroupIssueCodeAutoScalingGroupNotFound                 NodegroupIssueCode = "AutoScalingGroupNotFound"
+	NodegroupIssueCodeAutoScalingGroupInvalidConfiguration     NodegroupIssueCode = "AutoScalingGroupInvalidConfiguration"
+	NodegroupIssueCodeEc2SecurityGroupNotFound                 NodegroupIssueCode = "Ec2SecurityGroupNotFound"
+	NodegroupIssueCodeEc2SecurityGroupDeletionFailure          NodegroupIssueCode = "Ec2SecurityGroupDeletionFailure"
+	NodegroupIssueCodeEc2LaunchTemplateNotFound                NodegroupIssueCode = "Ec2LaunchTemplateNotFound"
+	NodegroupIssueCodeEc2LaunchTemplateVersionMismatch         NodegroupIssueCode = "Ec2LaunchTemplateVersionMismatch"
+	NodegroupIssueCodeEc2SubnetNotFound                        NodegroupIssueCode = "Ec2SubnetNotFound"
+	NodegroupIssueCodeEc2SubnetInvalidConfiguration            NodegroupIssueCode = "Ec2SubnetInvalidConfiguration"
+	NodegroupIssueCodeIamInstanceProfileNotFound               NodegroupIssueCode = "IamInstanceProfileNotFound"
+	NodegroupIssueCodeEc2SubnetMissingIpv6Assignment           NodegroupIssueCode = "Ec2SubnetMissingIpv6Assignment"
+	NodegroupIssueCodeIamLimitExceeded                         NodegroupIssueCode = "IamLimitExceeded"
+	NodegroupIssueCodeIamNodeRoleNotFound                      NodegroupIssueCode = "IamNodeRoleNotFound"
+	NodegroupIssueCodeNodeCreationFailure                      NodegroupIssueCode = "NodeCreationFailure"
+	NodegroupIssueCodeAsgInstanceLaunchFailures                NodegroupIssueCode = "AsgInstanceLaunchFailures"
+	NodegroupIssueCodeInstanceLimitExceeded                    NodegroupIssueCode = "InstanceLimitExceeded"
+	NodegroupIssueCodeInsufficientFreeAddresses                NodegroupIssueCode = "InsufficientFreeAddresses"
+	NodegroupIssueCodeAccessDenied                             NodegroupIssueCode = "AccessDenied"
+	NodegroupIssueCodeInternalFailure                          NodegroupIssueCode = "InternalFailure"
+	NodegroupIssueCodeClusterUnreachable                       NodegroupIssueCode = "ClusterUnreachable"
+	NodegroupIssueCodeAmiIdNotFound                            NodegroupIssueCode = "AmiIdNotFound"
+	NodegroupIssueCodeAutoScalingGroupOptInRequired            NodegroupIssueCode = "AutoScalingGroupOptInRequired"
+	NodegroupIssueCodeAutoScalingGroupRateLimitExceeded        NodegroupIssueCode = "AutoScalingGroupRateLimitExceeded"
+	NodegroupIssueCodeEc2LaunchTemplateDeletionFailure         NodegroupIssueCode = "Ec2LaunchTemplateDeletionFailure"
+	NodegroupIssueCodeEc2LaunchTemplateInvalidConfiguration    NodegroupIssueCode = "Ec2LaunchTemplateInvalidConfiguration"
+	NodegroupIssueCodeEc2LaunchTemplateMaxLimitExceeded        NodegroupIssueCode = "Ec2LaunchTemplateMaxLimitExceeded"
+	NodegroupIssueCodeEc2SubnetListTooLong                     NodegroupIssueCode = "Ec2SubnetListTooLong"
+	NodegroupIssueCodeIamThrottling                            NodegroupIssueCode = "IamThrottling"
+	NodegroupIssueCodeNodeTerminationFailure                   NodegroupIssueCode = "NodeTerminationFailure"
+	NodegroupIssueCodePodEvictionFailure                       NodegroupIssueCode = "PodEvictionFailure"
+	NodegroupIssueCodeSourceEc2LaunchTemplateNotFound          NodegroupIssueCode = "SourceEc2LaunchTemplateNotFound"
+	NodegroupIssueCodeLimitExceeded                            NodegroupIssueCode = "LimitExceeded"
+	NodegroupIssueCodeUnknown                                  NodegroupIssueCode = "Unknown"
+	NodegroupIssueCodeAutoScalingGroupInstanceRefreshActive    NodegroupIssueCode = "AutoScalingGroupInstanceRefreshActive"
+	NodegroupIssueCodeKubernetesLabelInvalid                   NodegroupIssueCode = "KubernetesLabelInvalid"
+	NodegroupIssueCodeEc2LaunchTemplateVersionMaxLimitExceeded NodegroupIssueCode = "Ec2LaunchTemplateVersionMaxLimitExceeded"
 )
 
 // Values returns all known values for NodegroupIssueCode. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (NodegroupIssueCode) Values() []NodegroupIssueCode {
 	return []NodegroupIssueCode{
 		"AutoScalingGroupNotFound",
@@ -538,6 +635,8 @@ func (NodegroupIssueCode) Values() []NodegroupIssueCode {
 		"LimitExceeded",
 		"Unknown",
 		"AutoScalingGroupInstanceRefreshActive",
+		"KubernetesLabelInvalid",
+		"Ec2LaunchTemplateVersionMaxLimitExceeded",
 	}
 }
 
@@ -555,8 +654,9 @@ const (
 )
 
 // Values returns all known values for NodegroupStatus. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (NodegroupStatus) Values() []NodegroupStatus {
 	return []NodegroupStatus{
 		"CREATING",
@@ -579,13 +679,33 @@ const (
 )
 
 // Values returns all known values for ResolveConflicts. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (ResolveConflicts) Values() []ResolveConflicts {
 	return []ResolveConflicts{
 		"OVERWRITE",
 		"NONE",
 		"PRESERVE",
+	}
+}
+
+type SupportType string
+
+// Enum values for SupportType
+const (
+	SupportTypeStandard SupportType = "STANDARD"
+	SupportTypeExtended SupportType = "EXTENDED"
+)
+
+// Values returns all known values for SupportType. Note that this can be expanded
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (SupportType) Values() []SupportType {
+	return []SupportType{
+		"STANDARD",
+		"EXTENDED",
 	}
 }
 
@@ -599,8 +719,9 @@ const (
 )
 
 // Values returns all known values for TaintEffect. Note that this can be expanded
-// in the future, and so it is only as up to date as the client. The ordering of
-// this slice is not guaranteed to be stable across updates.
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (TaintEffect) Values() []TaintEffect {
 	return []TaintEffect{
 		"NO_SCHEDULE",
@@ -640,11 +761,14 @@ const (
 	UpdateParamTypeSecurityGroups           UpdateParamType = "SecurityGroups"
 	UpdateParamTypeSubnets                  UpdateParamType = "Subnets"
 	UpdateParamTypeAuthenticationMode       UpdateParamType = "AuthenticationMode"
+	UpdateParamTypePodIdentityAssociations  UpdateParamType = "PodIdentityAssociations"
+	UpdateParamTypeUpgradePolicy            UpdateParamType = "UpgradePolicy"
 )
 
 // Values returns all known values for UpdateParamType. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (UpdateParamType) Values() []UpdateParamType {
 	return []UpdateParamType{
 		"Version",
@@ -674,6 +798,8 @@ func (UpdateParamType) Values() []UpdateParamType {
 		"SecurityGroups",
 		"Subnets",
 		"AuthenticationMode",
+		"PodIdentityAssociations",
+		"UpgradePolicy",
 	}
 }
 
@@ -688,8 +814,9 @@ const (
 )
 
 // Values returns all known values for UpdateStatus. Note that this can be
-// expanded in the future, and so it is only as up to date as the client. The
-// ordering of this slice is not guaranteed to be stable across updates.
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (UpdateStatus) Values() []UpdateStatus {
 	return []UpdateStatus{
 		"InProgress",
@@ -713,11 +840,13 @@ const (
 	UpdateTypeAddonUpdate                        UpdateType = "AddonUpdate"
 	UpdateTypeVpcConfigUpdate                    UpdateType = "VpcConfigUpdate"
 	UpdateTypeAccessConfigUpdate                 UpdateType = "AccessConfigUpdate"
+	UpdateTypeUpgradePolicyUpdate                UpdateType = "UpgradePolicyUpdate"
 )
 
 // Values returns all known values for UpdateType. Note that this can be expanded
-// in the future, and so it is only as up to date as the client. The ordering of
-// this slice is not guaranteed to be stable across updates.
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
 func (UpdateType) Values() []UpdateType {
 	return []UpdateType{
 		"VersionUpdate",
@@ -730,5 +859,6 @@ func (UpdateType) Values() []UpdateType {
 		"AddonUpdate",
 		"VpcConfigUpdate",
 		"AccessConfigUpdate",
+		"UpgradePolicyUpdate",
 	}
 }

@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -40,18 +41,42 @@ var checkLatestVersionCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check to see if you're running the latest version",
 	Run: func(cmd *cobra.Command, args []string) {
+		data := make(map[string]interface{})
+
 		latest_version, err := http.GetLatestVersion()
 		if err != nil {
-			log.Fatalf("error while checking for latest version: %v", err)
+			if jsonOutput {
+				data["error"] = fmt.Sprintf("error while checking for latest version: %v", err)
+				jsonBytes, _ := json.Marshal(data)
+				fmt.Println(string(jsonBytes))
+			} else {
+				log.Fatalf("error while checking for latest version: %v", err)
+			}
 		}
 		if latest_version != internal.Version {
-			binary_path := os.Args[0]
-			fmt.Printf("You're running version %s\n\n", internal.Version)
-			fmt.Printf("There is a newer version available (%s)!\n", latest_version)
-			fmt.Printf("Please upgrade:\n%s version upgrade\n", binary_path)
+			if jsonOutput {
+				data["current_version"] = internal.Version
+				data["latest_version"] = latest_version
+				data["upgrade_available"] = true
+				jsonBytes, _ := json.Marshal(data)
+				fmt.Println(string(jsonBytes))
+			} else {
+				binary_path := os.Args[0]
+				fmt.Printf("You're running version %s\n\n", internal.Version)
+				fmt.Printf("There is a newer version available (%s)!\n", latest_version)
+				fmt.Printf("Please upgrade:\n%s version upgrade\n", binary_path)
+			}
 		} else {
-			fmt.Printf("You are up to date!\n")
-			fmt.Printf("You're running version %s\n", internal.Version)
+			if jsonOutput {
+				data["current_version"] = internal.Version
+				data["latest_version"] = latest_version
+				data["upgrade_available"] = false
+				jsonBytes, _ := json.Marshal(data)
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("You are up to date!\n")
+				fmt.Printf("You're running version %s\n", internal.Version)
+			}
 		}
 	},
 }

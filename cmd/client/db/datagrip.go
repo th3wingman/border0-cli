@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -61,32 +60,65 @@ var dataGripCmd = &cobra.Command{
 			return err
 		}
 
-		connectionName := hostname
+		var (
+			connectionName string
+			datagripConfig datagrip.Config
+		)
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
-			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
-			if err != nil {
-				return fmt.Errorf("could not start listener: %w", err)
+		if info.PrivateNetworkEnabled {
+			// Connect over VPN
+			// No need to add SSL certificates
+			// No need to start a listener
+
+			connectionName = info.SocketName
+
+			datagripConfig = datagrip.Config{
+				PrivateNetworkEnabled: true,
+
+				// VPN connection
+				Type:     pickedHost.DatabaseType,
+				Name:     connectionName,
+				Host:     info.SocketName,
+				Port:     info.Port,
+				Database: dbName,
+			}
+		} else {
+			// Connect over TLS via proxy
+			// Need to add SSL certificates
+			// Need to start a listener
+
+			connectionName = hostname
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+				info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+				if err != nil {
+					return fmt.Errorf("could not start listener: %w", err)
+				}
+
+				hostname = "localhost"
 			}
 
-			hostname = "localhost"
+			certChainPath, err := client.DownloadCertificateChain(hostname)
+			if err != nil {
+				return err
+			}
+
+			datagripConfig = datagrip.Config{
+				PrivateNetworkEnabled: false,
+
+				// Proxy connection over TLS
+				Type:        pickedHost.DatabaseType,
+				Name:        connectionName,
+				Host:        hostname,
+				Port:        info.Port,
+				Database:    dbName,
+				CAPath:      certChainPath,
+				SSLCertPath: info.CertificatePath,
+				SSLKeyPath:  info.PrivateKeyPath,
+			}
 		}
 
-		certChainPath, err := client.DownloadCertificateChain(hostname)
-		if err != nil {
-			return err
-		}
-
-		xmlDoc, err := datagrip.DataSourcesXML(&datagrip.Config{
-			Type:        pickedHost.DatabaseType,
-			Name:        connectionName,
-			Host:        hostname,
-			Port:        info.Port,
-			Database:    dbName,
-			CAPath:      certChainPath,
-			SSLCertPath: info.CertificatePath,
-			SSLKeyPath:  info.PrivateKeyPath,
-		})
+		xmlDoc, err := datagrip.DataSourcesXML(&datagripConfig)
 		if err != nil {
 			return err
 		}
@@ -108,7 +140,7 @@ var dataGripCmd = &cobra.Command{
 			}
 		}
 		xmlPath := filepath.Join(dotIdeaPath, "dataSources.xml")
-		if err = ioutil.WriteFile(xmlPath, []byte(xmlDoc), 0600); err != nil {
+		if err = os.WriteFile(xmlPath, []byte(xmlDoc), 0600); err != nil {
 			return fmt.Errorf("failed writing DataGrip dataSources.xml file: %w", err)
 		}
 
@@ -142,10 +174,15 @@ var dataGripCmd = &cobra.Command{
 			err = client.ExecCommand("datagrip", configPath)
 		}
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
-			ch := make(chan os.Signal, 1)
-			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-			<-ch
+		if !info.PrivateNetworkEnabled {
+			// Connect over TLS via proxy
+			// Need to wait for the user to close the connection
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
+				ch := make(chan os.Signal, 1)
+				signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+				<-ch
+			}
 		}
 
 		return err

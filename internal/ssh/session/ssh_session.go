@@ -7,12 +7,13 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/ssh/config"
 	"github.com/borderzero/border0-cli/internal/ssh/session/common"
+	"github.com/borderzero/border0-cli/internal/util/recorder"
+	"github.com/borderzero/border0-go/lib/types/pointer"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
@@ -36,7 +39,7 @@ var _ SessionHandler = (*sshSessionHandler)(nil)
 type sshSession struct {
 	config             *config.ProxyConfig
 	logger             *zap.Logger
-	metadata           *border0.E2EEncryptionMetadata
+	metadata           *border0.ConnMetadata
 	sshServerConfig    *ssh.ServerConfig
 	sshClientConfig    *ssh.ClientConfig
 	downstreamSshConn  *ssh.ServerConn
@@ -55,6 +58,7 @@ type sshChannel struct {
 	downstreamChannel ssh.Channel
 	width             int
 	height            int
+	pty               bool
 }
 
 func NewSshSessionHandler(logger *zap.Logger, config *config.ProxyConfig) (*sshSessionHandler, error) {
@@ -73,10 +77,10 @@ func NewSshSessionHandler(logger *zap.Logger, config *config.ProxyConfig) (*sshS
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	}
 
-	if len(config.IdentityPrivateKey) > 0 {
-		signer, err := ssh.ParsePrivateKey(config.IdentityPrivateKey)
+	if config.IdentityPrivateKeyVar != "" {
+		signer, err := newVariableSourceSigner(logger, config.IdentityPrivateKeyVar)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse identity private key: %s", err)
+			return nil, fmt.Errorf("failed to initialize private key signer: %v", err)
 		}
 
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
@@ -87,7 +91,7 @@ func NewSshSessionHandler(logger *zap.Logger, config *config.ProxyConfig) (*sshS
 	}
 
 	if len(authMethods) == 0 {
-		if !config.EndToEndEncryption {
+		if !config.Socket.IsPrimaryProxy() {
 			return nil, fmt.Errorf("no authentication methods provided")
 		} else {
 			config.Border0CertAuth = true
@@ -130,7 +134,45 @@ func (s *sshSessionHandler) Proxy(conn net.Conn) {
 		sshClientConfig: s.config.SshClientConfig,
 	}
 
-	if s.config.EndToEndEncryption {
+	var lastError error
+	switch {
+	case s.config.Socket.PrivateNetworkEnabled:
+		pnConn, ok := conn.(*border0.PrivateNetworkConn)
+		if !ok {
+			s.logger.Error("failed to cast connection to private network")
+			return
+		}
+
+		if pnConn.Metadata == nil {
+			s.logger.Error("invalid private network metadata")
+			return
+		}
+
+		defer func() {
+			if err := s.config.Border0API.EndSession(models.Session{
+				SessionKey: pnConn.Metadata.SessionKey,
+				SocketID:   s.config.Socket.SocketID,
+				EndTime:    pointer.To(time.Now()),
+			}); err != nil {
+				session.logger.Error("failed to end session", zap.Error(err))
+			}
+		}()
+
+		session.metadata = pnConn.Metadata
+		session.logger = session.logger.With(zap.String("session_key", session.metadata.SessionKey))
+		session.sshServerConfig.NoClientAuthCallback = common.GetNoClientAuthCallback(
+			s.config.Border0API,
+			s.config.Socket,
+			pnConn.Metadata,
+			true,
+			&lastError,
+		)
+
+		if s.config.Border0CertAuth {
+			session.sshClientConfig.Auth = []ssh.AuthMethod{ssh.
+				PublicKeysCallback(session.userPublicKeyCallback)}
+		}
+	case s.config.EndToEndEncryption:
 		e2EEncryptionConn, ok := conn.(border0.E2EEncryptionConn)
 		if !ok {
 			conn.Close()
@@ -150,22 +192,40 @@ func (s *sshSessionHandler) Proxy(conn net.Conn) {
 			s.config.Border0API,
 			s.config.Socket,
 			e2EEncryptionConn.Metadata,
+			true,
 		)
 
 		if s.config.Border0CertAuth {
 			session.sshClientConfig.Auth = []ssh.AuthMethod{ssh.
 				PublicKeysCallback(session.userPublicKeyCallback)}
 		}
+	default:
+		session.metadata = &border0.ConnMetadata{}
 	}
 
 	var err error
 	session.downstreamSshConn, session.downstreamSshChans, session.downstreamSshReqs, err = ssh.NewServerConn(conn, session.config.SshServerConfig)
 	if err != nil {
-		session.logger.Error("failed to accept ssh connection", zap.Error(err))
+		if sshErr, ok := err.(*ssh.ServerAuthError); ok && session.config.Socket.IsPrimaryProxy() {
+			if err := s.config.Border0API.UpdateSession(models.SessionUpdate{
+				SessionKey:     session.metadata.SessionKey,
+				Socket:         session.config.Socket,
+				Result:         models.ResultDenied,
+				AuthInfoFailed: sshErr.Error(),
+			}); err != nil {
+				session.logger.Error("failed to update session", zap.Error(err))
+			}
+
+			return
+		}
+
+		if err := session.errorEvent("ssh_connection", fmt.Sprintf("failed to accept connection: %s", err)); err != nil {
+			session.logger.Error("failed to create session event", zap.Error(err))
+		}
 		return
 	}
 
-	if session.config.EndToEndEncryption {
+	if session.config.Socket.IsPrimaryProxy() {
 		if err := session.config.Border0API.UpdateSession(models.SessionUpdate{
 			SessionKey: session.metadata.SessionKey,
 			Socket:     session.config.Socket,
@@ -178,7 +238,10 @@ func (s *sshSessionHandler) Proxy(conn net.Conn) {
 
 	if session.config.AwsUpstreamType == "aws-ec2connect" {
 		if err := session.setupEc2InstanceConnect(); err != nil {
-			session.logger.Error("failed to setup ec2 connect", zap.Error(err))
+			if err := session.errorEvent("ssh_ec2_connect", fmt.Sprintf("failed to setup ec2 connect: %s", err)); err != nil {
+				session.logger.Error("failed to create session event", zap.Error(err))
+			}
+
 			return
 		}
 	}
@@ -198,7 +261,9 @@ func (s *sshSessionHandler) Proxy(conn net.Conn) {
 	// so we can disregard the reqs channel
 	go ssh.DiscardRequests(session.downstreamSshReqs)
 	if err := session.handleChannels(); err != nil {
-		session.logger.Error("failed to handle channels", zap.Error(err))
+		if err := session.errorEvent("ssh_session", err.Error()); err != nil {
+			session.logger.Error("failed to create session event", zap.Error(err))
+		}
 		return
 	}
 }
@@ -282,7 +347,50 @@ func (s *sshSession) handleChannels() error {
 
 	defer s.downstreamSshConn.Close()
 
-	upstreamConn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", s.config.Hostname, s.config.Port), 5*time.Second)
+	var max_session_duration int
+	if s.config.Socket.IsPrimaryProxy() {
+		for _, action := range s.metadata.AllowedActions {
+			switch permission := action.(type) {
+			case models.Permissions:
+				if permission.SSH != nil && permission.SSH.MaxSessionDurationSeconds != nil {
+					if *permission.SSH.MaxSessionDurationSeconds > max_session_duration {
+						max_session_duration = *permission.SSH.MaxSessionDurationSeconds
+					}
+				}
+			}
+		}
+
+		if max_session_duration > 0 {
+			go func() {
+				select {
+				case <-time.After(time.Duration(max_session_duration) * time.Second):
+					metadata, err := json.Marshal(struct {
+						SessionDuration int    `json:"session_duration"`
+						User            string `json:"user"`
+					}{max_session_duration, s.sshClientConfig.User})
+
+					if err != nil {
+						s.logger.Error("failed to create session event", zap.Error(err))
+					} else {
+						if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+							SessionKey: s.metadata.SessionKey,
+							Socket:     s.config.Socket,
+							Type:       "ssh_session_duration",
+							Status:     "denied",
+							Metadata:   string(metadata),
+						}); err != nil {
+							s.logger.Error("failed to create session event", zap.Error(err))
+						}
+
+						cancel()
+					}
+				case <-ctx.Done():
+				}
+			}()
+		}
+	}
+
+	upstreamConn, err := net.DialTimeout("tcp", net.JoinHostPort(s.config.Hostname, strconv.Itoa(s.config.Port)), 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("unable to connect to upstream host: %s", err)
 	}
@@ -307,13 +415,13 @@ func (s *sshSession) handleChannels() error {
 
 			switch newChannel.ChannelType() {
 			case "session":
-				go s.handleSessionChannel(ctx, cancel, newChannel)
+				go s.handleSessionChannel(ctx, newChannel)
 			case "direct-tcpip":
-				go s.handleDirectTcpipChannel(ctx, cancel, newChannel)
+				go s.handleDirectTcpipChannel(newChannel)
 			default:
-				s.logger.Error("unknown client channel type", zap.String("channel_type", newChannel.ChannelType()))
-				if err := newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", newChannel.ChannelType())); err != nil {
-					return err
+				newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", newChannel.ChannelType()))
+				if err := s.errorEvent("ssh_channel", fmt.Sprintf("unknown channel type: %s", newChannel.ChannelType())); err != nil {
+					s.logger.Error("failed to create session event", zap.Error(err))
 				}
 			}
 		case newChannel := <-s.upstreamSshChans:
@@ -323,10 +431,13 @@ func (s *sshSession) handleChannels() error {
 
 			switch newChannel.ChannelType() {
 			default:
-				s.logger.Error("unknown server channel type", zap.String("channel_type", newChannel.ChannelType()))
+				if err := s.errorEvent("ssh_channel", fmt.Sprintf("unknown unknown server type: %s", newChannel.ChannelType())); err != nil {
+					s.logger.Error("failed to create session event", zap.Error(err))
+				}
 				if err := newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", newChannel.ChannelType())); err != nil {
 					return err
 				}
+
 			}
 		case <-ctx.Done():
 			return nil
@@ -344,31 +455,136 @@ func (s *sshSession) keepAlive(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if _, _, err := s.upstreamSshConn.SendRequest("keepalive@openssh.com", true, nil); err != nil {
-				s.logger.Error("failed to send keepalive request", zap.Error(err))
+				if err := s.errorEvent("ssh_session", fmt.Sprintf("failed to send keepalive request: %s", err)); err != nil {
+					s.logger.Error("failed to create session event", zap.Error(err))
+				}
+
 				return
 			}
 		}
 	}
 }
 
-func (s *sshSession) handleDirectTcpipChannel(ctx context.Context, cancel context.CancelFunc, newChannel ssh.NewChannel) {
+func (s *sshSession) handleDirectTcpipChannel(newChannel ssh.NewChannel) {
+	var localForwardData localForwardChannel
+
+	if err := ssh.Unmarshal(newChannel.ExtraData(), &localForwardData); err != nil {
+		newChannel.Reject(ssh.ConnectionFailed, "failed to parse data")
+		if err := s.errorEvent("ssh_tcpforward", fmt.Sprintf("failed to parse payload: %s", err)); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
+		return
+	}
+
+	if s.config.Socket.IsPrimaryProxy() && !isAllowed("tcp_forwarding", "", &localForwardData, s.metadata.AllowedActions, s.logger) {
+		newChannel.Reject(ssh.ConnectionFailed, "tcp_forwarding access denied by policy")
+
+		metadata, err := json.Marshal(localForwardData)
+		if err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+			return
+		}
+
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       "ssh_tcpforward",
+			Status:     "denied",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
+		return
+	}
 	upstreamChannel, _, err := s.upstreamSshConn.OpenChannel("direct-tcpip", newChannel.ExtraData())
 	if err != nil {
 		if sshErr, ok := err.(*ssh.OpenChannelError); ok {
 			newChannel.Reject(sshErr.Reason, sshErr.Message)
+			metadata, err := json.Marshal(struct {
+				Error   string              `json:"error"`
+				Payload localForwardChannel `json:"payload"`
+			}{fmt.Sprintf("failed to open channel %s: %s", sshErr.Reason, sshErr.Message), localForwardData})
+			if err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+				return
+			}
+
+			if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+				SessionKey: s.metadata.SessionKey,
+				Socket:     s.config.Socket,
+				Type:       "ssh_tcpforward",
+				Status:     "error",
+				Metadata:   string(metadata),
+			}); err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+			}
 		} else {
 			newChannel.Reject(ssh.ConnectionFailed, fmt.Sprintf("Could not connect to destination host: %s", err))
+			metadata, err := json.Marshal(struct {
+				Error   string              `json:"error"`
+				Payload localForwardChannel `json:"payload"`
+			}{fmt.Sprintf("failed to open channel %s", err), localForwardData})
+			if err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+				return
+			}
+
+			if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+				SessionKey: s.metadata.SessionKey,
+				Socket:     s.config.Socket,
+				Type:       "ssh_tcpforward",
+				Status:     "error",
+				Metadata:   string(metadata),
+			}); err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+			}
 		}
+		return
 	}
 
 	defer upstreamChannel.Close()
 
 	sshChannel, _, err := newChannel.Accept()
 	if err != nil {
-		log.Printf("Could not accept channel: %v", err)
+		metadata, err := json.Marshal(struct {
+			Error   string              `json:"error"`
+			Payload localForwardChannel `json:"payload"`
+		}{fmt.Errorf("failed to accept channel: %w", err).Error(), localForwardData})
+		if err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+			return
+		}
+
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       "ssh_tcpforward",
+			Status:     "error",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 	defer sshChannel.Close()
+
+	metadata, err := json.Marshal(localForwardData)
+	if err != nil {
+		s.logger.Error("failed to create session event", zap.Error(err))
+	} else {
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       "ssh_tcpforward",
+			Status:     "success",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -388,7 +604,7 @@ func (s *sshSession) handleDirectTcpipChannel(ctx context.Context, cancel contex
 	wg.Wait()
 }
 
-func (s *sshSession) handleSessionChannel(ctx context.Context, cancel context.CancelFunc, newChannel ssh.NewChannel) {
+func (s *sshSession) handleSessionChannel(ctx context.Context, newChannel ssh.NewChannel) {
 	channel := &sshChannel{
 		sshSession: s,
 		width:      80,
@@ -397,8 +613,11 @@ func (s *sshSession) handleSessionChannel(ctx context.Context, cancel context.Ca
 
 	upstreamSession, err := s.upstreamSshClient.NewSession()
 	if err != nil {
-		s.logger.Error("failed to open upstream session", zap.Error(err))
 		newChannel.Reject(ssh.ConnectionFailed, fmt.Sprintf("failed to open upstream channel (%s)", err))
+		if err := s.errorEvent("ssh_session", fmt.Sprintf("failed to open upstream session: %s", err)); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 
@@ -407,8 +626,30 @@ func (s *sshSession) handleSessionChannel(ctx context.Context, cancel context.Ca
 
 	downstreamChannel, downstreamChannelRequests, err := newChannel.Accept()
 	if err != nil {
-		s.logger.Error("failed to accept channel", zap.Error(err))
+		if err := s.errorEvent("ssh_session", fmt.Sprintf("failed to accept channel: %s", err)); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
 		return
+	}
+
+	metadata, err := json.Marshal(struct {
+		ChannelType   string `json:"channel_type"`
+		User          string `json:"user"`
+		ClientVersion string `json:"client_version"`
+	}{newChannel.ChannelType(), s.sshClientConfig.User, string(s.downstreamSshConn.ClientVersion())})
+	if err != nil {
+		s.logger.Error("failed to create session event", zap.Error(err))
+		return
+	}
+
+	if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+		SessionKey: s.metadata.SessionKey,
+		Socket:     s.config.Socket,
+		Type:       "ssh_session",
+		Status:     "success",
+		Metadata:   string(metadata),
+	}); err != nil {
+		s.logger.Error("failed to create session event", zap.Error(err))
 	}
 
 	channel.downstreamChannel = downstreamChannel
@@ -455,6 +696,7 @@ func (s *sshChannel) handleRequest(req *ssh.Request) {
 		if req.WantReply {
 			req.Reply(true, nil)
 		}
+		s.pty = true
 	case "window-change":
 		if _, err := s.upstreamSession.SendRequest(req.Type, req.WantReply, req.Payload); err != nil {
 			s.logger.Error("failed to send request", zap.Error(err))
@@ -472,20 +714,52 @@ func (s *sshChannel) handleRequest(req *ssh.Request) {
 		if string(req.Payload[4:]) == "sftp" {
 			go s.handleSftp(req)
 		} else {
-			s.logger.Error("unknown subsystem", zap.String("subsystem", string(req.Payload[4:])))
 			req.Reply(false, nil)
+			if err := s.errorEvent("ssh_subsystem", fmt.Sprintf("unknown subsystem: %s", string(req.Payload[4:]))); err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+			}
 		}
 	case "exec":
 		go s.handleExec(req)
 	case "shell":
 		go s.handleShell(req)
 	default:
-		s.logger.Error("unknown request type", zap.String("request_type", req.Type))
-		req.Reply(false, nil)
+		if req.WantReply {
+			req.Reply(false, nil)
+		}
 	}
 }
 
 func (s *sshChannel) handleSftp(req *ssh.Request) {
+	if s.config.Socket.IsPrimaryProxy() && !isAllowed("sftp", "", nil, s.metadata.AllowedActions, s.logger) {
+		if err := req.Reply(false, nil); err != nil {
+			s.logger.Error("failed to reply to request", zap.Error(err))
+		}
+
+		s.downstreamChannel.Stderr().Write([]byte("Request not allowed\n"))
+
+		metadata, err := json.Marshal(struct {
+			User          string `json:"user"`
+			ClientVersion string `json:"client_version"`
+		}{s.sshClientConfig.User, string(s.downstreamSshConn.ClientVersion())})
+		if err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+			return
+		}
+
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       "ssh_sftp",
+			Status:     "denied",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
+		return
+	}
+
 	defer s.upstreamSession.Close()
 
 	upstreamStdin, upstreamStdout, upstreamStderr, err := s.setupPipes(s.upstreamSession)
@@ -494,10 +768,30 @@ func (s *sshChannel) handleSftp(req *ssh.Request) {
 		return
 	}
 
+	metadata, err := json.Marshal(struct {
+		User          string `json:"user"`
+		ClientVersion string `json:"client_version"`
+	}{s.sshClientConfig.User, string(s.downstreamSshConn.ClientVersion())})
+	if err != nil {
+		s.logger.Error("failed to create session event", zap.Error(err))
+	} else {
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       "ssh_sftp",
+			Status:     "success",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+	}
+
 	if s.config.IsRecordingEnabled() {
 		r, err := s.record(nil)
 		if err != nil {
-			s.logger.Error("failed to record session", zap.Error(err))
+			if err := s.errorEvent("ssh_recording", fmt.Sprintf("failed to record session: %s", err)); err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+			}
 			return
 		}
 
@@ -528,6 +822,10 @@ func (s *sshChannel) handleSftp(req *ssh.Request) {
 	var ok bool
 	ok, err = s.upstreamSession.SendRequest(req.Type, req.WantReply, req.Payload)
 	if err != nil {
+		if err := s.errorEvent("ssh_sftp", fmt.Sprintf("failed to start sftp session: %s", err)); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		req.Reply(false, []byte(fmt.Sprint(err)))
 		return
 	}
@@ -540,6 +838,38 @@ func (s *sshChannel) handleSftp(req *ssh.Request) {
 }
 
 func (s *sshChannel) handleExec(req *ssh.Request) {
+	command := string(req.Payload[4:])
+
+	if s.config.Socket.IsPrimaryProxy() && !isAllowed(req.Type, command, nil, s.metadata.AllowedActions, s.logger) {
+		if err := req.Reply(false, nil); err != nil {
+			s.logger.Error("failed to reply to request", zap.Error(err))
+		}
+
+		s.downstreamChannel.Stderr().Write([]byte("Request not allowed\n"))
+
+		metadata, err := json.Marshal(struct {
+			User          string `json:"user"`
+			ClientVersion string `json:"client_version"`
+			Command       string `json:"command,omitempty"`
+		}{s.sshClientConfig.User, string(s.downstreamSshConn.ClientVersion()), command})
+		if err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+			return
+		}
+
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       fmt.Sprintf("ssh_%s", req.Type),
+			Status:     "denied",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
+		return
+	}
+
 	defer s.upstreamSession.Close()
 
 	upstreamStdin, upstreamStdout, upstreamStderr, err := s.setupPipes(s.upstreamSession)
@@ -548,12 +878,32 @@ func (s *sshChannel) handleExec(req *ssh.Request) {
 		return
 	}
 
-	command := string(req.Payload[4:])
+	metadata, err := json.Marshal(struct {
+		Username      string `json:"username"`
+		Pty           bool   `json:"pty"`
+		Command       string `json:"command,omitempty"`
+		ClientVersion string `json:"client_version"`
+	}{Username: s.sshClientConfig.User, Pty: s.pty, Command: command, ClientVersion: string(s.downstreamSshConn.ClientVersion())})
+	if err != nil {
+		s.logger.Error("failed to create session event", zap.Error(err))
+	} else {
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       fmt.Sprintf("ssh_%s", req.Type),
+			Status:     "success",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+	}
 
 	if s.config.IsRecordingEnabled() {
 		r, err := s.record(&upstreamStdout)
 		if err != nil {
-			s.logger.Error("failed to record session", zap.Error(err))
+			if err := s.errorEvent("ssh_recording", fmt.Sprintf("failed to record session: %s", err)); err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+			}
 			return
 		}
 
@@ -581,13 +931,67 @@ func (s *sshChannel) handleExec(req *ssh.Request) {
 		io.Copy(s.downstreamChannel.Stderr(), upstreamStderr)
 	}()
 
-	err = s.upstreamSession.Run(command)
+	runErr := s.upstreamSession.Run(command)
+	if runErr != nil {
+		if err := s.errorEvent("ssh_shell", fmt.Sprintf("failed to request exec: %s", runErr)); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+	}
 
 	wg.Wait()
 }
 
 func (s *sshChannel) handleShell(req *ssh.Request) {
+	if s.config.Socket.IsPrimaryProxy() && !isAllowed(req.Type, "", nil, s.metadata.AllowedActions, s.logger) {
+		if err := req.Reply(false, nil); err != nil {
+			s.logger.Error("failed to reply to request", zap.Error(err))
+		}
+
+		s.downstreamChannel.Stderr().Write([]byte("Request not allowed\n"))
+
+		metadata, err := json.Marshal(struct {
+			User          string `json:"user"`
+			ClientVersion string `json:"client_version"`
+		}{s.sshClientConfig.User, string(s.downstreamSshConn.ClientVersion())})
+		if err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+			return
+		}
+
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       fmt.Sprintf("ssh_%s", req.Type),
+			Status:     "denied",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
+		return
+	}
+
 	defer s.upstreamSession.Close()
+
+	metadata, err := json.Marshal(struct {
+		Username      string `json:"username"`
+		Pty           bool   `json:"pty"`
+		Command       string `json:"command,omitempty"`
+		ClientVersion string `json:"client_version"`
+	}{Username: s.sshClientConfig.User, Pty: s.pty, ClientVersion: string(s.downstreamSshConn.ClientVersion())})
+	if err != nil {
+		s.logger.Error("failed to create session event", zap.Error(err))
+	} else {
+		if err := s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+			SessionKey: s.metadata.SessionKey,
+			Socket:     s.config.Socket,
+			Type:       fmt.Sprintf("ssh_%s", req.Type),
+			Status:     "success",
+			Metadata:   string(metadata),
+		}); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+	}
 
 	upstreamStdin, upstreamStdout, upstreamStderr, err := s.setupPipes(s.upstreamSession)
 	if err != nil {
@@ -598,7 +1002,9 @@ func (s *sshChannel) handleShell(req *ssh.Request) {
 	if s.config.IsRecordingEnabled() {
 		r, err := s.record(&upstreamStdout)
 		if err != nil {
-			s.logger.Error("failed to record session", zap.Error(err))
+			if err := s.errorEvent("ssh_recording", fmt.Sprintf("failed to record session: %s", err)); err != nil {
+				s.logger.Error("failed to create session event", zap.Error(err))
+			}
 			return
 		}
 
@@ -628,6 +1034,10 @@ func (s *sshChannel) handleShell(req *ssh.Request) {
 	var ok bool
 	ok, err = s.upstreamSession.SendRequest(req.Type, req.WantReply, req.Payload)
 	if err != nil {
+		if err := s.errorEvent("ssh_shell", fmt.Sprintf("failed to request shell: %s", err)); err != nil {
+			s.logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		req.Reply(false, []byte(fmt.Sprint(err)))
 		return
 	}
@@ -661,7 +1071,7 @@ func closeChannel(downstreamChannel ssh.Channel, err error) {
 	downstreamChannel.Close()
 }
 
-func (s *sshChannel) record(reader *io.Reader) (*common.Recording, error) {
+func (s *sshChannel) record(reader *io.Reader) (*recorder.AsciinemaRecorder, error) {
 	pr, pw := io.Pipe()
 	s.sessionWriter = pw
 
@@ -669,7 +1079,11 @@ func (s *sshChannel) record(reader *io.Reader) (*common.Recording, error) {
 		*reader = io.TeeReader(*reader, pw)
 	}
 
-	r := common.NewRecording(s.logger, pr, s.config.Socket.SocketID, s.metadata.SessionKey, s.config.Border0API, s.width, s.height)
+	recorderOpts := []recorder.AsciinemaRecorderOption{
+		recorder.WithAsciinemaHeight(s.height),
+		recorder.WithAsciinemaWidth(s.width),
+	}
+	r := recorder.NewAsciinemaRecorder(s.logger, s.config.Border0API, pr, s.config.Socket.SocketID, s.metadata.SessionKey, recorderOpts...)
 
 	if err := r.Record(); err != nil {
 		return nil, err
@@ -718,4 +1132,28 @@ func (s *sshSession) userPublicKeyCallback() ([]ssh.Signer, error) {
 	}
 
 	return []ssh.Signer{certSigner}, nil
+}
+
+func (s *sshSession) errorEvent(eventType string, message string) error {
+	var clientVersion string
+	if s.downstreamSshConn != nil {
+		clientVersion = string(s.downstreamSshConn.ClientVersion())
+	}
+
+	metadata, err := json.Marshal(struct {
+		User          string `json:"user,omitempty"`
+		ClientVersion string `json:"client_version,omitempty"`
+		Error         string `json:"error"`
+	}{s.sshClientConfig.User, clientVersion, message})
+	if err != nil {
+		return err
+	}
+
+	return s.config.Border0API.CreateSessionEvent(models.SessionEvent{
+		SessionKey: s.metadata.SessionKey,
+		Socket:     s.config.Socket,
+		Type:       eventType,
+		Status:     "error",
+		Metadata:   string(metadata),
+	})
 }

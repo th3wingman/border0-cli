@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -17,8 +18,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
+	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/util"
+	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
 	"go.uber.org/zap"
@@ -33,7 +36,8 @@ type postgresHandler struct {
 }
 
 type postgresServerHandler interface {
-	HandleConnection()
+	HandleConnection(*pgconn.HijackedConn)
+	ErrorEvent(eventType, message string) error
 }
 
 func newPostgresHandler(c Config) (*postgresHandler, error) {
@@ -47,7 +51,7 @@ func newPostgresHandler(c Config) (*postgresHandler, error) {
 	}
 
 	var tlsConfig *tls.Config
-	if !c.E2eEncryptionEnabled {
+	if !c.Socket.IsPrimaryProxy() {
 		generatedCert, err := generateX509KeyPair()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate tls certificate: %s", err)
@@ -155,10 +159,98 @@ func (h postgresHandler) handleClient(c net.Conn) {
 		h.UpstreamConfig.Database = db
 	}
 
+	var metadata *border0.ConnMetadata
+
+	switch {
+	case h.Socket.PrivateNetworkEnabled:
+		pnConn, ok := c.(*border0.PrivateNetworkConn)
+		if !ok {
+			h.Logger.Error("failed to cast connection to private network")
+			return
+		}
+
+		if pnConn.Metadata == nil {
+			h.Logger.Error("invalid private network metadata")
+			return
+		}
+
+		defer func() {
+			if err := h.Config.Border0API.EndSession(models.Session{
+				SessionKey: pnConn.Metadata.SessionKey,
+				SocketID:   h.Config.Socket.SocketID,
+				EndTime:    pointer.To(time.Now()),
+			}); err != nil {
+				h.Logger.Error("failed to end session", zap.Error(err))
+			}
+		}()
+
+		metadata = pnConn.Metadata
+	case h.Config.E2eEncryptionEnabled:
+		e2eeConn, ok := c.(border0.E2EEncryptionConn)
+		if !ok {
+			c.Close()
+			h.Logger.Error("failed to cast connection to e2eencryption")
+			return
+		}
+
+		if e2eeConn.Metadata == nil {
+			h.Logger.Error("invalid e2e metadata")
+			return
+		}
+
+		metadata = e2eeConn.Metadata
+	}
+
+	var serverHandler postgresServerHandler
+
+	if h.Config.Socket.IsPrimaryProxy() {
+		if !isDatabaseAllowed(metadata.AllowedActions, h.UpstreamConfig.Database) {
+			if err := h.Border0API.UpdateSession(models.SessionUpdate{
+				SessionKey:     metadata.SessionKey,
+				Socket:         &h.Socket,
+				Result:         models.ResultDenied,
+				AuthInfoFailed: "database access denied by policy",
+			}); err != nil {
+				h.Logger.Error("failed to update session", zap.Error(err))
+			}
+
+			clientConn.Send(&pgproto3.ErrorResponse{
+				Severity: "ERROR",
+				Code:     "28000",
+				Message:  "User not authorized to access database",
+				Detail:   fmt.Sprintf("User \"%s\" is not allowed to access database %s.", metadata.UserEmail, h.UpstreamConfig.Database),
+			})
+
+			return
+		}
+
+		serverHandler = &postgresLocalHandler{
+			logger:          h.Logger.With(zap.String("session_key", metadata.SessionKey)),
+			metadata:        metadata,
+			border0API:      h.Border0API,
+			socket:          h.Socket,
+			lastAuth:        time.Now(),
+			recordingChan:   make(chan message, 100),
+			serverConn:      c,
+			serverBackend:   clientConn,
+			preparedQueries: make(map[string]string),
+			binds:           make(map[string]bind),
+			database:        h.UpstreamConfig.Database,
+		}
+	} else {
+		serverHandler = &postgresCopyyHandler{
+			serverConn: c,
+			logger:     h.Logger,
+		}
+	}
+
 	if h.RdsIam {
 		authenticationToken, err := auth.BuildAuthToken(context.TODO(), net.JoinHostPort(h.Hostname, strconv.Itoa(h.Port)), h.AwsRegion, h.Username, h.awsCredentials)
 		if err != nil {
-			h.Logger.Error("sqlauthproxy: failed to create authentication token", zap.Error(err))
+			if err := serverHandler.ErrorEvent("database_rds_iam", fmt.Sprintf("failed to create authentication token: %s", err)); err != nil {
+				h.Logger.Error("failed to create session event", zap.Error(err))
+			}
+
 			return
 		}
 
@@ -167,7 +259,27 @@ func (h postgresHandler) handleClient(c net.Conn) {
 
 	conn, err := pgconn.ConnectConfig(ctx, h.UpstreamConfig)
 	if err != nil {
-		h.Logger.Error("sqlauthproxy: failed to connect to upstream", zap.Error(err))
+		var e *pgconn.PgError
+		if errors.As(err, &e) {
+			clientConn.Send(&pgproto3.ErrorResponse{
+				Severity: e.Severity,
+				Code:     e.Code,
+				Message:  e.Message,
+				Detail:   e.Detail,
+			})
+		} else {
+			clientConn.Send(&pgproto3.ErrorResponse{
+				Severity: "ERROR",
+				Code:     "08006",
+				Message:  "Connection error",
+				Detail:   err.Error(),
+			})
+		}
+
+		if err := serverHandler.ErrorEvent("database_connection", fmt.Sprintf("failed to connect to upstream: %s", err)); err != nil {
+			h.Logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 
@@ -175,52 +287,22 @@ func (h postgresHandler) handleClient(c net.Conn) {
 
 	pgconn, err := conn.Hijack()
 	if err != nil {
-		h.Logger.Error("sqlauthproxy: failed to connect to upstream", zap.Error(err))
+		if err := serverHandler.ErrorEvent("database_connection", fmt.Sprintf("failed to connect to upstream: %s", err)); err != nil {
+			h.Logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 
 	if err = h.handleClientAuthRequest(clientConn, pgconn.ParameterStatuses); err != nil {
-		h.Logger.Error("sqlauthproxy: failed to handle client authentication", zap.Error(err))
+		if err := serverHandler.ErrorEvent("database_connection", fmt.Sprintf("failed to handle client authentication: %s", err)); err != nil {
+			h.Logger.Error("failed to create session event", zap.Error(err))
+		}
+
 		return
 	}
 
-	var serverHandler postgresServerHandler
-	if h.Config.E2eEncryptionEnabled {
-		e2EEncryptionConn, ok := c.(border0.E2EEncryptionConn)
-		if !ok {
-			c.Close()
-			h.Logger.Error("failed to cast connection to e2eencryption")
-			return
-		}
-
-		if e2EEncryptionConn.Metadata == nil {
-			h.Logger.Error("invalid e2e metadata")
-			return
-		}
-
-		serverHandler = &postgresLocalHandler{
-			logger:          h.Logger.With(zap.String("session_key", e2EEncryptionConn.Metadata.SessionKey)),
-			metadata:        e2EEncryptionConn.Metadata,
-			border0API:      h.Border0API,
-			socket:          h.Socket,
-			lastAuth:        time.Now(),
-			recordingChan:   make(chan message, 100),
-			clientConn:      pgconn,
-			serverConn:      c,
-			serverBackend:   clientConn,
-			preparedQueries: make(map[string]string),
-			binds:           make(map[string]bind),
-			database:        h.UpstreamConfig.Database,
-		}
-
-	} else {
-		serverHandler = &postgresCopyyHandler{
-			clientConn: pgconn,
-			serverConn: c,
-		}
-	}
-
-	serverHandler.HandleConnection()
+	serverHandler.HandleConnection(pgconn)
 }
 
 func (h postgresHandler) handleClientStartup(conn net.Conn) (*pgproto3.StartupMessage, net.Conn, error) {

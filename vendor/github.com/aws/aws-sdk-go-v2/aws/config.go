@@ -162,6 +162,9 @@ type Config struct {
 	// This variable is sourced from environment variable AWS_REQUEST_MIN_COMPRESSION_SIZE_BYTES or
 	// the shared config profile attribute request_min_compression_size_bytes
 	RequestMinCompressSizeBytes int64
+
+	// Controls how a resolved AWS account ID is handled for endpoint routing.
+	AccountIDEndpointMode AccountIDEndpointMode
 }
 
 // NewConfig returns a new Config pointer that can be chained with builder
@@ -170,8 +173,7 @@ func NewConfig() *Config {
 	return &Config{}
 }
 
-// Copy will return a shallow copy of the Config object. If any additional
-// configurations are provided they will be merged into the new config returned.
+// Copy will return a shallow copy of the Config object.
 func (c Config) Copy() Config {
 	cp := c
 	return cp

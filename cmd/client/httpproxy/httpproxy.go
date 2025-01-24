@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 
 	"github.com/borderzero/border0-cli/cmd/logger"
@@ -143,7 +144,7 @@ func (sm *SessionManager) addSession(session *yamux.Session, logStream *yamux.St
 }
 
 func (sm *SessionManager) createSession(info *client.ResourceInfo, tlsConfig *tls.Config, hostname string, useWsProxy bool) (net.Conn, *yamux.Session, *yamux.Stream, error) {
-	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, fmt.Sprintf("%s:%d", hostname, info.Port), tlsConfig, info.CaCertificate, useWsProxy)
+	conn, err := establishConnection(info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, net.JoinHostPort(hostname, strconv.Itoa(info.Port)), tlsConfig, info.CaCertificate, useWsProxy)
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 
 	"github.com/borderzero/border0-cli/cmd/client/utils"
 	"github.com/borderzero/border0-cli/cmd/logger"
@@ -82,7 +83,7 @@ func getRunE(socketTypesToList ...string) func(cmd *cobra.Command, args []string
 				}
 
 				go func() {
-					conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+					conn, err := client.Connect(net.JoinHostPort(hostname, strconv.Itoa(info.Port)), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 					if err != nil {
 						fmt.Printf("failed to connect to %s:%d: %s\n", hostname, info.Port, err)
 					}
@@ -92,7 +93,7 @@ func getRunE(socketTypesToList ...string) func(cmd *cobra.Command, args []string
 				}()
 			}
 		} else {
-			conn, err := client.Connect(fmt.Sprintf("%s:%d", hostname, info.Port), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+			conn, err := client.Connect(net.JoinHostPort(hostname, strconv.Itoa(info.Port)), true, &tlsConfig, certificate, info.CaCertificate, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
 			if err != nil {
 				return fmt.Errorf("failed to connect: %w", err)
 			}

@@ -1,3 +1,252 @@
+# v1.85.0 (2024-09-23)
+
+* **Feature**: Support ComputeRedundancy parameter in ModifyDBShardGroup API. Add DBShardGroupArn in DBShardGroup API response. Remove InvalidMaxAcuFault from CreateDBShardGroup and ModifyDBShardGroup API. Both API will throw InvalidParameterValueException for invalid ACU configuration.
+
+# v1.84.0 (2024-09-20)
+
+* **Feature**: Add tracing and metrics support to service clients.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.83.2 (2024-09-18)
+
+* **Documentation**: Updates Amazon RDS documentation with information upgrading snapshots with unsupported engine versions for RDS for MySQL and RDS for PostgreSQL.
+
+# v1.83.1 (2024-09-17)
+
+* **Bug Fix**: **BREAKFIX**: Only generate AccountIDEndpointMode config for services that use it. This is a compiler break, but removes no actual functionality, as no services currently use the account ID in endpoint resolution.
+* **Documentation**: Updates Amazon RDS documentation with configuration information about the BYOL model for RDS for Db2.
+
+# v1.83.0 (2024-09-16)
+
+* **Feature**: Launching Global Cluster tagging.
+
+# v1.82.5 (2024-09-12)
+
+* **Documentation**: This release adds support for the os-upgrade pending maintenance action for Amazon Aurora DB clusters.
+
+# v1.82.4 (2024-09-04)
+
+* No change notes available for this release.
+
+# v1.82.3 (2024-09-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.82.2 (2024-08-22)
+
+* No change notes available for this release.
+
+# v1.82.1 (2024-08-15)
+
+* **Dependency Update**: Bump minimum Go version to 1.21.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.82.0 (2024-08-01)
+
+* **Feature**: This release adds support for specifying optional MinACU parameter in CreateDBShardGroup and ModifyDBShardGroup API. DBShardGroup response will contain MinACU if specified.
+
+# v1.81.5 (2024-07-18)
+
+* **Documentation**: Updates Amazon RDS documentation to specify an eventual consistency model for DescribePendingMaintenanceActions.
+
+# v1.81.4 (2024-07-10.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.81.3 (2024-07-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.81.2 (2024-06-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.81.1 (2024-06-27)
+
+* **Documentation**: Updates Amazon RDS documentation for TAZ export to S3.
+
+# v1.81.0 (2024-06-26)
+
+* **Feature**: Support list-of-string endpoint parameter.
+
+# v1.80.1 (2024-06-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.80.0 (2024-06-18)
+
+* **Feature**: Track usage of various AWS SDK features in user-agent string.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.79.7 (2024-06-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.79.6 (2024-06-07)
+
+* **Bug Fix**: Add clock skew correction on all service clients
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.79.5 (2024-06-04)
+
+* No change notes available for this release.
+
+# v1.79.4 (2024-06-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.79.3 (2024-05-30)
+
+* **Documentation**: Updates Amazon RDS documentation for Aurora Postgres DBname.
+
+# v1.79.2 (2024-05-23)
+
+* No change notes available for this release.
+
+# v1.79.1 (2024-05-21)
+
+* **Documentation**: Updates Amazon RDS documentation for Db2 license through AWS Marketplace.
+
+# v1.79.0 (2024-05-20)
+
+* **Feature**: This release adds support for EngineLifecycleSupport on DBInstances, DBClusters, and GlobalClusters.
+
+# v1.78.3 (2024-05-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.78.2 (2024-05-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.78.1 (2024-05-08)
+
+* **Bug Fix**: GoDoc improvement
+
+# v1.78.0 (2024-04-26)
+
+* **Feature**: SupportsLimitlessDatabase field added to describe-db-engine-versions to indicate whether the DB engine version supports Aurora Limitless Database.
+
+# v1.77.3 (2024-04-25)
+
+* **Documentation**: Updates Amazon RDS documentation for setting local time zones for RDS for Db2 DB instances.
+
+# v1.77.2 (2024-04-23)
+
+* **Documentation**: Fix the example ARN for ModifyActivityStreamRequest
+
+# v1.77.1 (2024-04-11)
+
+* **Documentation**: Updates Amazon RDS documentation for Standard Edition 2 support in RDS Custom for Oracle.
+
+# v1.77.0 (2024-04-09)
+
+* **Feature**: This release adds support for specifying the CA certificate to use for the new db instance when restoring from db snapshot, restoring from s3, restoring to point in time, and creating a db instance read replica.
+
+# v1.76.1 (2024-03-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.76.0 (2024-03-18)
+
+* **Feature**: This release launches the ModifyIntegration API and support for data filtering for zero-ETL Integrations.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.75.2 (2024-03-14)
+
+* **Documentation**: Updates Amazon RDS documentation for EBCDIC collation for RDS for Db2.
+
+# v1.75.1 (2024-03-07)
+
+* **Bug Fix**: Remove dependency on go-cmp.
+* **Documentation**: Updates Amazon RDS documentation for io2 storage for Multi-AZ DB clusters
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.75.0 (2024-03-06)
+
+* **Feature**: Updated the input of CreateDBCluster and ModifyDBCluster to support setting CA certificates. Updated the output of DescribeDBCluster to show current CA certificate setting value.
+
+# v1.74.2 (2024-03-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.74.1 (2024-03-04)
+
+* **Bug Fix**: Update internal/presigned-url dependency for corrected API name.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.74.0 (2024-02-26)
+
+* **Feature**: This release adds support for gp3 data volumes for Multi-AZ DB Clusters.
+
+# v1.73.0 (2024-02-23)
+
+* **Feature**: Add pattern and length based validations for DBShardGroupIdentifier
+* **Bug Fix**: Move all common, SDK-side middleware stack ops into the service client module to prevent cross-module compatibility issues in the future.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.72.0 (2024-02-22)
+
+* **Feature**: Add middleware stack snapshot tests.
+
+# v1.71.2 (2024-02-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.71.1 (2024-02-20)
+
+* **Bug Fix**: When sourcing values for a service's `EndpointParameters`, the lack of a configured region (i.e. `options.Region == ""`) will now translate to a `nil` value for `EndpointParameters.Region` instead of a pointer to the empty string `""`. This will result in a much more explicit error when calling an operation instead of an obscure hostname lookup failure.
+
+# v1.71.0 (2024-02-16)
+
+* **Feature**: Add new ClientOptions field to waiter config which allows you to extend the config for operation calls made by waiters.
+* **Documentation**: Doc only update for a valid option in DB parameter group
+
+# v1.70.0 (2024-02-13)
+
+* **Feature**: Bump minimum Go version to 1.20 per our language support policy.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.0 (2024-01-29)
+
+* **Feature**: Introduced support for the InsufficientDBInstanceCapacityFault error in the RDS RestoreDBClusterFromSnapshot and RestoreDBClusterToPointInTime API methods. This provides enhanced error handling, ensuring a more robust experience.
+
+# v1.68.0 (2024-01-24)
+
+* **Feature**: This release adds support for Aurora Limitless Database.
+
+# v1.67.0 (2024-01-22)
+
+* **Feature**: Introduced support for the InsufficientDBInstanceCapacityFault error in the RDS CreateDBCluster API method. This provides enhanced error handling, ensuring a more robust experience when creating database clusters with insufficient instance capacity.
+
+# v1.66.2 (2024-01-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.66.1 (2023-12-27)
+
+* No change notes available for this release.
+
+# v1.66.0 (2023-12-21)
+
+* **Feature**: This release adds support for using RDS Data API with Aurora PostgreSQL Serverless v2 and provisioned DB clusters.
+
+# v1.65.0 (2023-12-19)
+
+* **Feature**: RDS - The release adds two new APIs: DescribeDBRecommendations and ModifyDBRecommendation
+
+# v1.64.6 (2023-12-15)
+
+* **Documentation**: Updates Amazon RDS documentation by adding code examples
+
+# v1.64.5 (2023-12-08)
+
+* **Bug Fix**: Reinstate presence of default Retryer in functional options, but still respect max attempts set therein.
+
+# v1.64.4 (2023-12-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.64.3 (2023-12-06)
 
 * **Bug Fix**: Restore pre-refactor auth behavior where all operations could technically be performed anonymously.

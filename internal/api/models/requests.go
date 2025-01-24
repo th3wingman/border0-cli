@@ -62,13 +62,22 @@ type EvaluatePolicyRequest struct {
 }
 
 type EvaluatePolicyResponse struct {
-	Actions map[string][]string `json:"allowed_actions"`
-	Info    map[string][]string `json:"info"`
+	Permissions map[string][]any    `json:"permissions,omitempty"`
+	Actions     map[string][]string `json:"allowed_actions,omitempty"`
+	Info        map[string][]string `json:"info"`
 }
 
 type UpdateSessionRequest struct {
-	UserData   string `json:"user_data"`
-	SessionKey string `json:"session_key"`
+	UserData       string `json:"user_data,omitempty"`
+	SessionKey     string `json:"session_key"`
+	Result         string `json:"result,omitempty"`
+	AuthInfoFailed string `json:"auth_info_failed,omitempty"`
+}
+
+type SessionEventRequest struct {
+	Type     string `json:"type"`
+	Status   string `json:"status"`
+	Metadata string `json:"metadata"`
 }
 
 type SignSshOrgCertificateRequest struct {

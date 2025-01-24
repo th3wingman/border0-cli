@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"net/netip"
 
 	"github.com/borderzero/border0-go/lib/types/nilcheck"
 )
@@ -27,19 +28,31 @@ const (
 
 	// ServiceTypeRdp is the service type for rdp services (fka sockets).
 	ServiceTypeRdp = "rdp"
+
+	// ServiceTypeKubernetes is the service type for kubernetes services (fka sockets).
+	ServiceTypeKubernetes = "kubernetes"
+
+	// ServiceTypeSubnetRoutes is the service type for subnet routes services (fka sockets).
+	ServiceTypeSubnetRoutes = "subnet_routes"
+
+	// ServiceTypeExitNode is the service type for exit node services (fka sockets).
+	ServiceTypeExitNode = "exit_node"
 )
 
 // Configuration represents upstream service configuration.
 type Configuration struct {
 	ServiceType string `json:"service_type"`
 
-	DatabaseServiceConfiguration *DatabaseServiceConfiguration `json:"database_service_configuration,omitempty"`
-	HttpServiceConfiguration     *HttpServiceConfiguration     `json:"http_service_configuration,omitempty"`
-	SshServiceConfiguration      *SshServiceConfiguration      `json:"ssh_service_configuration,omitempty"`
-	TlsServiceConfiguration      *TlsServiceConfiguration      `json:"tls_service_configuration,omitempty"`
-	VncServiceConfiguration      *VncServiceConfiguration      `json:"vnc_service_configuration,omitempty"`
-	VpnServiceConfiguration      *VpnServiceConfiguration      `json:"vpn_service_configuration,omitempty"`
-	RdpServiceConfiguration      *RdpServiceConfiguration      `json:"rdp_service_configuration,omitempty"`
+	DatabaseServiceConfiguration     *DatabaseServiceConfiguration     `json:"database_service_configuration,omitempty"`
+	HttpServiceConfiguration         *HttpServiceConfiguration         `json:"http_service_configuration,omitempty"`
+	SshServiceConfiguration          *SshServiceConfiguration          `json:"ssh_service_configuration,omitempty"`
+	TlsServiceConfiguration          *TlsServiceConfiguration          `json:"tls_service_configuration,omitempty"`
+	VncServiceConfiguration          *VncServiceConfiguration          `json:"vnc_service_configuration,omitempty"`
+	VpnServiceConfiguration          *VpnServiceConfiguration          `json:"vpn_service_configuration,omitempty"`
+	RdpServiceConfiguration          *RdpServiceConfiguration          `json:"rdp_service_configuration,omitempty"`
+	KubernetesServiceConfiguration   *KubernetesServiceConfiguration   `json:"kubernetes_service_configuration,omitempty"`
+	SubnetRoutesServiceConfiguration *SubnetRoutesServiceConfiguration `json:"subnet_routes_service_configuration,omitempty"`
+	ExitNodeServiceConfiguration     *ExitNodeServiceConfiguration     `json:"exit_node_service_configuration,omitempty"`
 }
 
 type validatable interface {
@@ -49,13 +62,16 @@ type validatable interface {
 // Validate validates the Configuration.
 func (c *Configuration) Validate() error {
 	all := map[string]validatable{
-		ServiceTypeDatabase: c.DatabaseServiceConfiguration,
-		ServiceTypeHttp:     c.HttpServiceConfiguration,
-		ServiceTypeSsh:      c.SshServiceConfiguration,
-		ServiceTypeTls:      c.TlsServiceConfiguration,
-		ServiceTypeVnc:      c.VncServiceConfiguration,
-		ServiceTypeVpn:      c.VpnServiceConfiguration,
-		ServiceTypeRdp:      c.RdpServiceConfiguration,
+		ServiceTypeDatabase:     c.DatabaseServiceConfiguration,
+		ServiceTypeHttp:         c.HttpServiceConfiguration,
+		ServiceTypeSsh:          c.SshServiceConfiguration,
+		ServiceTypeTls:          c.TlsServiceConfiguration,
+		ServiceTypeVnc:          c.VncServiceConfiguration,
+		ServiceTypeVpn:          c.VpnServiceConfiguration,
+		ServiceTypeRdp:          c.RdpServiceConfiguration,
+		ServiceTypeKubernetes:   c.KubernetesServiceConfiguration,
+		ServiceTypeSubnetRoutes: c.SubnetRoutesServiceConfiguration,
+		ServiceTypeExitNode:     c.ExitNodeServiceConfiguration,
 	}
 
 	if currentConfig, ok := all[c.ServiceType]; ok {
@@ -86,12 +102,50 @@ type ConnectorServiceConfiguration struct {
 	EndToEndEncryptionEnabled      bool          `json:"end_to_end_encryption_enabled"`
 	RecordingEnabled               bool          `json:"recording_enabled"`
 	Upstream                       Configuration `json:"upstream_configuration"`
+	PrivateNetworkIPv4             *string       `json:"private_network_ipv4"`
+	PrivateNetworkIPv6             *string       `json:"private_network_ipv6"`
 }
 
 // Validate validates the ConnectorServiceConfiguration.
 func (c *ConnectorServiceConfiguration) Validate() error {
 	if err := c.Upstream.Validate(); err != nil {
 		return fmt.Errorf("invalid upstream configuration: %w", err)
+	}
+
+	if c.PrivateNetworkIPv4 != nil {
+		if err := validateIP(c.PrivateNetworkIPv4, "ipv4"); err != nil {
+			return err
+		}
+	}
+
+	if c.PrivateNetworkIPv6 != nil {
+		if err := validateIP(c.PrivateNetworkIPv6, "ipv6"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateIP(ipStr *string, version string) error {
+	if ipStr == nil {
+		return nil
+	}
+	addr, err := netip.ParseAddr(*ipStr)
+	if err != nil {
+		return fmt.Errorf("invalid IP address: %s", *ipStr)
+	}
+	switch version {
+	case "ipv4":
+		if !addr.Is4() {
+			return fmt.Errorf("expected an IPv4 address: %s", *ipStr)
+		}
+	case "ipv6":
+		if !addr.Is6() {
+			return fmt.Errorf("expected an IPv6 address: %s", *ipStr)
+		}
+	default:
+		return fmt.Errorf("unknown IP version: %s", version)
 	}
 	return nil
 }

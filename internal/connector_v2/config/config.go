@@ -33,6 +33,8 @@ const (
 
 // Configuration represents (static) connector configuration
 type Configuration struct {
+	ConfigPath string `yaml:"_"` // used to communicate what we are using as the path
+
 	Token                      string            `yaml:"token"`
 	ConnectorId                string            `yaml:"connector_id,omitempty"`
 	ConnectorServer            string            `yaml:"connector_server,omitempty"`
@@ -104,6 +106,17 @@ func GetConfiguration(ctx context.Context, configFilePath string) (*Configuratio
 			}
 		}
 	}
+
+	// NOTE: setting this here is NECESSARY because we store the device state
+	// in the same directory as the border0 configuration. Without communicating
+	// the path upstream by setting it here, we do not know where to look for
+	// the device state file.
+	//
+	// Relying on the connector's configuration to pick the state file location
+	// is also great because it means if we ever store files in an additional
+	// location for newer versions of the connector, the device state file will
+	// also be stored accordingly.
+	config.ConfigPath = path
 
 	// if there is a token in the environment, overwrite that read from config file
 	if os.Getenv(envNameToken) != "" {

@@ -1,0 +1,61 @@
+// sets the .proto file syntax version
+syntax = "proto3";
+
+// sets the output golang package name
+option go_package = "github.com/borderzero/border0-proto/device";
+
+// sets the protobuf package name (i.e. definitions namespace)
+package border0.device.v1;
+
+import "common/messages.proto";
+
+// the stream (rpc) service for the Border0 api to manage devices
+service DeviceManagementService {
+  rpc ControlStream(stream DeviceToServerMessage) returns (stream ServerToDeviceMessage);
+}
+
+// messages from devices to the server (api)
+message DeviceToServerMessage {
+  oneof Message {
+    AuthChallengeSolutionMessage auth_challenge_solution = 1;
+    border0.common.v1.DiscoveryDetailsMessage discovery_details = 2;
+    border0.common.v1.HeartbeatMessage heartbeat = 3;
+    border0.common.v1.StatsMessage stats = 4;
+  }
+}
+
+// messages from the server (api) to devices
+message ServerToDeviceMessage {
+  oneof Message {
+    AuthChallengeMessage auth_challenge = 1;
+    border0.common.v1.HeartbeatMessage heartbeat = 2;
+    border0.common.v1.NetworkStateMessage network_state = 3;
+    border0.common.v1.PeerOnlineMessage peer_online = 4;
+    border0.common.v1.PeerOfflineMessage peer_offline = 5;
+    border0.common.v1.DisconnectMessage disconnect = 6;
+    Service service = 7;
+  }
+}
+
+message AuthChallengeMessage {
+  string serverPublicKey = 1;
+  bytes challenge = 2;
+  bytes challengeNonce = 3;
+}
+
+message AuthChallengeSolutionMessage {
+  bytes solved = 1;
+  bytes solvedNonce = 2;
+}
+
+message Service {
+  string network_id = 1;
+  string name = 2;
+  string type = 3;
+  string ipv4 = 4;
+  string ipv6 = 5;
+  repeated string subnet_routes = 6;
+  repeated string peer_public_key = 7;
+  string dns_name = 8;
+  string upstream_type = 9;
+}

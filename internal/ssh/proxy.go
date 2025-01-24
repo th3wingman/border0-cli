@@ -46,13 +46,14 @@ func Proxy(l net.Listener, c config.ProxyConfig) error {
 		c.AwsConfig = *cfg
 	}
 
-	if c.EndToEndEncryption {
+	if c.EndToEndEncryption && !c.Socket.PrivateNetworkEnabled {
 		c.SshServerConfig = &ssh.ServerConfig{
 			ServerVersion: sshProxyVersion,
 		}
 	} else {
 		c.SshServerConfig = &ssh.ServerConfig{
-			NoClientAuth: true,
+			NoClientAuth:  true,
+			ServerVersion: sshProxyVersion,
 		}
 	}
 

@@ -65,24 +65,42 @@ var mysqlCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
-			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
-			if err != nil {
-				fmt.Println("ERROR: could not setup listener:", err)
-				return err
+		if info.PrivateNetworkEnabled {
+			// Connect over VPN
+			// No need to add SSL certificates
+			// No need to start a listener
+
+			err = client.ExecCommand("mysql", []string{
+				"-h", info.SocketName,
+				"-P", fmt.Sprint(info.Port),
+				"--protocol", "TCP",
+				dbName,
+			}...)
+		} else {
+			// Connect over TLS via proxy
+			// Need to add SSL certificates
+			// Need to start a listener
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+				info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+				if err != nil {
+					fmt.Println("ERROR: could not setup listener:", err)
+					return err
+				}
+
+				hostname = "localhost"
 			}
 
-			hostname = "localhost"
+			err = client.ExecCommand("mysql", []string{
+				"-h", hostname,
+				"-P", fmt.Sprint(info.Port),
+				"--protocol", "TCP",
+				"--ssl-cert", info.CertificatePath,
+				"--ssl-key", info.PrivateKeyPath,
+				dbName,
+			}...)
 		}
 
-		err = client.ExecCommand("mysql", []string{
-			"-h", hostname,
-			"-P", fmt.Sprint(info.Port),
-			"--protocol", "TCP",
-			"--ssl-cert", info.CertificatePath,
-			"--ssl-key", info.PrivateKeyPath,
-			dbName,
-		}...)
 		return err
 	},
 }

@@ -63,14 +63,19 @@ func Login(org string) (token string, claims jwt.MapClaims, err error) {
 		return
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("client device authorization request returned non-200 status: %d", resp.StatusCode)
-		return
-	}
 
 	bodyByt, err := io.ReadAll(resp.Body)
 	if err != nil {
 		err = fmt.Errorf("client device authorization response body could not be read: %s", err)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body := ""
+		if len(bodyByt) > 0 {
+			body = fmt.Sprintf(" (body: %s)", string(bodyByt))
+		}
+		err = fmt.Errorf("client device authorization request returned non-200 status: %d.%s", resp.StatusCode, body)
 		return
 	}
 
@@ -301,7 +306,7 @@ func saveToken(token string) error {
 	return nil
 }
 
-func IsExistingClientTokenValid(homeDir string) (valid bool, token, identity string, err error) {
+func IsExistingClientTokenValid(homeDir string) (valid bool, token, identity string, claims jwt.MapClaims, err error) {
 	if homeDir == "" {
 		homeDir, err = osutil.GetUserHomeDir()
 	}
@@ -314,8 +319,8 @@ func IsExistingClientTokenValid(homeDir string) (valid bool, token, identity str
 		err = fmt.Errorf("couldn't get client token: %w", err)
 		return
 	}
-	identity, _, err = ValidateClientToken(token)
-	return (err == nil), token, identity, err
+	identity, claims, err = ValidateClientToken(token)
+	return (err == nil), token, identity, claims, err
 }
 
 func GetClientToken(homeDir string) (string, error) {
@@ -339,7 +344,7 @@ func GetClientToken(homeDir string) (string, error) {
 func ClientTokenFile(homedir string) string {
 	tokenfile := ""
 	if runtime.GOOS == "windows" {
-		tokenfile = fmt.Sprintf("%s/.border0/client_token", os.Getenv("APPDATA"))
+		tokenfile = fmt.Sprintf("%s/%s/.border0/client_token", homedir, "AppData/Roaming")
 	} else {
 		tokenfile = fmt.Sprintf("%s/.border0/client_token", homedir)
 	}
@@ -470,11 +475,8 @@ func FetchResource(token string, name string) (resource models.ClientResource, e
 
 func ReadTokenOrAskToLogIn() (token string, err error) {
 	var valid bool
-	valid, token, _, err = IsExistingClientTokenValid("")
+	valid, token, _, _, err = IsExistingClientTokenValid("")
 	if !valid {
-		fmt.Println(err)
-		fmt.Println()
-
 		var orgID string
 		if err = survey.AskOne(&survey.Input{
 			Message: "let's try to log in again, what is your organization id/email:",
@@ -492,10 +494,66 @@ func ReadTokenOrAskToLogIn() (token string, err error) {
 	return token, nil
 }
 
+type deviceRegistrationRequest struct {
+	PublicKey string `json:"key"`
+	Name      string `json:"name"`
+}
+
+type Addresses struct {
+	IPv4            string `json:"ipv4"`
+	IPv6            string `json:"ipv6"`
+	NetworkCIDRv4   string `json:"network_cidr_v4"`
+	NetworkCIDRv6   string `json:"network_cidr_v6"`
+	ResourcesCIDRv4 string `json:"resources_cidr_v4"`
+	ResourcesCIDRv6 string `json:"resources_cidr_v6"`
+}
+
+type deviceRegistrationResponse struct {
+	DeviceID  string     `json:"device_id"`
+	KeyExpiry *time.Time `json:"key_expiry,omitempty"`
+	Addresses Addresses  `json:"addresses"`
+}
+
+func RegisterDevice(pub, hostname, token string) (string, *time.Time, *Addresses, error) {
+	bodyBytes, err := json.Marshal(&deviceRegistrationRequest{PublicKey: pub, Name: hostname})
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to encode device requestration request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/client/device", api.APIURL()), bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to build device registration http request object: %v", err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to execute device registation http request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	bodyByt, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to read device registration http response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, nil, fmt.Errorf("device registration request was unsuccessful, got a %d status code", resp.StatusCode)
+	}
+
+	var respBody deviceRegistrationResponse
+	if err = json.Unmarshal(bodyByt, &respBody); err != nil {
+		return "", nil, nil, fmt.Errorf("failed to json-decode device registration response body: %v", err)
+	}
+
+	return respBody.DeviceID, respBody.KeyExpiry, &respBody.Addresses, nil
+}
+
 func AutocompleteHost(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var hosts []string
 
-	valid, token, _, err := IsExistingClientTokenValid("")
+	valid, token, _, _, err := IsExistingClientTokenValid("")
 	if !valid || err != nil {
 		return hosts, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -529,7 +587,7 @@ func EnterDBName(inputDBName, suggestedDBname string) (enteredDBName string, err
 	enteredDBName = inputDBName
 	if enteredDBName == "" {
 		if err = survey.AskOne(&survey.Input{
-			Message: "what is the name of the database schema:",
+			Message: "what is the name of the database:",
 			Default: suggestedDBname,
 		}, &enteredDBName); err != nil {
 			err = fmt.Errorf("couldn't capture database input: %w", err)
@@ -540,9 +598,33 @@ func EnterDBName(inputDBName, suggestedDBname string) (enteredDBName string, err
 	return enteredDBName, nil
 }
 
+func ListOrgSockets(socketTypes ...string) ([]models.ClientResource, error) {
+	token, err := ReadTokenOrAskToLogIn()
+	if err != nil {
+		return nil, err
+	}
+	resources, err := FetchResources(token, socketTypes...)
+	if err != nil {
+		return nil, fmt.Errorf("failed fetching client resources: %w", err)
+	}
+	return resources.Resources, nil
+}
+
+func GetOrgSocket(name string) (*models.ClientResource, error) {
+	token, err := ReadTokenOrAskToLogIn()
+	if err != nil {
+		return nil, err
+	}
+	resource, err := FetchResource(token, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed fetching client resource: %w", err)
+	}
+	return &resource, nil
+}
+
 func PickHost(inputHost string, socketTypes ...string) (models.ClientResource, error) {
 	if inputHost != "" {
-		valid, _, _, err := IsExistingClientTokenValid("")
+		valid, _, _, _, err := IsExistingClientTokenValid("")
 		if !valid || err != nil {
 			return models.ClientResource{
 				Domains: []string{inputHost},

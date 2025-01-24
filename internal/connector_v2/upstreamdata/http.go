@@ -15,12 +15,17 @@ func (u *UpstreamDataBuilder) buildUpstreamDataForHttpService(s *models.Socket, 
 	if config.HttpServiceType == service.HttpServiceTypeStandard {
 		hostname := config.StandardHttpServiceConfiguration.Hostname
 		port := config.StandardHttpServiceConfiguration.Port
+		hostHeader := config.StandardHttpServiceConfiguration.HostHeader
+
+		if hostHeader == "" {
+			hostHeader = hostname
+		}
 
 		hostname = u.fetchVariableFromSource(hostname)
 
 		s.TargetHostname = hostname
 		s.TargetPort = int(port)
-		s.UpstreamHttpHostname = &hostname
+		s.UpstreamHttpHostname = &hostHeader
 	}
 
 	return nil

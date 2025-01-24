@@ -49,6 +49,10 @@ func (u *UpstreamDataBuilder) Build(s *models.Socket, config service.Configurati
 		return u.buildUpstreamDataForRdpService(s, config.RdpServiceConfiguration)
 	case service.ServiceTypeVpn:
 		return u.buildUpstreamDataForVpnService(s, config.VpnServiceConfiguration)
+	case service.ServiceTypeKubernetes:
+		return u.buildUpstreamDataForKubernetesService(s, config.KubernetesServiceConfiguration)
+	case service.ServiceTypeSubnetRoutes, service.ServiceTypeExitNode:
+		return nil // nothing to do for subnet routes sockets...
 	default:
 		return fmt.Errorf("unsupported service type: %s", s.SocketType)
 	}

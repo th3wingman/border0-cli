@@ -23,7 +23,8 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/http"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/fatih/color"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -63,15 +64,20 @@ var listOrgs = &cobra.Command{
 		}
 
 		t := table.NewWriter()
-		t.AppendHeader(table.Row{"Name", "Subdomain", "Current"})
+		t.AppendHeader(table.Row{"Name", "Current"})
 
-		for _, s := range orgs {
-			if s.ID == account.Organization.ID {
-				t.AppendRow(table.Row{s.Name, s.Subdomain + "." + domainSuffix, "Yes"})
-			} else {
-				t.AppendRow(table.Row{s.Name, s.Subdomain + "." + domainSuffix, "No"})
+		blue := color.New(color.FgBlue)
+
+		for _, org := range orgs {
+			currentOrg := "No"
+			if org.ID == account.Organization.ID {
+				currentOrg = "Yes"
 			}
-
+			row := table.Row{
+				org.Subdomain + " " + blue.Sprintf("[%s]", org.Name),
+				currentOrg,
+			}
+			t.AppendRow(row)
 		}
 		t.SetStyle(table.StyleLight)
 		fmt.Printf("%s\n", t.Render())
@@ -82,7 +88,6 @@ var switchOrg = &cobra.Command{
 	Use:   "switch-org",
 	Short: "Switch to a different organization",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		form := models.SwitchOrgRequest{OrgName: orgName}
 
 		client, err := http.NewClient()
@@ -91,7 +96,7 @@ var switchOrg = &cobra.Command{
 		}
 		val := &models.SwitchOrgResponse{}
 
-		err = client.Request("POST", "users/organizations/switch", val, &form)
+		err = client.Request("POST", "organizations/switch", val, &form)
 
 		if err != nil {
 			log.Fatal(err)
@@ -180,8 +185,8 @@ func init() {
 	createCmd.MarkFlagRequired("password")
 	createCmd.Flags().MarkHidden("sshkey")
 
-	switchOrg.Flags().StringVarP(&orgName, "org-name", "", "", "organization name")
-	switchOrg.MarkFlagRequired("org-name")
+	switchOrg.Flags().StringVarP(&orgName, "name", "", "", "organization name")
+	switchOrg.MarkFlagRequired("name")
 
 	accountCmd.AddCommand(createCmd)
 	accountCmd.AddCommand(showCmd)

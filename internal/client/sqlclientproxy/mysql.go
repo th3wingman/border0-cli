@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
@@ -135,13 +136,16 @@ func (p *mysqlClientProxy) handleConnection(ctx context.Context, clientConn net.
 		tlsConfig = p.tlsConfig
 	}
 
-	serverConn, err := mysqlClient.ConnectWithDialer(ctx, "tcp", fmt.Sprintf("%s:%d", p.resource.Hostname(), p.info.Port), proxyConn.GetUser(), "", "", p.Dialer, func(c *mysqlClient.Conn) {
+	serverConn, err := mysqlClient.ConnectWithDialer(ctx, "tcp", net.JoinHostPort(p.resource.Hostname(), strconv.Itoa(p.info.Port)), proxyConn.GetUser(), "", "", p.Dialer, func(c *mysqlClient.Conn) error {
 		c.SetTLSConfig(tlsConfig)
+		return nil
 	})
 	if err != nil {
 		fmt.Println("failed to connect to socket:", err)
 		return
 	}
+
+	defer serverConn.Close()
 
 	if serverHandler.Database != "" {
 		if err := serverConn.UseDB(serverHandler.Database); err != nil {
@@ -149,8 +153,6 @@ func (p *mysqlClientProxy) handleConnection(ctx context.Context, clientConn net.
 			return
 		}
 	}
-
-	defer serverConn.Close()
 
 	fmt.Printf("client %s connected to server\n", clientConn.RemoteAddr().String())
 	border0.ProxyConnection(proxyConn.Conn.Conn, serverConn.Conn.Conn)

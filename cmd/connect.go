@@ -145,7 +145,7 @@ var connectCmd = &cobra.Command{
 			if port < 1 {
 				log.Fatalf("error: port not specified")
 			}
-			border0.Serve(logger.Logger, l, hostname, port)
+			border0.Serve(logger.Logger, l, hostname, port, socket.SocketType, border0API, socketFromAPI)
 		}
 
 		fmt.Println("cleaning up...")

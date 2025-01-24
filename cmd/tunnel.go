@@ -28,7 +28,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/ssh/server"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -179,7 +179,7 @@ var tunnelConnectCmd = &cobra.Command{
 			if port < 1 {
 				log.Fatalf("error: port not specified")
 			}
-			border0.Serve(logger.Logger, l, hostname, port)
+			border0.Serve(logger.Logger, l, hostname, port, socket.SocketType, border0API, socket.Socket)
 		}
 	},
 }

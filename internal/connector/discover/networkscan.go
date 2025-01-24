@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -187,7 +188,6 @@ func subnetToIps(subnets []string) []string {
 			// Check if we already have this IP in the cache
 			// If we do, skip it.. could be overlapping CIDRS
 			if _, ok := ipcache[i]; ok {
-				//fmt.Println("Skipping IP ", i)
 				continue
 			} else {
 				// Add this IP to the cache
@@ -207,31 +207,25 @@ func subnetToIps(subnets []string) []string {
 
 func scanPort(port int, target scanjob) bool {
 
-	targetHostPort := fmt.Sprintf("%s:%d", target.ip, target.port)
-	//fmt.Printf("[+] Scanning %s\n", targetHostPort)
+	targetHostPort := net.JoinHostPort(target.ip, strconv.Itoa(port))
 	d := net.Dialer{Timeout: timeoutTCP}
 
 	_, err := d.Dial("tcp", targetHostPort)
 	if err != nil {
 		errstr, _ := err.(*net.OpError)
 		if strings.Contains(errstr.Err.Error(), "too many open files") {
-			//log.Println(">> Too many open files")
 			return false
 
 		} else if strings.Contains(errstr.Err.Error(), "timeout") {
-			//log.Println(">> timeout")
 			return false
 
 		} else if strings.Contains(errstr.Err.Error(), "refused") {
-			//log.Println(">> refused")
 			return false
 
 		} else {
-			//log.Println(">> ", targetHostPort, errstr.Err.Error())
 			return false
 		}
 	} else {
-		//fmt.Printf("[+] Port %s/TCP is open\n", targetHostPort)
 		return true
 	}
 }

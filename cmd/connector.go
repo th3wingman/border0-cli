@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,10 +13,14 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/borderzero/border0-cli/internal"
-	"github.com/borderzero/border0-cli/internal/connector"
+	border0_connector "github.com/borderzero/border0-cli/internal/connector"
 	"github.com/borderzero/border0-cli/internal/connector/config"
+	"github.com/borderzero/border0-go"
+	"github.com/borderzero/border0-go/client"
+	"github.com/jedib0t/go-pretty/v6/table"
 
 	"github.com/borderzero/border0-cli/internal/connector_v2/daemon"
 	"github.com/borderzero/border0-cli/internal/connector_v2/install"
@@ -72,84 +77,106 @@ type Credentials struct {
 	Token string `yaml:"token"`
 }
 
+type statusOutput struct {
+	State       string `json:"state,omitempty"`
+	ServiceName string `json:"service_name,omitempty"`
+	Pid         string `json:"pid,omitempty"`
+	Error       string `json:"error_message,omitempty"`
+}
+
 func displayServiceStatus(serviceName string) {
 	system := runtime.GOOS
 
 	var output []byte
 	var err error
+	statusOutput := statusOutput{
+		ServiceName: serviceName,
+		State:       "unknown",
+	}
 
-	if system == "linux" {
+	switch system {
+	case "linux":
 		output, err = exec.Command("systemctl", "show", serviceName, "--no-page").Output()
-	} else if system == "darwin" {
+	case "darwin":
 		output, err = exec.Command("launchctl", "print", fmt.Sprintf("system/%s", serviceName)).Output()
-	} else if system == "windows" {
+	case "windows":
 		output, err = exec.Command("sc", "queryex", serviceName).Output()
-	} else {
-		fmt.Printf("Unsupported platform: %s\n", system)
+	default:
+		if jsonOutput {
+			statusOutput.Error = fmt.Sprintf("unsupported platform: %s", system)
+			jsonOutput, _ := json.Marshal(statusOutput)
+			fmt.Println(string(jsonOutput))
+		} else {
+			fmt.Printf("The %s service could not be found.\n", serviceName)
+		}
 		return
 	}
 
 	if err != nil {
-		fmt.Printf("The %s service could not be found.\n", serviceName)
+		if jsonOutput {
+			statusOutput.Error = fmt.Sprintf("the %s service could not be found", serviceName)
+			jsonOutput, _ := json.Marshal(statusOutput)
+			fmt.Println(string(jsonOutput))
+		} else {
+			fmt.Printf("The %s service could not be found.\n", serviceName)
+		}
 		return
 	}
 
 	status := strings.TrimSpace(string(output))
 
-	if system == "linux" {
+	switch system {
+	case "linux":
 		lines := strings.Split(status, "\n")
 		for _, line := range lines {
 			if strings.HasPrefix(line, "ActiveState=") {
 				activeState := strings.TrimPrefix(line, "ActiveState=")
 				if activeState == "active" {
-					fmt.Printf("The %s service is currently running.\n", serviceName)
+					statusOutput.State = "running"
 				} else {
-					fmt.Printf("The %s service is not running.\n", serviceName)
+					statusOutput.State = "not running"
 				}
 			} else if strings.HasPrefix(line, "MainPID=") {
-				fmt.Println(line)
+				statusOutput.Pid = strings.TrimPrefix(line, "MainPID=")
+				if statusOutput.Pid == "0" {
+					statusOutput.Pid = ""
+				}
 			}
 		}
-		return
-	}
-
-	if system == "darwin" {
+	case "darwin":
 		lines := strings.Split(status, "\n")
 		for _, line := range lines {
-			// remove all whitespace and tabs from line
 			line = strings.Trim(line, "\t ")
-			// process "state" line
 			if strings.Contains(line, "state =") {
-				state := strings.Trim(strings.TrimPrefix(line, "state ="), "\t ")
-				if state != "running" {
-					fmt.Printf("The %s service is not running.\n", serviceName)
-					return
-				}
-				fmt.Printf("The %s service is currently running. ", serviceName)
-				continue
+				statusOutput.State = strings.Trim(strings.TrimPrefix(line, "state ="), "\t ")
 			}
-			// process "pid" line
 			if strings.Contains(line, "pid =") {
-				fmt.Printf("(%s)", line)
+				statusOutput.Pid = strings.Trim(strings.TrimPrefix(line, "pid ="), "\t ")
 			}
 		}
-		fmt.Println() // newline
-	}
-
-	if system == "windows" {
+	case "windows":
 		lines := strings.Split(status, "\r\n")
 		for _, line := range lines {
 			if strings.Contains(line, "STATE") {
 				if strings.Contains(line, "RUNNING") {
-					fmt.Printf("The %s service is currently running.\n", serviceName)
+					statusOutput.State = "running"
 				} else {
-					fmt.Printf("The %s service is not running.\n", serviceName)
+					statusOutput.State = "not running"
 				}
 			} else if strings.Contains(line, "PID") {
-				fmt.Println(line)
+				statusOutput.Pid = strings.TrimPrefix(line, "PID")
 			}
 		}
-		return
+	}
+
+	if jsonOutput {
+		jsonOutput, _ := json.Marshal(statusOutput)
+		fmt.Println(string(jsonOutput))
+	} else {
+		fmt.Printf("The %s service is currently %s.\n", serviceName, statusOutput.State)
+		if statusOutput.Pid != "" {
+			fmt.Println("PID:", statusOutput.Pid)
+		}
 	}
 }
 
@@ -258,7 +285,7 @@ var connectorStartCmd = &cobra.Command{
 				config.ConnectorId = connectorId
 			}
 
-			connectorv2.NewConnectorService(ctx, log, internal.Version, config).Start()
+			connectorv2.NewConnectorService(log, internal.Version, config).Start(ctx)
 			return
 		}
 
@@ -295,7 +322,7 @@ var connectorStartCmd = &cobra.Command{
 				}
 			}
 
-			if err := connector.NewConnectorService(*cfg, log, internal.Version).Start(); err != nil {
+			if err := border0_connector.NewConnectorService(*cfg, log, internal.Version).Start(); err != nil {
 				log.Error("failed to start connector", zap.String("error", err.Error()))
 			}
 		}
@@ -441,6 +468,257 @@ var connectorStatusCmd = &cobra.Command{
 	},
 }
 
+var connectorCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create a new connector",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if name == "" {
+			return fmt.Errorf("empty name not allowed")
+		}
+
+		token, err := http.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to read token, make sure you're logged in. %v", err)
+		}
+
+		api := border0.NewAPIClient(
+			client.WithAuthToken(token),
+			client.WithRetryMax(2),
+		)
+		connector, err := api.CreateConnector(cmd.Context(), &client.Connector{
+			Name:                     name,
+			Description:              description,
+			BuiltInSshServiceEnabled: withSSH,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create connector: %v", err)
+		}
+
+		if jsonOutput {
+			connectorJSON, err := json.Marshal(connector)
+			if err != nil {
+				return fmt.Errorf("failed to marshal connector to JSON: %v", err)
+			}
+			fmt.Println(string(connectorJSON))
+			return nil
+		}
+
+		t := table.NewWriter()
+		t.AppendRow(table.Row{"ID", connector.ConnectorID})
+		t.AppendRow(table.Row{"NAME", connector.Name})
+		t.AppendRow(table.Row{"DESCRIPTION", connector.Description})
+		t.AppendRow(table.Row{"BUILT-IN SSH SERVER", connector.BuiltInSshServiceEnabled})
+		t.SetStyle(table.StyleLight)
+		fmt.Println(t.Render())
+		return err
+	},
+}
+
+var connectorListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "list connectors in the organization",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		token, err := http.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to read token, make sure you're logged in. %v", err)
+		}
+
+		api := border0.NewAPIClient(
+			client.WithAuthToken(token),
+			client.WithRetryMax(2),
+		)
+		connectors, err := api.Connectors(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("failed to list connectors: %v", err)
+		}
+
+		if jsonOutput {
+			connectorListJSON, err := json.Marshal(connectors)
+			if err != nil {
+				return fmt.Errorf("failed to marshal connector list to JSON: %v", err)
+			}
+			fmt.Println(string(connectorListJSON))
+			return nil
+		}
+
+		t := table.NewWriter()
+		t.AppendHeader(table.Row{"CONNECTOR ID", "NAME", "DESCRIPTION"})
+		for _, connector := range connectors.List {
+			t.AppendRow(table.Row{
+				connector.ConnectorID,
+				connector.Name,
+				truncateString(connector.Description, 50),
+			})
+		}
+		t.SetStyle(table.StyleLight)
+		fmt.Println(t.Render())
+		return nil
+	},
+}
+
+var connectorDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "delete a connector by id",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if connectorID == "" {
+			return fmt.Errorf("empty connector-id not allowed")
+		}
+
+		token, err := http.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to read token, make sure you're logged in. %v", err)
+		}
+
+		api := border0.NewAPIClient(
+			client.WithAuthToken(token),
+			client.WithRetryMax(2),
+		)
+		if err := api.DeleteConnector(cmd.Context(), connectorID); err != nil {
+			return fmt.Errorf("failed to delete connector: %v", err)
+		}
+		fmt.Printf("connector %s deleted successfully!\n", connectorID)
+		return nil
+	},
+}
+
+var connectorTokenCmdTree = &cobra.Command{
+	Use:   "token",
+	Short: "connector token related commands",
+}
+
+var connectorTokenCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create a new connector token",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if connectorID == "" {
+			return fmt.Errorf("empty connector-id not allowed")
+		}
+
+		token, err := http.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to read token, make sure you're logged in. %v", err)
+		}
+
+		api := border0.NewAPIClient(
+			client.WithAuthToken(token),
+			client.WithRetryMax(2),
+		)
+
+		ct := &client.ConnectorToken{
+			ConnectorID: connectorID,
+			Name:        tokenName,
+		}
+		if lifetimeDays != 0 {
+			ct.ExpiresAt = client.FlexibleTime{Time: time.Now().Add(time.Duration(lifetimeDays) * time.Hour * 24)}
+		}
+
+		connectorToken, err := api.CreateConnectorToken(cmd.Context(), ct)
+		if err != nil {
+			return fmt.Errorf("failed to create connector token: %v", err)
+		}
+
+		if jsonOutput {
+			connectorTokenJSON, err := json.Marshal(connectorToken)
+			if err != nil {
+				return fmt.Errorf("failed to marshal connector token to JSON: %v", err)
+			}
+			fmt.Println(string(connectorTokenJSON))
+			return nil
+		}
+
+		expiry := connectorToken.ExpiresAt.Local().String()
+		if connectorToken.ExpiresAt.IsZero() {
+			expiry = "never expires"
+		}
+
+		t := table.NewWriter()
+		t.AppendRow(table.Row{"CONNECTOR ID", connectorID})
+		t.AppendRow(table.Row{"TOKEN ID", connectorToken.ID})
+		t.AppendRow(table.Row{"TOKEN NAME", connectorToken.Name})
+		t.AppendRow(table.Row{"TOKEN EXPIRY", expiry})
+		t.SetStyle(table.StyleLight)
+		fmt.Println(t.Render())
+
+		fmt.Printf("\nToken: %s\n", connectorToken.Token)
+
+		return nil
+	},
+}
+
+var connectorTokenDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "delete a connector token by id",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if connectorID == "" {
+			return fmt.Errorf("empty connector-id not allowed")
+		}
+		if tokenID == "" {
+			return fmt.Errorf("empty token-id not allowed")
+		}
+
+		token, err := http.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to read token, make sure you're logged in. %v", err)
+		}
+
+		api := border0.NewAPIClient(
+			client.WithAuthToken(token),
+			client.WithRetryMax(2),
+		)
+		if err := api.DeleteConnectorToken(cmd.Context(), connectorID, tokenID); err != nil {
+			return fmt.Errorf("failed to delete connector token: %v", err)
+		}
+		fmt.Printf("connector token %s deleted successfully!\n", connectorID)
+		return nil
+	},
+}
+
+var connectorTokenListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "list connector tokens for a given connector",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if connectorID == "" {
+			return fmt.Errorf("empty connector-id not allowed")
+		}
+
+		token, err := http.GetToken()
+		if err != nil {
+			return fmt.Errorf("failed to read token, make sure you're logged in. %v", err)
+		}
+
+		api := border0.NewAPIClient(
+			client.WithAuthToken(token),
+			client.WithRetryMax(2),
+		)
+		connectorTokens, err := api.ConnectorTokens(cmd.Context(), connectorID)
+		if err != nil {
+			return fmt.Errorf("failed to list connector tokens: %v", err)
+		}
+
+		if jsonOutput {
+			connectorTokensListJSON, err := json.Marshal(connectorTokens)
+			if err != nil {
+				return fmt.Errorf("failed to marshal connector token list to JSON: %v", err)
+			}
+			fmt.Println(string(connectorTokensListJSON))
+			return nil
+		}
+
+		t := table.NewWriter()
+		t.AppendHeader(table.Row{"TOKEN ID", "TOKEN NAME", "EXPIRY"})
+		for _, connectorToken := range connectorTokens.List {
+			expiry := connectorToken.ExpiresAt.Local().String()
+			if connectorToken.ExpiresAt.IsZero() {
+				expiry = "never expires"
+			}
+			t.AppendRow(table.Row{connectorToken.ID, connectorToken.Name, expiry})
+		}
+		t.SetStyle(table.StyleLight)
+		fmt.Println(t.Render())
+		return nil
+	},
+}
+
 func init() {
 	connectorStartCmd.Flags().StringVarP(&serviceFlag, "service", "s", "", "used to provide service actions e.g. start | stop | install | uninstall...")
 	connectorStartCmd.Flags().StringVarP(&connectorConfig, "config", "f", "", "yaml configuration file for connector service, see https://docs.border0.com for more info")
@@ -461,9 +739,43 @@ func init() {
 	connectorInstallCmd.Flags().BoolVar(&qr, "qr", false, "Print a QR code for authenticating with a mobile device")
 	connectorInstallCmd.Flags().MarkHidden("qr")
 
+	connectorCreateCmd.Flags().StringVarP(&name, "name", "n", "", "name for new connector")
+	connectorCreateCmd.Flags().StringVarP(&description, "description", "d", "", "description for new connector")
+	connectorCreateCmd.Flags().BoolVarP(&withSSH, "with-ssh", "s", false, "set if the new connector should have a built-in shell service")
+	connectorCreateCmd.Flags().BoolVarP(&jsonOutput, "json", "j", false, "set for json output")
+
+	connectorListCmd.Flags().BoolVarP(&jsonOutput, "json", "j", false, "set for json output")
+
+	connectorDeleteCmd.Flags().StringVarP(&connectorID, "connector-id", "i", "", "connector unique identifier (uuid)")
+
+	connectorTokenCreateCmd.Flags().StringVarP(&connectorID, "connector-id", "i", "", "connector unique identifier (uuid)")
+	connectorTokenCreateCmd.Flags().StringVarP(&tokenName, "token-name", "t", fmt.Sprintf("cli-connector-token-%d", time.Now().Unix()), "connector token name")
+	connectorTokenCreateCmd.Flags().IntVarP(&lifetimeDays, "lifetime-days", "d", 0, "connector token lifetime days (0 for no expiry)")
+	connectorTokenCreateCmd.Flags().BoolVarP(&jsonOutput, "json", "j", false, "set for json output")
+
+	connectorTokenListCmd.Flags().StringVarP(&connectorID, "connector-id", "i", "", "connector unique identifier (uuid)")
+
+	connectorTokenDeleteCmd.Flags().StringVarP(&connectorID, "connector-id", "i", "", "connector unique identifier (uuid)")
+	connectorTokenDeleteCmd.Flags().StringVarP(&tokenID, "token-id", "t", "", "connector token unique identifier (uuid)")
+
+	connectorTokenCmdTree.AddCommand(connectorTokenCreateCmd)
+	connectorTokenCmdTree.AddCommand(connectorTokenListCmd)
+	connectorTokenCmdTree.AddCommand(connectorTokenDeleteCmd)
+
+	connectorCmd.AddCommand(connectorTokenCmdTree)
 	connectorCmd.AddCommand(connectorStartCmd)
 	connectorCmd.AddCommand(connectorStatusCmd)
 	connectorCmd.AddCommand(connectorInstallCmd)
 	connectorCmd.AddCommand(connectorUnInstallCmd)
+	connectorCmd.AddCommand(connectorCreateCmd)
+	connectorCmd.AddCommand(connectorListCmd)
+	connectorCmd.AddCommand(connectorDeleteCmd)
 	rootCmd.AddCommand(connectorCmd)
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return fmt.Sprintf("%s...", s[:maxLen-3])
+	}
+	return s
 }

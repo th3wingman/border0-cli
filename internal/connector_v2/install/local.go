@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	awsc "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
@@ -15,6 +16,11 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector_v2/invite"
 	"github.com/borderzero/border0-cli/internal/util"
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	getBorder0TokenInSsmParameterStoreMaxAttempts          = 3
+	getBorder0TokenInSsmParameterStoreSleepBetweenAttempts = time.Second * 2
 )
 
 // RunInstallWizard runs the connector install wizard for the local machine.
@@ -75,13 +81,21 @@ func RunInstallWizard(
 					if err != nil {
 						return fmt.Errorf("unable to load AWS SDK config: %v", err)
 					}
-					token, err := getBorder0TokenInSsmParameterStore(ctx, cfg, tokenPersistenceSsmPath)
-					if err != nil {
-						return fmt.Errorf("failed to check ssm parameter %s for connector token: %v", tokenPersistenceSsmPath, err)
-					}
-					if token != nil {
-						connectorToken = *token
-						hasToken = true
+
+					for attempts := 1; ; attempts++ {
+						token, err := getBorder0TokenInSsmParameterStore(ctx, cfg, tokenPersistenceSsmPath)
+						if err != nil {
+							if attempts < getBorder0TokenInSsmParameterStoreMaxAttempts {
+								time.Sleep(getBorder0TokenInSsmParameterStoreSleepBetweenAttempts)
+								continue
+							}
+							return fmt.Errorf("failed to check ssm parameter %s for connector token after %d attempts: %v", tokenPersistenceSsmPath, getBorder0TokenInSsmParameterStoreMaxAttempts, err)
+						}
+						if token != nil {
+							connectorToken = *token
+							hasToken = true
+						}
+						break
 					}
 				}
 

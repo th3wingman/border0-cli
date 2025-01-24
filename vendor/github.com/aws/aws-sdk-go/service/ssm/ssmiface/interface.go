@@ -132,6 +132,10 @@ type SSMAPI interface {
 	DeleteMaintenanceWindowWithContext(aws.Context, *ssm.DeleteMaintenanceWindowInput, ...request.Option) (*ssm.DeleteMaintenanceWindowOutput, error)
 	DeleteMaintenanceWindowRequest(*ssm.DeleteMaintenanceWindowInput) (*request.Request, *ssm.DeleteMaintenanceWindowOutput)
 
+	DeleteOpsItem(*ssm.DeleteOpsItemInput) (*ssm.DeleteOpsItemOutput, error)
+	DeleteOpsItemWithContext(aws.Context, *ssm.DeleteOpsItemInput, ...request.Option) (*ssm.DeleteOpsItemOutput, error)
+	DeleteOpsItemRequest(*ssm.DeleteOpsItemInput) (*request.Request, *ssm.DeleteOpsItemOutput)
+
 	DeleteOpsMetadata(*ssm.DeleteOpsMetadataInput) (*ssm.DeleteOpsMetadataOutput, error)
 	DeleteOpsMetadataWithContext(aws.Context, *ssm.DeleteOpsMetadataInput, ...request.Option) (*ssm.DeleteOpsMetadataOutput, error)
 	DeleteOpsMetadataRequest(*ssm.DeleteOpsMetadataInput) (*request.Request, *ssm.DeleteOpsMetadataOutput)
@@ -274,6 +278,13 @@ type SSMAPI interface {
 
 	DescribeInstancePatchesPages(*ssm.DescribeInstancePatchesInput, func(*ssm.DescribeInstancePatchesOutput, bool) bool) error
 	DescribeInstancePatchesPagesWithContext(aws.Context, *ssm.DescribeInstancePatchesInput, func(*ssm.DescribeInstancePatchesOutput, bool) bool, ...request.Option) error
+
+	DescribeInstanceProperties(*ssm.DescribeInstancePropertiesInput) (*ssm.DescribeInstancePropertiesOutput, error)
+	DescribeInstancePropertiesWithContext(aws.Context, *ssm.DescribeInstancePropertiesInput, ...request.Option) (*ssm.DescribeInstancePropertiesOutput, error)
+	DescribeInstancePropertiesRequest(*ssm.DescribeInstancePropertiesInput) (*request.Request, *ssm.DescribeInstancePropertiesOutput)
+
+	DescribeInstancePropertiesPages(*ssm.DescribeInstancePropertiesInput, func(*ssm.DescribeInstancePropertiesOutput, bool) bool) error
+	DescribeInstancePropertiesPagesWithContext(aws.Context, *ssm.DescribeInstancePropertiesInput, func(*ssm.DescribeInstancePropertiesOutput, bool) bool, ...request.Option) error
 
 	DescribeInventoryDeletions(*ssm.DescribeInventoryDeletionsInput) (*ssm.DescribeInventoryDeletionsOutput, error)
 	DescribeInventoryDeletionsWithContext(aws.Context, *ssm.DescribeInventoryDeletionsInput, ...request.Option) (*ssm.DescribeInventoryDeletionsOutput, error)

@@ -7,39 +7,42 @@ import (
 
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
+	"github.com/borderzero/border0-cli/internal/device/state"
 	"github.com/borderzero/border0-go/types/common"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
 
 type ProxyConfig struct {
-	Username           string
-	Password           string
-	IdentityFile       string
-	IdentityPrivateKey []byte
-	Hostname           string
-	Port               int
-	SshClientConfig    *ssh.ClientConfig
-	SshServerConfig    *ssh.ServerConfig
-	AwsSSMTarget       string
-	AwsEC2InstanceId   string
-	AWSRegion          string
-	AWSProfile         string
-	ECSSSMProxy        *ECSSSMProxy
-	IsKubectlExec      bool
-	KubectlExecProxy   *KubectlExecProxy
-	IsDockerExec       bool
-	AwsConfig          aws.Config
-	AwsUpstreamType    string
-	Logger             *zap.Logger
-	AwsCredentials     *common.AwsCredentials
-	Recording          bool
-	EndToEndEncryption bool
-	Hostkey            *ssh.Signer
-	OrgSshCA           ssh.PublicKey
-	Socket             *models.Socket
-	Border0API         border0.Border0API
-	Border0CertAuth    bool
+	Username              string
+	Password              string
+	IdentityFile          string
+	IdentityPrivateKeyVar string
+	Hostname              string
+	Port                  int
+	SshClientConfig       *ssh.ClientConfig
+	SshServerConfig       *ssh.ServerConfig
+	AwsSSMTarget          string
+	AwsEC2InstanceId      string
+	AWSRegion             string
+	AWSProfile            string
+	ECSSSMProxy           *ECSSSMProxy
+	IsKubectlExec         bool
+	KubectlExecProxy      *KubectlExecProxy
+	IsDockerExec          bool
+	DockerExecProxy       *DockerExecProxy
+	AwsConfig             aws.Config
+	AwsUpstreamType       string
+	Logger                *zap.Logger
+	AwsCredentials        *common.AwsCredentials
+	Recording             bool
+	EndToEndEncryption    bool
+	Hostkey               *ssh.Signer
+	OrgSshCA              ssh.PublicKey
+	Socket                *models.Socket
+	Border0API            border0.Border0API
+	Border0CertAuth       bool
+	PrivateNetworkState   state.State
 }
 
 type ECSSSMProxy struct {
@@ -62,7 +65,11 @@ type KubectlExecProxy struct {
 	NamespaceSelectorsAllowlist map[string]map[string][]string
 }
 
-func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSProfile string, hostkey *ssh.Signer, org *models.Organization, border0API border0.Border0API) (*ProxyConfig, error) {
+type DockerExecProxy struct {
+	ContainerNameAllowlist []string
+}
+
+func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSProfile string, hostkey *ssh.Signer, org *models.Organization, border0API border0.Border0API, state state.State) (*ProxyConfig, error) {
 	if socket.ConnectorLocalData == nil && !socket.EndToEndEncryptionEnabled {
 		return nil, nil
 	}
@@ -74,10 +81,12 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 		if socket.IsBorder0Certificate && !socket.EndToEndEncryptionEnabled {
 			return nil, nil
 		}
-		if socket.ConnectorLocalData.UpstreamUsername == "" && socket.ConnectorLocalData.UpstreamPassword == "" {
-			if len(socket.ConnectorLocalData.UpstreamIdentityPrivateKey) == 0 && socket.ConnectorLocalData.UpstreamIdentifyFile == "" {
-				return nil, nil
-			}
+		if socket.ConnectorLocalData.UpstreamUsername == "" &&
+			socket.ConnectorLocalData.UpstreamPassword == "" &&
+			socket.ConnectorLocalData.UpstreamIdentityPrivateKeyVar == "" &&
+			socket.ConnectorLocalData.UpstreamIdentifyFile == "" &&
+			!socket.SSHServer {
+			return nil, nil
 		}
 	}
 
@@ -100,26 +109,27 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 	}
 
 	if socket.ConnectorLocalData.IsAwsEks && socket.ConnectorLocalData.AwsEksCluster == "" {
-		return nil, fmt.Errorf("aws eks cluster name is required for aws eks kubectl exec ssh sockets.")
+		return nil, fmt.Errorf("aws eks cluster name is required for aws eks kubectl exec ssh sockets")
 	}
 
 	proxyConfig := &ProxyConfig{
-		Logger:             logger,
-		Hostname:           socket.ConnectorData.TargetHostname,
-		Port:               socket.ConnectorData.Port,
-		Username:           socket.ConnectorLocalData.UpstreamUsername,
-		Password:           socket.ConnectorLocalData.UpstreamPassword,
-		IdentityFile:       socket.ConnectorLocalData.UpstreamIdentifyFile,
-		IdentityPrivateKey: socket.ConnectorLocalData.UpstreamIdentityPrivateKey,
-		AwsEC2InstanceId:   socket.ConnectorLocalData.AwsEC2InstanceId,
-		AwsSSMTarget:       socket.ConnectorLocalData.AwsEC2InstanceId, // when instance id empty and ecs cluster is given, target will be constructed during connection
-		AWSRegion:          AWSRegion,
-		AWSProfile:         AWSProfile,
-		AwsCredentials:     socket.ConnectorLocalData.AwsCredentials,
-		Recording:          socket.RecordingEnabled,
-		EndToEndEncryption: socket.EndToEndEncryptionEnabled,
-		Socket:             &socket,
-		Border0API:         border0API,
+		Logger:                logger,
+		Hostname:              socket.ConnectorData.TargetHostname,
+		Port:                  socket.ConnectorData.Port,
+		Username:              socket.ConnectorLocalData.UpstreamUsername,
+		Password:              socket.ConnectorLocalData.UpstreamPassword,
+		IdentityFile:          socket.ConnectorLocalData.UpstreamIdentifyFile,
+		IdentityPrivateKeyVar: socket.ConnectorLocalData.UpstreamIdentityPrivateKeyVar,
+		AwsEC2InstanceId:      socket.ConnectorLocalData.AwsEC2InstanceId,
+		AwsSSMTarget:          socket.ConnectorLocalData.AwsEC2InstanceId, // when instance id empty and ecs cluster is given, target will be constructed during connection
+		AWSRegion:             AWSRegion,
+		AWSProfile:            AWSProfile,
+		AwsCredentials:        socket.ConnectorLocalData.AwsCredentials,
+		Recording:             socket.RecordingEnabled,
+		EndToEndEncryption:    socket.EndToEndEncryptionEnabled,
+		Socket:                &socket,
+		Border0API:            border0API,
+		PrivateNetworkState:   state,
 	}
 
 	if socket.ConnectorLocalData.IsKubectlExec {
@@ -142,6 +152,13 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 			// should source aws credentials, the actual value of the string doesnt matter,
 			// as long as the field is populated.
 			proxyConfig.AwsUpstreamType = "aws-eks-kubectl-exec"
+		}
+	}
+
+	if socket.ConnectorLocalData.IsDockerExec {
+		proxyConfig.IsDockerExec = true
+		proxyConfig.DockerExecProxy = &DockerExecProxy{
+			ContainerNameAllowlist: socket.ConnectorLocalData.DockerContainerNameAllowlist,
 		}
 	}
 
@@ -175,9 +192,13 @@ func BuildProxyConfig(logger *zap.Logger, socket models.Socket, AWSRegion, AWSPr
 		}
 	}
 
+	if socket.PrivateNetworkEnabled {
+		proxyConfig.Hostkey = hostkey
+	}
+
 	return proxyConfig, nil
 }
 
 func (c *ProxyConfig) IsRecordingEnabled() bool {
-	return c.Recording && c.EndToEndEncryption
+	return c.Recording && c.Socket.IsPrimaryProxy()
 }

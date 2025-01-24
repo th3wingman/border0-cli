@@ -8,7 +8,7 @@ import (
 
 	border0 "github.com/borderzero/border0-cli/internal/http"
 	"github.com/borderzero/border0-cli/internal/util"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 

@@ -59,25 +59,51 @@ var mysqlWorkbenchCmd = &cobra.Command{
 			return err
 		}
 
-		connectionName := hostname
+		var (
+			connectionName string
+			xmlDoc         string
+		)
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
-			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+		if info.PrivateNetworkEnabled {
+			// Connect over VPN
+			// No need to add SSL certificates
+			// No need to start a listener
+
+			connectionName = info.SocketName
+
+			// for more info about mysql workbench command line options and config files, see:
+			// https://dev.mysql.com/doc/workbench/en/wb-command-line-options.html
+			// https://dev.mysql.com/doc/workbench/en/wb-configuring-files.html
+			xmlDoc, err = mysqlworkbench.ConnectionsXML(connectionName, info.SocketName, info.Port, "", "", dbName)
 			if err != nil {
-				fmt.Println("ERROR: could not setup listener:", err)
 				return err
 			}
+		} else {
+			// Connect over TLS via proxy
+			// Need to add SSL certificates
+			// Need to start a listener
 
-			hostname = "localhost"
+			connectionName = hostname
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+				info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+				if err != nil {
+					fmt.Println("ERROR: could not setup listener:", err)
+					return err
+				}
+
+				hostname = "localhost"
+			}
+
+			// for more info about mysql workbench command line options and config files, see:
+			// https://dev.mysql.com/doc/workbench/en/wb-command-line-options.html
+			// https://dev.mysql.com/doc/workbench/en/wb-configuring-files.html
+			xmlDoc, err = mysqlworkbench.ConnectionsXML(connectionName, hostname, info.Port, info.CertificatePath, info.PrivateKeyPath, dbName)
+			if err != nil {
+				return err
+			}
 		}
 
-		// for more info about mysql workbench command line options and config files, see:
-		// https://dev.mysql.com/doc/workbench/en/wb-command-line-options.html
-		// https://dev.mysql.com/doc/workbench/en/wb-configuring-files.html
-		xmlDoc, err := mysqlworkbench.ConnectionsXML(connectionName, hostname, info.Port, info.CertificatePath, info.PrivateKeyPath, dbName)
-		if err != nil {
-			return err
-		}
 		home, err := util.GetUserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home dir : %w", err)
@@ -123,10 +149,15 @@ var mysqlWorkbenchCmd = &cobra.Command{
 			err = client.ExecCommand("mysql-workbench", "--configdir", configPath, "--query", connectionName)
 		}
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
-			ch := make(chan os.Signal, 1)
-			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-			<-ch
+		if !info.PrivateNetworkEnabled {
+			// Connect over TLS via proxy
+			// Need to wait for the user to close the connection
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled {
+				ch := make(chan os.Signal, 1)
+				signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+				<-ch
+			}
 		}
 
 		return err

@@ -9,6 +9,10 @@ import (
 // FIXME: this should be part of the Border0 Go SDK
 
 const (
+	// ConnectorControlStreamMetadataKeyPublicKey is the GRPC
+	// stream metadata key for the connector device's public key.
+	ConnectorControlStreamMetadataKeyPublicKey = "public_key"
+
 	// ConnectorControlStreamMetadataKeyToken is the GRPC
 	// stream metadata key for the authorization token.
 	ConnectorControlStreamMetadataKeyToken = "token"
@@ -21,6 +25,7 @@ const (
 // ConnectorControlStreamCredentials represents the authentication mechanism
 // against the Border0 API's connector-control-plain (GRPC) server.
 type ConnectorControlStreamCredentials struct {
+	publicKey         string
 	token             string
 	connectorId       string
 	insecureTransport bool
@@ -32,6 +37,11 @@ var _ credentials.PerRPCCredentials = (*ConnectorControlStreamCredentials)(nil)
 
 // CredentialOption is the constructor option type for ConnectorControlStreamCredentials.
 type CredentialOption func(*ConnectorControlStreamCredentials)
+
+// WithPublicKey is the CredentialOption to set the public key.
+func WithPublicKey(publicKey string) CredentialOption {
+	return func(c *ConnectorControlStreamCredentials) { c.publicKey = publicKey }
+}
 
 // WithToken is the CredentialOption to set the token.
 func WithToken(token string) CredentialOption {
@@ -73,6 +83,9 @@ func NewConnectorControlStreamCredentials(opts ...CredentialOption) *ConnectorCo
 // ^ copied straight from the interface defintion.
 func (c *ConnectorControlStreamCredentials) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
 	md := map[string]string{}
+	if c.publicKey != "" {
+		md[ConnectorControlStreamMetadataKeyPublicKey] = c.publicKey
+	}
 	if c.token != "" {
 		md[ConnectorControlStreamMetadataKeyToken] = c.token
 	}

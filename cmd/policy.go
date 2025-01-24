@@ -17,7 +17,7 @@ import (
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/http"
 	jwt "github.com/golang-jwt/jwt"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/table"
 
 	"github.com/spf13/cobra"
 	"k8s.io/kubectl/pkg/util/term"
@@ -388,6 +388,14 @@ var policyEditCmd = &cobra.Command{
 			file.WriteString(string(bytes))
 			file.Close()
 
+			initialFileInfo, err := os.Stat(fpath)
+			if err != nil {
+				fmt.Printf("⛔ unable to stat the temp file: %v\n", err)
+				return
+			}
+
+			initialModTime := initialFileInfo.ModTime()
+
 			c := exec.Command(defaultEnvEditor(), fpath)
 			c.Stdin = os.Stdin
 			c.Stdout = os.Stdout
@@ -406,6 +414,20 @@ var policyEditCmd = &cobra.Command{
 				fmt.Printf("there was a problem with the editor")
 				return
 			}
+
+			finalFileInfo, err := os.Stat(fpath)
+			if err != nil {
+				fmt.Printf("⛔ unable to stat the temp file: %v\n", err)
+				return
+			}
+			finalModTime := finalFileInfo.ModTime()
+
+			// Compare the modification times
+			if initialModTime == finalModTime {
+				fmt.Printf("⚠️ File was not saved, policy update cancelled\n")
+				return
+			}
+
 			jsonFile, err := os.Open(fpath)
 			if err != nil {
 				fmt.Printf("could not open policy file %s\n", err)
@@ -456,13 +478,16 @@ var policyAddCmd = &cobra.Command{
 			log.Fatalf("⛔ error: invalid policy name")
 		}
 
+		if policyVersion != "v1" && policyVersion != "v2" {
+			log.Fatalf("⛔ error: invalid policy version, only v1 and v2 are supported")
+		}
+
 		if policyFile != "" {
 			data, err = os.ReadFile(policyFile)
 			if err != nil {
 				fmt.Printf("⛔ could not open policy file %s\n", err)
 				return
 			}
-
 		} else {
 			if strings.Contains(runtime.GOOS, "windows") {
 				fmt.Printf("⛔ not available on windows. Please use the --policy-file or -f option")
@@ -483,8 +508,22 @@ var policyAddCmd = &cobra.Command{
 				return
 			}
 
-			file.WriteString(policyTemplate())
+			template, err := policyTemplate()
+			if err != nil {
+				fmt.Printf("⛔ could not create a policy template %s\n", err)
+				return
+			}
+
+			file.WriteString(template)
 			file.Close()
+
+			initialFileInfo, err := os.Stat(fpath)
+			if err != nil {
+				fmt.Printf("⛔ unable to stat the temp file: %v\n", err)
+				return
+			}
+
+			initialModTime := initialFileInfo.ModTime()
 
 			c := exec.Command(defaultEnvEditor(), fpath)
 			c.Stdin = os.Stdin
@@ -499,6 +538,19 @@ var policyAddCmd = &cobra.Command{
 					}
 				}
 				fmt.Printf("⛔ there was a problem with the editor")
+				return
+			}
+
+			finalFileInfo, err := os.Stat(fpath)
+			if err != nil {
+				fmt.Printf("⛔ unable to stat the temp file: %v\n", err)
+				return
+			}
+			finalModTime := finalFileInfo.ModTime()
+
+			// Compare the modification times
+			if initialModTime == finalModTime {
+				fmt.Printf("⚠️ file was not saved, policy creation cancelled\n")
 				return
 			}
 
@@ -533,6 +585,7 @@ var policyAddCmd = &cobra.Command{
 			PolicyData:  policyData,
 			Description: policyDescription,
 			Orgwide:     orgwide,
+			Version:     policyVersion,
 		}
 
 		client, err := http.NewClient()
@@ -617,6 +670,7 @@ func init() {
 	policyAddCmd.Flags().StringVarP(&policyDescription, "description", "d", "", "Policy Description")
 	policyAddCmd.Flags().StringVarP(&policyFile, "policy-file", "f", "", "Policy Definition File")
 	policyAddCmd.Flags().BoolVarP(&orgwide, "orgwide", "o", false, "Organization wide polciy")
+	policyAddCmd.Flags().StringVarP(&policyVersion, "version", "v", "v2", "Policy Version")
 
 	policyEditCmd.Flags().StringVarP(&policyName, "name", "n", "", "Policy Name")
 	policyEditCmd.MarkFlagRequired("name")
@@ -631,7 +685,8 @@ func init() {
 
 }
 
-const defaultPolicyDataTemplate = `{
+const (
+	defaultPolicyDataTemplateV1 = `{
 	"version": "v1",
 	"action": [
 		"database",
@@ -662,7 +717,47 @@ const defaultPolicyDataTemplate = `{
 	}
 }`
 
-func policyTemplate() string {
+	defaultPolicyDataTemplateV2 = `{
+	"permissions": {
+		"ssh": {
+			"shell": {},
+			"exec": {},
+			"sftp": {},
+			"tcp_forwarding": {},
+			"kubectl_exec": {},
+			"docker_exec": {}
+		},
+		"database": {},
+		"http": {},
+		"tls": {},
+		"vnc": {},
+		"rdp": {},
+		"vpn": {}
+	},
+	"condition": {
+		"who": {
+			"email": [
+				"%s"
+			],
+			"group": [],
+			"service_account": []
+		},
+		"where": {
+			"allowed_ip": ["0.0.0.0/0", "::/0"],
+			"country": [],
+			"country_not": []
+		},
+		"when": {
+			"after": "%s",
+			"before": null,
+			"time_of_day_after": null,
+			"time_of_day_before": null
+		}
+	}
+}`
+)
+
+func policyTemplate() (string, error) {
 	// Lets create a template for the policy
 	// start with getting the admin email
 	adminEmail := ""
@@ -686,5 +781,12 @@ func policyTemplate() string {
 	// Also let's get yesterday's date
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
-	return fmt.Sprintf(defaultPolicyDataTemplate, adminEmail, yesterday)
+	switch policyVersion {
+	case "v1":
+		return fmt.Sprintf(defaultPolicyDataTemplateV1, adminEmail, yesterday), nil
+	case "v2":
+		return fmt.Sprintf(defaultPolicyDataTemplateV2, adminEmail, yesterday), nil
+	default:
+		return "", fmt.Errorf("unsupported policy version: %v", policyVersion)
+	}
 }

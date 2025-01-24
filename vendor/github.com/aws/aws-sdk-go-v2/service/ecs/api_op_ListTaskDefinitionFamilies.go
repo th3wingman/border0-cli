@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -14,9 +13,11 @@ import (
 
 // Returns a list of task definition families that are registered to your account.
 // This list includes task definition families that no longer have any ACTIVE task
-// definition revisions. You can filter out task definition families that don't
-// contain any ACTIVE task definition revisions by setting the status parameter to
-// ACTIVE . You can also filter the results with the familyPrefix parameter.
+// definition revisions.
+//
+// You can filter out task definition families that don't contain any ACTIVE task
+// definition revisions by setting the status parameter to ACTIVE . You can also
+// filter the results with the familyPrefix parameter.
 func (c *Client) ListTaskDefinitionFamilies(ctx context.Context, params *ListTaskDefinitionFamiliesInput, optFns ...func(*Options)) (*ListTaskDefinitionFamiliesOutput, error) {
 	if params == nil {
 		params = &ListTaskDefinitionFamiliesInput{}
@@ -52,9 +53,10 @@ type ListTaskDefinitionFamiliesInput struct {
 	// The nextToken value returned from a ListTaskDefinitionFamilies request
 	// indicating that more results are available to fulfill the request and further
 	// calls will be needed. If maxResults was provided, it is possible the number of
-	// results to be fewer than maxResults . This token should be treated as an opaque
-	// identifier that is only used to retrieve the next items in a list and not for
-	// other programmatic purposes.
+	// results to be fewer than maxResults .
+	//
+	// This token should be treated as an opaque identifier that is only used to
+	// retrieve the next items in a list and not for other programmatic purposes.
 	NextToken *string
 
 	// The task definition family status to filter the ListTaskDefinitionFamilies
@@ -109,25 +111,28 @@ func (c *Client) addOperationListTaskDefinitionFamiliesMiddlewares(stack *middle
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
+		return err
+	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
 	if err = addClientUserAgent(stack, options); err != nil {
@@ -142,10 +147,16 @@ func (c *Client) addOperationListTaskDefinitionFamiliesMiddlewares(stack *middle
 	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListTaskDefinitionFamilies(options.Region), middleware.Before); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecursionDetection(stack); err != nil {
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -160,16 +171,20 @@ func (c *Client) addOperationListTaskDefinitionFamiliesMiddlewares(stack *middle
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// ListTaskDefinitionFamiliesAPIClient is a client that implements the
-// ListTaskDefinitionFamilies operation.
-type ListTaskDefinitionFamiliesAPIClient interface {
-	ListTaskDefinitionFamilies(context.Context, *ListTaskDefinitionFamiliesInput, ...func(*Options)) (*ListTaskDefinitionFamiliesOutput, error)
-}
-
-var _ ListTaskDefinitionFamiliesAPIClient = (*Client)(nil)
 
 // ListTaskDefinitionFamiliesPaginatorOptions is the paginator options for
 // ListTaskDefinitionFamilies
@@ -244,6 +259,9 @@ func (p *ListTaskDefinitionFamiliesPaginator) NextPage(ctx context.Context, optF
 	}
 	params.MaxResults = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.ListTaskDefinitionFamilies(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -262,6 +280,14 @@ func (p *ListTaskDefinitionFamiliesPaginator) NextPage(ctx context.Context, optF
 
 	return result, nil
 }
+
+// ListTaskDefinitionFamiliesAPIClient is a client that implements the
+// ListTaskDefinitionFamilies operation.
+type ListTaskDefinitionFamiliesAPIClient interface {
+	ListTaskDefinitionFamilies(context.Context, *ListTaskDefinitionFamiliesInput, ...func(*Options)) (*ListTaskDefinitionFamiliesOutput, error)
+}
+
+var _ ListTaskDefinitionFamiliesAPIClient = (*Client)(nil)
 
 func newServiceMetadataMiddleware_opListTaskDefinitionFamilies(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{

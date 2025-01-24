@@ -104,20 +104,34 @@ var ssmsCmd = &cobra.Command{
 		defer persistPreference()
 		client.OnInterruptDo(persistPreference)
 
-		if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
-			info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
-			if err != nil {
-				return fmt.Errorf("could not start listener: %w", err)
+		if info.PrivateNetworkEnabled {
+			// Connect over VPN
+			// No need to start a listener
+
+			err = client.ExecCommand(ssmsPath, []string{
+				"-S", fmt.Sprintf("tcp:%s,%d", info.SocketName, info.Port),
+				"-d", dbName,
+				"-U", "border0",
+			}...)
+		} else {
+			// Connect over TLS via proxy
+			// Need to start a listener
+
+			if info.ConnectorAuthenticationEnabled || info.EndToEndEncryptionEnabled || useWsProxy {
+				info.Port, err = client.StartConnectorAuthListener(hostname, info.Port, info.SetupTLSCertificate(), info.CaCertificate, 0, info.ConnectorAuthenticationEnabled, info.EndToEndEncryptionEnabled, useWsProxy)
+				if err != nil {
+					return fmt.Errorf("could not start listener: %w", err)
+				}
+
+				hostname = "127.0.0.1"
 			}
 
-			hostname = "127.0.0.1"
+			err = client.ExecCommand(ssmsPath, []string{
+				"-S", fmt.Sprintf("tcp:%s,%d", hostname, info.Port),
+				"-d", dbName,
+				"-U", "border0",
+			}...)
 		}
-
-		err = client.ExecCommand(ssmsPath, []string{
-			"-S", fmt.Sprintf("tcp:%s,%d", hostname, info.Port),
-			"-d", dbName,
-			"-U", "border0",
-		}...)
 
 		return err
 	},

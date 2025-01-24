@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strconv"
 
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/cache"
@@ -46,9 +47,11 @@ import (
 // For details see https://aka.ms/msal-net-authenticationresult
 type AuthResult = base.AuthResult
 
+type AuthenticationScheme = authority.AuthenticationScheme
+
 type Account = shared.Account
 
-var errNoAccount = errors.New("no account was specified with public.WithAccount(), or the specified account is invalid")
+var errNoAccount = errors.New("no account was specified with public.WithSilentAccount(), or the specified account is invalid")
 
 // clientOptions configures the Client's behavior.
 type clientOptions struct {
@@ -210,6 +213,37 @@ func WithClaims(claims string) interface {
 	}
 }
 
+// WithAuthenticationScheme is an extensibility mechanism designed to be used only by Azure Arc for proof of possession access tokens.
+func WithAuthenticationScheme(authnScheme AuthenticationScheme) interface {
+	AcquireSilentOption
+	AcquireInteractiveOption
+	AcquireByUsernamePasswordOption
+	options.CallOption
+} {
+	return struct {
+		AcquireSilentOption
+		AcquireInteractiveOption
+		AcquireByUsernamePasswordOption
+		options.CallOption
+	}{
+		CallOption: options.NewCallOption(
+			func(a any) error {
+				switch t := a.(type) {
+				case *acquireTokenSilentOptions:
+					t.authnScheme = authnScheme
+				case *interactiveAuthOptions:
+					t.authnScheme = authnScheme
+				case *acquireTokenByUsernamePasswordOptions:
+					t.authnScheme = authnScheme
+				default:
+					return fmt.Errorf("unexpected options type %T", a)
+				}
+				return nil
+			},
+		),
+	}
+}
+
 // WithTenantID specifies a tenant for a single authentication. It may be different than the tenant set in [New] by [WithAuthority].
 // This option is valid for any token acquisition method.
 func WithTenantID(tenantID string) interface {
@@ -259,6 +293,7 @@ func WithTenantID(tenantID string) interface {
 type acquireTokenSilentOptions struct {
 	account          Account
 	claims, tenantID string
+	authnScheme      AuthenticationScheme
 }
 
 // AcquireSilentOption is implemented by options for AcquireTokenSilent
@@ -297,8 +332,8 @@ func (pca Client) AcquireTokenSilent(ctx context.Context, scopes []string, opts 
 	if err := options.ApplyOptions(&o, opts); err != nil {
 		return AuthResult{}, err
 	}
-	// a home account ID is required to find user tokens in the cache
-	if o.account.HomeAccountID == "" {
+	// an account is required to find user tokens in the cache
+	if reflect.ValueOf(o.account).IsZero() {
 		return AuthResult{}, errNoAccount
 	}
 
@@ -309,6 +344,7 @@ func (pca Client) AcquireTokenSilent(ctx context.Context, scopes []string, opts 
 		RequestType: accesstokens.ATPublic,
 		IsAppCache:  false,
 		TenantID:    o.tenantID,
+		AuthnScheme: o.authnScheme,
 	}
 
 	return pca.base.AcquireTokenSilent(ctx, silentParameters)
@@ -317,6 +353,7 @@ func (pca Client) AcquireTokenSilent(ctx context.Context, scopes []string, opts 
 // acquireTokenByUsernamePasswordOptions contains optional configuration for AcquireTokenByUsernamePassword
 type acquireTokenByUsernamePasswordOptions struct {
 	claims, tenantID string
+	authnScheme      AuthenticationScheme
 }
 
 // AcquireByUsernamePasswordOption is implemented by options for AcquireTokenByUsernamePassword
@@ -342,6 +379,9 @@ func (pca Client) AcquireTokenByUsernamePassword(ctx context.Context, scopes []s
 	authParams.Claims = o.claims
 	authParams.Username = username
 	authParams.Password = password
+	if o.authnScheme != nil {
+		authParams.AuthnScheme = o.authnScheme
+	}
 
 	token, err := pca.base.Token.UsernamePassword(ctx, authParams)
 	if err != nil {
@@ -481,6 +521,7 @@ func (pca Client) RemoveAccount(ctx context.Context, account Account) error {
 type interactiveAuthOptions struct {
 	claims, domainHint, loginHint, redirectURI, tenantID string
 	openURL                                              func(url string) error
+	authnScheme                                          AuthenticationScheme
 }
 
 // AcquireInteractiveOption is implemented by options for AcquireTokenInteractive
@@ -627,6 +668,9 @@ func (pca Client) AcquireTokenInteractive(ctx context.Context, scopes []string, 
 	authParams.DomainHint = o.domainHint
 	authParams.State = uuid.New().String()
 	authParams.Prompt = "select_account"
+	if o.authnScheme != nil {
+		authParams.AuthnScheme = o.authnScheme
+	}
 	res, err := pca.browserLogin(ctx, redirectURL, authParams, o.openURL)
 	if err != nil {
 		return AuthResult{}, err

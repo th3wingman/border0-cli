@@ -13,12 +13,28 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
+	"github.com/borderzero/border0-cli/internal/device/connector_server"
+	"github.com/borderzero/border0-cli/internal/device/handlers"
+	"github.com/borderzero/border0-cli/internal/device/utils/debouncer"
+	"github.com/borderzero/border0-cli/internal/device/utils/ipfw"
+	"github.com/borderzero/border0-cli/internal/device/utils/nat"
+	"github.com/borderzero/border0-cli/internal/device/utils/stats"
+	"github.com/borderzero/border0-cli/internal/device/wg/endpoint"
+	"github.com/borderzero/border0-cli/internal/device/wgmgr"
+	"github.com/borderzero/border0-cli/internal/httpproxylib"
+	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
+
 	"github.com/borderzero/border0-cli/internal/border0"
 	"github.com/borderzero/border0-cli/internal/connector_v2/cmds"
 	"github.com/borderzero/border0-cli/internal/connector_v2/config"
@@ -27,20 +43,27 @@ import (
 	"github.com/borderzero/border0-cli/internal/connector_v2/plugin"
 	"github.com/borderzero/border0-cli/internal/connector_v2/upstreamdata"
 	"github.com/borderzero/border0-cli/internal/connector_v2/util"
-	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
+	device_config "github.com/borderzero/border0-cli/internal/device/config"
+	deviceServer "github.com/borderzero/border0-cli/internal/device/server"
+	device_state "github.com/borderzero/border0-cli/internal/device/state"
+	"github.com/borderzero/border0-cli/internal/k8sapilib"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	sshConfig "github.com/borderzero/border0-cli/internal/ssh/config"
 	"github.com/borderzero/border0-cli/internal/ssh/server"
+
 	b0Util "github.com/borderzero/border0-cli/internal/util"
+	"github.com/borderzero/border0-cli/internal/util/refresher"
 	"github.com/borderzero/border0-cli/internal/vpnlib"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/types/connector"
 	"github.com/borderzero/border0-go/types/service"
+	"github.com/borderzero/border0-proto/common"
 	pb "github.com/borderzero/border0-proto/connector"
 	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -54,12 +77,22 @@ import (
 )
 
 const (
+	defaultWgPort = 32442
+
 	backoffMaxInterval = 1 * time.Hour
 	serviceConfigPath  = "/etc/border0/"
 	sshHostKeyFile     = "ssh_host_ecdsa_key"
 
-	initOpConstBackoffInterval = 500 * time.Millisecond
-	initOpConstBackoffRetries  = 2 // 3 attempts total
+	initOpConstBackoffInterval      = 500 * time.Millisecond
+	initOpConstBackoffRetries       = 2 // 3 attempts total
+	wgmrWaitTimeout                 = 10 * time.Second
+	inboundMessageChannelBufferSize = 50
+
+	stateFileName = "device.state.yaml"
+
+	cleanupIdAnnounceGoingAway  = "announce_going_away"
+	cleanupIdCloseStatsListener = "close_stats_listener"
+	cleanupIdCleanupNatRules    = "cleanup_nat_rules"
 )
 
 type ConnectorService struct {
@@ -70,8 +103,7 @@ type ConnectorService struct {
 	context                  context.Context
 	stream                   pb.ConnectorService_ControlStreamClient
 	heartbeatInterval        int
-	plugins                  map[string]plugin.Plugin
-	sockets                  map[string]*border0.Socket
+	state                    state
 	requests                 sync.Map
 	organization             *models.Organization
 	discoveryResultChan      chan *plugin.PluginDiscoveryResults
@@ -79,40 +111,100 @@ type ConnectorService struct {
 	sshPrivateHostKeyLock    sync.Mutex
 	connectorCertificateLock sync.Mutex
 	connectorCertificate     *tls.Certificate
+	privateNetworkEnabled    bool
+	deviceState              device_state.State
+	wgmr                     wgmgr.WireGuardManager
+	peerMap                  endpoint.Mapping
+	cleanups                 map[string]func()
+	natMgr                   nat.NATManager
+	wgmrReady                bool
 }
 
 func NewConnectorService(
-	ctx context.Context,
 	l *zap.Logger,
 	version string,
 	config *config.Configuration,
 ) *ConnectorService {
+	natMgr, err := nat.NewManager(l)
+	if err != nil {
+		l.Error("failed to create NAT manager", zap.Error(err))
+	}
+
 	cs := &ConnectorService{
 		config:              config,
 		version:             version,
-		context:             ctx,
 		heartbeatInterval:   10,
-		plugins:             make(map[string]plugin.Plugin),
-		sockets:             make(map[string]*border0.Socket),
+		state:               newState(),
 		discoveryResultChan: make(chan *plugin.PluginDiscoveryResults, 100),
+		cleanups:            make(map[string]func()),
+		natMgr:              natMgr,
 	}
 
 	cs.logger = logger.NewConnectorLogger(l, cs.sendControlStreamRequest)
+
+	state, err := device_state.Load(cs.logger, filepath.Join(filepath.Dir(config.ConfigPath), stateFileName))
+	if err == nil {
+		cs.deviceState = state
+	} else {
+		cs.logger.Error("failed to load device state file", zap.Error(err))
+	}
+
 	return cs
 }
 
-func (c *ConnectorService) Start() {
-	c.logger.Info("starting the connector service")
-	newCtx, cancel := context.WithCancel(c.context)
+func (c *ConnectorService) cleanupNatRules() {
+	_, _, devicesCIDRv4, devicesCIDRv6, _, _ := c.deviceState.GetNetworkIPs()
+	ifaces := c.deviceState.GetManagedInterfaces()
 
-	go c.StartControlStream(newCtx, cancel)
-	go c.handleDiscoveryResult(newCtx)
-
-	<-newCtx.Done()
+	for _, iface := range ifaces {
+		if err := c.natMgr.CleanupIPv4NAT(devicesCIDRv4, iface); err != nil {
+			c.logger.Warn("failed to cleanup NAT rules for IPv4", zap.Error(err))
+		}
+		if err := c.natMgr.CleanupIPv6NAT(devicesCIDRv6, iface); err != nil {
+			c.logger.Warn("failed to cleanup NAT rules for IPv6", zap.Error(err))
+		}
+	}
 }
 
-func (c *ConnectorService) StartControlStream(ctx context.Context, cancel context.CancelFunc) {
-	defer cancel()
+func (c *ConnectorService) Start(outerCtx context.Context) {
+	c.logger.Info("starting the connector service")
+
+	// NOTE(@adrianosela): We don't use the outer context as the parent
+	// context of the inner context because cleanup requires the GRPC
+	// control stream to still be usable.
+	// We *MUST* use a fresh context here.
+	innerCtx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	defer func() {
+		for _, cleanup := range c.cleanups {
+			cleanup()
+		}
+
+		// allow some time for cleanup to settle... In particular, we have
+		// seen that if a cleanup sends a GRPC message, this may not be
+		// received correctly server side if we exit here without this delay.
+		time.Sleep(time.Millisecond * 250)
+	}()
+
+	c.context = innerCtx
+	go c.StartControlStream(stop)
+	go c.handleDiscoveryResult(innerCtx)
+
+	// We block here until either the outer context is cancelled e.g. SIGINT/SIGTERM/SIGSTOP
+	// or the inner context is cancelled e.g. fatal logic error, server requested shutdown, etc.
+	// Cleanups will be executed immediately after the end of the function, followed by stop()
+	// which will stop the control stream and discovery result routines if they are still running.
+	select {
+	case <-outerCtx.Done():
+		c.logger.Info("top level context cancelled... shutting down connector...", zap.Error(outerCtx.Err()))
+	case <-innerCtx.Done():
+		c.logger.Info("connector service context cancelled (shutdown likely requested by Border0 API)... shutting down connector...", zap.Error(innerCtx.Err()))
+	}
+}
+
+func (c *ConnectorService) StartControlStream(stop context.CancelFunc) {
+	defer stop()
 
 	c.backoff = backoff.NewExponentialBackOff()
 	c.backoff.MaxElapsedTime = 0
@@ -129,10 +221,50 @@ func (c *ConnectorService) heartbeat(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(time.Duration(c.heartbeatInterval) * time.Second):
-			if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{RequestType: &pb.ControlStreamRequest_Heartbeat{Heartbeat: &pb.HeartbeatRequest{}}}); err != nil {
+			if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{RequestType: &pb.ControlStreamRequest_Heartbeat{Heartbeat: &common.HeartbeatMessage{}}}); err != nil {
 				c.logger.Error("failed to send heartbeat", zap.Error(err))
 			}
 		}
+	}
+}
+
+func (c *ConnectorService) handleResponse(requestID string, response *pb.ControlStreamResponse, loggerFields ...zapcore.Field) {
+	loggerFields = append(loggerFields, zap.String("request_id", requestID))
+
+	// load request metadata
+	v, ok := c.requests.Load(requestID)
+	if !ok {
+		c.logger.Error("invalid request id", loggerFields...)
+		return
+	}
+
+	// extract response channel from request metadata
+	responseChan, ok := v.(chan *pb.ControlStreamResponse)
+	if !ok {
+		c.logger.Error("failed to cast response channel", loggerFields...)
+		return
+	}
+
+	// set up protection against writing to closed channel
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.Warn(
+				"recovered from api response processing failure",
+				append(
+					loggerFields,
+					zap.String("hint", "api response likely took too long and is no longer being waited for"),
+					zap.Any("msg", r),
+				)...,
+			)
+		}
+	}()
+
+	select {
+	case responseChan <- response:
+	// there is a small (but nonzero!) chance that the API replied before the response channel (which
+	// is unbuffered) could be listened to, so we allow for some additional time before giving up.
+	case <-time.After(time.Second * 1):
+		c.logger.Error("failed to process response from api (response processing queue is full or not ready)", loggerFields...)
 	}
 }
 
@@ -144,7 +276,7 @@ func (c *ConnectorService) controlStream() error {
 		c.logger.Debug("control stream closed", zap.Duration("next retry", c.backoff.NextBackOff()))
 	}()
 
-	grpcConn, err := c.newConnectorClient(ctx)
+	grpcConn, err := c.newConnectorClient()
 	if err != nil {
 		c.logger.Error("failed to setup connection", zap.Error(err))
 		return fmt.Errorf("failed to create connector client: %w", err)
@@ -166,9 +298,9 @@ func (c *ConnectorService) controlStream() error {
 
 	fatalErrChan := make(chan error)
 	msgChan := make(chan struct {
-		response *pb.ControlStreamReponse
+		response *pb.ControlStreamResponse
 		error    error
-	})
+	}, inboundMessageChannelBufferSize)
 
 	go func() {
 		for {
@@ -178,7 +310,7 @@ func (c *ConnectorService) controlStream() error {
 			default:
 				msg, err := stream.Recv()
 				msgChan <- struct {
-					response *pb.ControlStreamReponse
+					response *pb.ControlStreamResponse
 					error    error
 				}{msg, err}
 			}
@@ -209,16 +341,16 @@ func (c *ConnectorService) controlStream() error {
 
 			go func() {
 				switch r := msg.response.GetRequestType().(type) {
-				case *pb.ControlStreamReponse_ConnectorConfig:
+				case *pb.ControlStreamResponse_ConnectorConfig:
 					if err := c.handleConnectorConfig(r.ConnectorConfig); err != nil {
 						c.logger.Error("failed to handle connector config", zap.Error(err))
 					}
-				case *pb.ControlStreamReponse_Init:
+				case *pb.ControlStreamResponse_Init:
 					if err := c.handleInit(r.Init); err != nil {
 						c.logger.Error("failed to handle init", zap.Error(err))
 						fatalErrChan <- fmt.Errorf("failed to handle init: %w", err)
 					}
-				case *pb.ControlStreamReponse_UpdateConfig:
+				case *pb.ControlStreamResponse_UpdateConfig:
 					switch t := r.UpdateConfig.GetConfigType().(type) {
 					case *pb.UpdateConfig_PluginConfig:
 						retryFunc := func() error {
@@ -253,73 +385,77 @@ func (c *ConnectorService) controlStream() error {
 					default:
 						c.logger.Error("unknown config type", zap.Any("type", t))
 					}
-				case *pb.ControlStreamReponse_TunnelCertificateSignResponse:
-					if v, ok := c.requests.Load(r.TunnelCertificateSignResponse.GetRequestId()); ok {
-						responseChan, ok := v.(chan *pb.ControlStreamReponse)
-						if !ok {
-							c.logger.Error("failed to cast response channel", zap.String("request_id", r.TunnelCertificateSignResponse.GetRequestId()))
-						}
-						select {
-						case responseChan <- msg.response:
-						default:
-							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.TunnelCertificateSignResponse.GetRequestId()))
-						}
-					} else {
-						c.logger.Error("unknown request id", zap.String("request_id", r.TunnelCertificateSignResponse.GetRequestId()))
-					}
-				case *pb.ControlStreamReponse_SshCertificateSignResponse:
-					if v, ok := c.requests.Load(r.SshCertificateSignResponse.GetRequestId()); ok {
-						responseChan, ok := v.(chan *pb.ControlStreamReponse)
-						if !ok {
-							c.logger.Error("failed to cast response channel", zap.String("request_id", r.SshCertificateSignResponse.GetRequestId()))
-						}
-						select {
-						case responseChan <- msg.response:
-						default:
-							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.SshCertificateSignResponse.GetRequestId()))
-						}
-					} else {
-						c.logger.Error("unknown request id", zap.String("request_id", r.SshCertificateSignResponse.GetRequestId()))
-					}
-				case *pb.ControlStreamReponse_Heartbeat:
-				case *pb.ControlStreamReponse_Stop:
+				case *pb.ControlStreamResponse_TunnelCertificateSignResponse:
+					c.handleResponse(
+						r.TunnelCertificateSignResponse.GetRequestId(),
+						msg.response,
+						zap.String("request_type", "tunnel_certificate_signing_request"),
+					)
+				case *pb.ControlStreamResponse_SshCertificateSignResponse:
+					c.handleResponse(
+						r.SshCertificateSignResponse.GetRequestId(),
+						msg.response,
+						zap.String("request_type", "ssh_certificate_signing_request"),
+					)
+				case *pb.ControlStreamResponse_Heartbeat:
+				case *pb.ControlStreamResponse_Stop:
 					c.logger.Info("stopping connector as requested by server")
 					fatalErrChan <- backoff.Permanent(nil)
-				case *pb.ControlStreamReponse_Disconnect:
+				case *pb.ControlStreamResponse_Disconnect:
 					c.logger.Info("disconnecting connector as requested by server")
 					err := stream.CloseSend()
 					if err != nil {
 						fatalErrChan <- fmt.Errorf("failed to close control stream: %w", err)
 					}
 					fatalErrChan <- fmt.Errorf("connector was disconnected by server")
-				case *pb.ControlStreamReponse_Authorize:
-					if v, ok := c.requests.Load(r.Authorize.GetRequestId()); ok {
-						responseChan, ok := v.(chan *pb.ControlStreamReponse)
-						if !ok {
-							c.logger.Error("failed to cast response channel", zap.String("request_id", r.Authorize.GetRequestId()))
-						}
-						select {
-						case responseChan <- msg.response:
-						default:
-							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.Authorize.GetRequestId()))
-						}
-					} else {
-						c.logger.Error("unknown request id", zap.String("request_id", r.Authorize.RequestId))
+				case *pb.ControlStreamResponse_Authorize:
+					c.handleResponse(
+						r.Authorize.GetRequestId(),
+						msg.response,
+						zap.String("request_type", "authorize_request"),
+					)
+				case *pb.ControlStreamResponse_CertificateSignResponse:
+					c.handleResponse(
+						r.CertificateSignResponse.GetRequestId(),
+						msg.response,
+						zap.String("request_type", "certificate_signing_request"),
+					)
+				case *pb.ControlStreamResponse_NetworkState:
+					if err := c.waitForWireguardManager(); err != nil {
+						c.logger.Error("wireguard is not ready", zap.Error(err))
+						return
 					}
-				case *pb.ControlStreamReponse_CertifcateSignResponse:
-					if v, ok := c.requests.Load(r.CertifcateSignResponse.GetRequestId()); ok {
-						responseChan, ok := v.(chan *pb.ControlStreamReponse)
-						if !ok {
-							c.logger.Error("failed to cast response channel", zap.String("request_id", r.CertifcateSignResponse.GetRequestId()))
-						}
-						select {
-						case responseChan <- msg.response:
-						default:
-							c.logger.Error("failed to send response to request channel", zap.String("request_id", r.CertifcateSignResponse.RequestId))
-						}
-					} else {
-						c.logger.Error("unknown request id", zap.String("request_id", r.CertifcateSignResponse.GetRequestId()))
+					if err := handlers.HandleNetworkStateMessage(c.logger, c.deviceState, c.wgmr, r.NetworkState); err != nil {
+						c.logger.Error("failed to configure wireguard peers", zap.Error(err))
+						return
 					}
+					c.logger.Info("re-configured wireguard peers successfully")
+				case *pb.ControlStreamResponse_PeerOnline:
+					if err := c.waitForWireguardManager(); err != nil {
+						c.logger.Error("wireguard is not ready", zap.Error(err))
+						return
+					}
+					if err := handlers.HandlePeerOnlineMessage(c.logger, c.deviceState, c.wgmr, msg.response.GetPeerOnline()); err != nil {
+						c.logger.Error("failed to add wireguard peer", zap.Error(err))
+						return
+					}
+					c.logger.Info("added wireguard peer successfully")
+				case *pb.ControlStreamResponse_PeerOffline:
+					if err := c.waitForWireguardManager(); err != nil {
+						c.logger.Error("wireguard is not ready", zap.Error(err))
+						return
+					}
+					if err := handlers.HandlePeerOfflineMessage(c.logger, c.deviceState, c.peerMap, c.wgmr, msg.response.GetPeerOffline()); err != nil {
+						c.logger.Error("failed to remove wireguard peer", zap.Error(err))
+						return
+					}
+					c.logger.Info("removed wireguard peer successfully")
+				case *pb.ControlStreamResponse_Session:
+					c.handleResponse(
+						r.Session.GetRequestId(),
+						msg.response,
+						zap.String("request_type", "session_request"),
+					)
 				default:
 					c.logger.Error("unknown message type", zap.Any("type", r))
 				}
@@ -328,13 +464,40 @@ func (c *ConnectorService) controlStream() error {
 	}
 }
 
-func (c *ConnectorService) newConnectorClient(ctx context.Context) (*grpc.ClientConn, error) {
+func (c *ConnectorService) waitForWireguardManager() error {
+	if c.wgmrReady {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(c.context, wgmrWaitTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if c.wgmrReady {
+				return nil
+			}
+		}
+	}
+}
+
+func (c *ConnectorService) newConnectorClient() (*grpc.ClientConn, error) {
 	ccsOpts := []CredentialOption{
 		WithToken(c.config.Token),
 		WithInsecureTransport(c.config.ConnectorInsecureTransport),
 	}
 	if c.config.ConnectorId != "" {
 		ccsOpts = append(ccsOpts, WithConnectorId(c.config.ConnectorId))
+	}
+
+	if c.deviceState != nil {
+		ccsOpts = append(ccsOpts, WithPublicKey(c.deviceState.GetPublicKey().B64()))
 	}
 
 	grpcOpts := []grpc.DialOption{
@@ -353,6 +516,8 @@ func (c *ConnectorService) newConnectorClient(ctx context.Context) (*grpc.Client
 	}
 
 	c.logger.Info("connecting to connector server", zap.String("server", c.config.ConnectorServer))
+
+	// TODO: grpc.DialContext is deprecated, use grpc.NewClient instead
 	client, err := grpc.DialContext(c.context, c.config.ConnectorServer, grpcOpts...)
 	if err != nil {
 		return nil, err
@@ -362,7 +527,8 @@ func (c *ConnectorService) newConnectorClient(ctx context.Context) (*grpc.Client
 }
 
 func (c *ConnectorService) handleConnectorConfig(config *pb.ConnectorConfig) error {
-	c.heartbeatInterval = int(config.HeartbeatInterval)
+	c.heartbeatInterval = int(config.GetHeartbeatInterval())
+	c.privateNetworkEnabled = config.GetPrivateNetworkEnabled()
 	return nil
 }
 
@@ -376,6 +542,80 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 	}
 
 	c.heartbeatInterval = int(connectorConfig.GetHeartbeatInterval())
+	c.privateNetworkEnabled = connectorConfig.GetPrivateNetworkEnabled()
+
+	if c.privateNetworkEnabled && c.wgmr == nil {
+		// set the cleanup
+		c.cleanups[cleanupIdAnnounceGoingAway] = func() {
+			if err := c.announce(false, nil, nil); err != nil {
+				c.logger.Error("failed to announce final (un)discoverability message", zap.Error(err))
+				return
+			}
+		}
+		config, err := device_config.GetConfiguration()
+		if err != nil {
+			return fmt.Errorf("failed to load device management configuration: %v", err)
+		}
+
+		if err := c.deviceState.
+			SetDeviceID(init.GetDeviceId()).
+			SetNetworkIPs(
+				init.GetSelfIpv4(),
+				init.GetSelfIpv6(),
+				init.GetNetworkCidrV4(),
+				init.GetNetworkCidrV6(),
+				init.GetNetworkResourcesCidrV4(),
+				init.GetNetworkResourcesCidrV6(),
+			).
+			Commit(); err != nil {
+			c.logger.Error("failed to save network IPs in state file", zap.Error(err))
+		}
+
+		wgmr, err := c.initPrivateNetwork(config)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("failed to initialize border0 network: %v", err))
+		}
+		c.wgmr = wgmr
+		c.wgmrReady = true
+
+		// ensure NAT rules
+		_, _, devicesCIDRv4, devicesCIDRv6, _, _ := c.deviceState.GetNetworkIPs()
+		if err := c.natMgr.SetupIPv4NAT(devicesCIDRv4, config.ManagedNetworkingInterfaceName); err != nil {
+			c.logger.Error("failed to set up NAT for IPv4", zap.Error(err))
+		}
+		if err := c.natMgr.SetupIPv6NAT(devicesCIDRv6, config.ManagedNetworkingInterfaceName); err != nil {
+			c.logger.Error("failed to set up NAT for IPv6", zap.Error(err))
+		}
+
+		// Add NAT cleanup function if private network is enabled
+		c.cleanups[cleanupIdCleanupNatRules] = func() { c.cleanupNatRules() }
+
+		// ensure IP forwarding is enabled
+		ipfwmgr := ipfw.NewManager(c.logger)
+		if err := ipfwmgr.SetupIPv4Forwarding(); err != nil {
+			c.logger.Error("failed to set up IP forwarding for IPv4", zap.Error(err))
+		}
+		if err := ipfwmgr.SetupIPv6Forwarding(); err != nil {
+			c.logger.Error("failed to set up IP forwarding for IPv6", zap.Error(err))
+		}
+
+		if err := c.wgmr.Start(); err != nil {
+			return backoff.Permanent(fmt.Errorf("failed to start border0 network: %v", err))
+		}
+
+		l, err := deviceServer.GetHTTPListener()
+		if err == nil {
+			c.cleanups[cleanupIdCloseStatsListener] = func() { defer l.Close() }
+			go func() {
+				cserver := connector_server.New(c.logger, c.wgmr, c.deviceState, c.version)
+				if err := cserver.Serve(l); err != nil && err != http.ErrServerClosed {
+					c.logger.Error("stats HTTP server error", zap.Error(err))
+				}
+			}()
+		} else {
+			c.logger.Error("failed to initialize stats HTTP server over unix socket", zap.Error(err))
+		}
+	}
 
 	certificates := make(map[string]string)
 	if err := util.AsStruct(connectorConfig.Organization.Certificates, &certificates); err != nil {
@@ -392,7 +632,7 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		initMessagePlugins.Add(config.GetId())
 
 		var action pb.Action
-		if _, ok := c.plugins[config.GetId()]; ok {
+		if _, ok := c.state.GetPlugin(config.GetId()); ok {
 			action = pb.Action_UPDATE
 		} else {
 			action = pb.Action_CREATE
@@ -414,7 +654,7 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 			)
 		}
 	}
-	for id := range c.plugins {
+	for _, id := range c.state.GetPluginIDs() {
 		if !initMessagePlugins.Has(id) {
 			retryFunc := func() error {
 				if err := c.handlePluginConfig(pb.Action_DELETE, &pb.PluginConfig{Id: id}); err != nil {
@@ -440,7 +680,7 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 		initMessageSocket.Add(config.GetId())
 
 		var action pb.Action
-		if _, ok := c.sockets[config.GetId()]; ok {
+		if _, ok := c.state.GetSocket(config.GetId()); ok {
 			action = pb.Action_UPDATE
 		} else {
 			action = pb.Action_CREATE
@@ -462,7 +702,7 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 			)
 		}
 	}
-	for id := range c.sockets {
+	for _, id := range c.state.GetSocketIDs() {
 		if !initMessageSocket.Has(id) {
 			retryFunc := func() error {
 				if err := c.handleSocketConfig(pb.Action_DELETE, &pb.SocketConfig{Id: id}); err != nil {
@@ -487,6 +727,71 @@ func (c *ConnectorService) handleInit(init *pb.Init) error {
 	return nil
 }
 
+func (c *ConnectorService) initPrivateNetwork(config *device_config.Configuration) (wgmgr.WireGuardManager, error) {
+	c.peerMap = endpoint.NewMapping()
+
+	statsmgr := stats.NewManager(c.logger)
+	go statsmgr.Push(
+		c.context,
+		time.Minute, // push once a minute
+		func(counters *stats.Delta) error {
+			c.logger.Debug(
+				"pushing metrics now",
+				zap.Uint64("bytes_in", counters.BytesIn),
+				zap.Uint64("bytes_out", counters.BytesOut),
+				zap.Uint64("packets_in", counters.PacketsIn),
+				zap.Uint64("packets_out", counters.PacketsOut),
+			)
+			return c.sendControlStreamRequest(&pb.ControlStreamRequest{
+				RequestType: &pb.ControlStreamRequest_Stats{
+					Stats: &common.StatsMessage{
+						StatsMessageType: &common.StatsMessage_NetworkDeviceStats{
+							NetworkDeviceStats: &common.NetworkDeviceStatsMessage{
+								BytesIn:    counters.BytesIn,
+								BytesOut:   counters.BytesOut,
+								PacketsIn:  counters.PacketsIn,
+								PacketsOut: counters.PacketsOut,
+							},
+						},
+					},
+				},
+			})
+		},
+	)
+
+	announceChan := debouncer.NewDebouncer(time.Millisecond*500, func(a *wgmgr.DiscoverabilityAnnouncement) {
+		if err := c.announce(a.Discoverable, a.UDP4Address, a.UDP6Address); err != nil {
+			c.logger.Error("failed to announce discoverability (in debouncer)", zap.Error(err))
+		}
+	})
+
+	wgPort := defaultWgPort
+	if wgPortOverride := strings.TrimSpace(os.Getenv("BORDER0_WG_BIND_PORT")); wgPortOverride != "" {
+		wgPortOverrideInt64, err := strconv.ParseInt(wgPortOverride, 10, 16)
+		if err != nil {
+			c.logger.Error(
+				"failed to parse port in BORDER0_WG_BIND_PORT as a 16 bit integer",
+				zap.String("BORDER0_WG_BIND_PORT", wgPortOverride),
+				zap.Error(err),
+			)
+		} else {
+			wgPort = int(wgPortOverrideInt64)
+		}
+	}
+
+	return wgmgr.New(
+		c.logger,
+		c.deviceState,
+		statsmgr,
+		c.peerMap,
+		config.ManagedNetworkingInterfaceName,
+		config.RelayURL,
+		announceChan,
+		true,
+		wgPort,
+	)
+}
+
 func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.PluginConfig) error {
 	var innerConfig *connector.PluginConfiguration
 	if err := util.AsStruct(config.GetConfig(), &innerConfig); err != nil {
@@ -497,7 +802,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 	case pb.Action_CREATE:
 		c.logger.Info("initializing plugin", zap.String("plugin", config.GetId()))
 
-		if _, ok := c.plugins[config.GetId()]; ok {
+		if _, ok := c.state.GetPlugin(config.GetId()); ok {
 			return fmt.Errorf("plugin already exists")
 		}
 
@@ -508,11 +813,11 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 		go p.Start(c.context, c.discoveryResultChan)
 
-		c.plugins[config.GetId()] = p
+		c.state.SetPlugin(config.GetId(), p)
 	case pb.Action_UPDATE:
 		c.logger.Info("updating plugin", zap.String("plugin", config.GetId()))
 
-		p, ok := c.plugins[config.GetId()]
+		p, ok := c.state.GetPlugin(config.GetId())
 		if !ok {
 			return fmt.Errorf("plugin does not exist")
 		}
@@ -528,11 +833,11 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 
 		go p.Start(c.context, c.discoveryResultChan)
 
-		c.plugins[config.GetId()] = p
+		c.state.SetPlugin(config.GetId(), p)
 	case pb.Action_DELETE:
 		c.logger.Info("removing plugin", zap.String("plugin", config.GetId()))
 
-		p, ok := c.plugins[config.GetId()]
+		p, ok := c.state.GetPlugin(config.GetId())
 		if !ok {
 			return fmt.Errorf("plugin does not exists")
 		}
@@ -541,7 +846,7 @@ func (c *ConnectorService) handlePluginConfig(action pb.Action, config *pb.Plugi
 			return fmt.Errorf("failed to delete plugin: %w", err)
 		}
 
-		delete(c.plugins, config.GetId())
+		c.state.DeletePlugin(config.GetId())
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
@@ -554,8 +859,15 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 	case pb.Action_CREATE:
 		c.logger.Info("initializing socket", zap.String("socket", config.GetId()))
 
-		if _, ok := c.sockets[config.GetId()]; ok {
-			return fmt.Errorf("socket already exists")
+		if _, ok := c.state.GetSocket(config.GetId()); ok {
+			suppressionPeriod := 1 * time.Minute
+			if c.backoff.GetElapsedTime() < suppressionPeriod {
+				// socket already exists
+				// this happends if socket is created and connector is starting at the same time
+				return nil
+			} else {
+				return fmt.Errorf("socket already exists")
+			}
 		}
 
 		socket, err := c.newSocket(config)
@@ -563,26 +875,43 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 			return fmt.Errorf("failed to create socket: %w", err)
 		}
 
-		c.sockets[config.GetId()] = socket
+		c.state.SetSocket(config.GetId(), socket)
 	case pb.Action_UPDATE:
 		c.logger.Info("updating socket", zap.String("socket", config.GetId()))
 
-		socket, ok := c.sockets[config.GetId()]
+		socket, ok := c.state.GetSocket(config.GetId())
 		if !ok {
 			return fmt.Errorf("socket does not exist")
 		}
 
-		var connectorSocketConfig service.ConnectorServiceConfiguration
-		if err := util.AsStruct(config.GetConfig(), &connectorSocketConfig); err != nil {
-			return fmt.Errorf("failed to parse socket config: %w", err)
+		mustReInit := false
+
+		// for kubernetes sockets, if the socket name changes we must re-init
+		// the socket (to force-fetch a new certificate for the new dns name).
+		if config.GetType() == service.ServiceTypeKubernetes {
+			if config.GetName() != socket.Socket.Name {
+				mustReInit = true
+			}
 		}
 
-		newHash, err := hashStruct(connectorSocketConfig)
-		if err != nil {
-			return fmt.Errorf("failed to hash socket config: %w", err)
+		if !mustReInit {
+			// for all sockets, we check the existing configuration hash against
+			// the newly hashed configuration in order to avoid unnecessarily re
+			// initializing the socket (and potentially breaking ongoing conns).
+			var connectorSocketConfig service.ConnectorServiceConfiguration
+			if err := util.AsStruct(config.GetConfig(), &connectorSocketConfig); err != nil {
+				return fmt.Errorf("failed to parse socket config: %w", err)
+			}
+			newHash, err := hashStruct(connectorSocketConfig)
+			if err != nil {
+				return fmt.Errorf("failed to hash socket config: %w", err)
+			}
+			if socket.ConfigHash != newHash {
+				mustReInit = true
+			}
 		}
 
-		if socket.ConfigHash == newHash {
+		if !mustReInit {
 			return nil
 		}
 
@@ -590,16 +919,16 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 			socket.Close()
 		}
 
-		socket, err = c.newSocket(config)
+		socket, err := c.newSocket(config)
 		if err != nil {
 			return fmt.Errorf("failed to create socket: %w", err)
 		}
 
-		c.sockets[config.GetId()] = socket
+		c.state.SetSocket(config.GetId(), socket)
 	case pb.Action_DELETE:
 		c.logger.Info("removing socket", zap.String("socket", config.GetId()))
 
-		socket, ok := c.sockets[config.GetId()]
+		socket, ok := c.state.GetSocket(config.GetId())
 		if !ok {
 			return fmt.Errorf("socket does not exists")
 		}
@@ -608,7 +937,7 @@ func (c *ConnectorService) handleSocketConfig(action pb.Action, config *pb.Socke
 			socket.Close()
 		}
 
-		delete(c.sockets, config.GetId())
+		c.state.DeleteSocket(config.GetId())
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
@@ -625,9 +954,11 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 	s := &models.Socket{
 		SocketID:                       config.GetId(),
 		SocketType:                     config.GetType(),
+		Name:                           config.GetName(),
 		ConnectorAuthenticationEnabled: connectorSocketConfig.ConnectorAuthenticationEnabled,
 		EndToEndEncryptionEnabled:      connectorSocketConfig.EndToEndEncryptionEnabled,
 		RecordingEnabled:               connectorSocketConfig.RecordingEnabled,
+		PrivateNetworkEnabled:          c.privateNetworkEnabled,
 	}
 
 	if s.ConnectorLocalData == nil {
@@ -656,11 +987,36 @@ func (c *ConnectorService) newSocket(config *pb.SocketConfig) (*border0.Socket, 
 		return nil, fmt.Errorf("failed to create socket: %w", err)
 	}
 
+	if connectorSocketConfig.PrivateNetworkIPv4 != nil {
+		ip := net.ParseIP(*connectorSocketConfig.PrivateNetworkIPv4)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid private network ipv4 address")
+		}
+
+		socket.PrivateNetworkIPv4 = ip
+	}
+
+	if connectorSocketConfig.PrivateNetworkIPv6 != nil {
+		ip := net.ParseIP(*connectorSocketConfig.PrivateNetworkIPv6)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid private network ipv6 address")
+		}
+
+		socket.PrivateNetworkIPv6 = ip
+	}
+
 	if socket.ConfigHash, err = hashStruct(connectorSocketConfig); err != nil {
 		return nil, fmt.Errorf("failed to hash socket config: %w", err)
 	}
 
-	go c.Listen(socket)
+	if socket.SocketType != service.ServiceTypeSubnetRoutes && socket.SocketType != service.ServiceTypeExitNode {
+		if socket.SocketType == service.ServiceTypeHttp && c.privateNetworkEnabled {
+			socket.PrivateNetworkEnabled = false
+			socket.Socket.PrivateNetworkEnabled = false
+		}
+
+		go c.Listen(socket)
+	}
 
 	return socket, nil
 }
@@ -753,12 +1109,16 @@ func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publ
 		return "", "", fmt.Errorf("failed to send tunnel certificate sign request: %w", err)
 	}
 
-	recChan := make(chan *pb.ControlStreamReponse)
+	recChan := make(chan *pb.ControlStreamResponse)
+	defer close(recChan)
+
 	c.requests.Store(requestId, recChan)
+	defer c.requests.Delete(requestId)
 
 	select {
 	case <-time.After(10 * time.Second):
 		return "", "", fmt.Errorf("timeout waiting for tunnel certificate sign response")
+
 	case r := <-recChan:
 		response := r.GetTunnelCertificateSignResponse()
 		if response == nil {
@@ -769,7 +1129,6 @@ func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publ
 			return "", "", fmt.Errorf("invalid response")
 		}
 
-		c.requests.Delete(response.GetRequestId())
 		return response.GetCertificate(), response.GetHostkey(), nil
 	}
 }
@@ -777,19 +1136,37 @@ func (c *ConnectorService) SignSSHKey(ctx context.Context, socketID string, publ
 func (c *ConnectorService) Listen(socket *border0.Socket) {
 	logger := c.logger.With(zap.String("socket_id", socket.SocketID))
 
-	l, err := socket.Listen()
-	if err != nil {
-		logger.Error("failed to start listener", zap.String("socket", socket.SocketID), zap.Error(err))
-		return
-	}
+	var l net.Listener
+	var err error
 
-	defer l.Close()
+	if socket.PrivateNetworkEnabled {
+		if socket.PrivateNetworkIPv4 == nil && socket.PrivateNetworkIPv6 == nil {
+			logger.Error("private network listener failed", zap.String("reason", "no private network ip addresses provided"))
+			return
+		}
+
+		l, err = border0.NewPrivateNetworkListener(logger, c, c.wgmr, c.deviceState, socket)
+		if err != nil {
+			logger.Error("failed to create private network listener", zap.Error(err))
+			return
+		}
+		socket.SetListener(l)
+		defer l.Close()
+	} else {
+		l, err = socket.Listen()
+		if err != nil {
+			logger.Error("failed to start listener", zap.Error(err))
+			return
+		}
+
+		defer l.Close()
+	}
 
 	var handlerConfig *sqlauthproxy.Config
 	if socket.SocketType == "database" {
-		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(logger, *socket.Socket, c)
+		handlerConfig, err = sqlauthproxy.BuildHandlerConfig(logger, *socket.Socket, c, c.deviceState)
 		if err != nil {
-			logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("failed to create config for socket", zap.Error(err))
 			return
 		}
 	}
@@ -797,23 +1174,41 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 	var sshProxyConfig *sshConfig.ProxyConfig
 	if socket.SocketType == "ssh" {
 		var hostkeySigner *gossh.Signer
-		if socket.EndToEndEncryptionEnabled {
+		if socket.Socket.IsPrimaryProxy() {
 			hostkeySigner, err = c.hostkey()
 			if err != nil {
-				logger.Error("failed to get hostkey", zap.String("socket", socket.SocketID), zap.Error(err))
+				logger.Error("failed to get hostkey", zap.Error(err))
 				return
 			}
 		}
 
-		sshProxyConfig, err = sshConfig.BuildProxyConfig(logger, *socket.Socket, socket.Socket.AWSRegion, "", hostkeySigner, c.organization, c)
+		sshProxyConfig, err = sshConfig.BuildProxyConfig(logger, *socket.Socket, socket.Socket.AWSRegion, "", hostkeySigner, c.organization, c, c.deviceState)
 		if err != nil {
-			logger.Error("failed to create config for socket", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("failed to create config for socket", zap.Error(err))
+			return
+		}
+	}
+
+	var k8sapiProxyConfig *k8sapilib.KubernetesProxyConfig
+	if socket.SocketType == service.ServiceTypeKubernetes {
+		k8sapiProxyConfig, err = k8sapilib.BuildProxyConfig(socket.GetContext(), logger, c, socket, c.getCertRefreshFuncForSocket(socket, 0.666))
+		if err != nil {
+			logger.Error("failed to build kubernetes api proxy config for socket", zap.Error(err))
+			return
+		}
+	}
+
+	var httpProxyConfig *httpproxylib.HttpProxyConfig
+	if socket.SocketType == service.ServiceTypeHttp {
+		httpProxyConfig, err = httpproxylib.BuildConfig(socket.GetContext(), logger, c, socket)
+		if err != nil {
+			logger.Error("failed to build http proxy config for socket", zap.Error(err))
 			return
 		}
 	}
 
 	switch {
-	case socket.Socket.SSHServer && socket.SocketType == "ssh" && !socket.EndToEndEncryptionEnabled:
+	case socket.Socket.SSHServer && socket.SocketType == "ssh" && !socket.Socket.IsPrimaryProxy():
 		opts := []server.Option{}
 		if socket.Socket != nil &&
 			socket.Socket.ConnectorLocalData != nil &&
@@ -823,21 +1218,33 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 
 		sshServer, err := server.NewServer(logger, c.organization.Certificates["ssh_public_key"], opts...)
 		if err != nil {
-			logger.Error("failed to create ssh server", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("failed to create ssh server", zap.Error(err))
 			return
 		}
 		if err := sshServer.Serve(l); err != nil {
-			logger.Error("ssh server failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("ssh server failed", zap.Error(err))
 		}
 	case sshProxyConfig != nil:
 		if err := ssh.Proxy(l, *sshProxyConfig); err != nil {
-			logger.Error("ssh proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("ssh proxy failed", zap.Error(err))
 		}
 	case handlerConfig != nil:
 		if err := sqlauthproxy.Serve(l, *handlerConfig); err != nil {
-			logger.Error("sql proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("sql proxy failed", zap.Error(err))
+		}
+	case k8sapiProxyConfig != nil:
+		if err := k8sapilib.Serve(l, k8sapiProxyConfig); err != nil {
+			logger.Error("kubernetes api proxy failed", zap.Error(err))
+		}
+	case httpProxyConfig != nil:
+		if err := httpproxylib.Serve(l, httpProxyConfig); err != nil {
+			logger.Error("http proxy failed", zap.Error(err))
 		}
 	case socket.SocketType == service.ServiceTypeVpn:
+		if c.privateNetworkEnabled {
+			logger.Error("vpn socket not supported in private network mode")
+			return
+		}
 		// options defined locally (not in socket config).
 		// these may move to socket config gradually.
 		localServerOpts := []vpnlib.ServerOption{
@@ -850,13 +1257,15 @@ func (c *ConnectorService) Listen(socket *border0.Socket) {
 			l,
 			socket.Socket.ConnectorLocalData.DHCPPoolSubnet,
 			socket.Socket.ConnectorLocalData.AdvertisedRoutes,
+			c,
+			*socket.Socket,
 			localServerOpts...,
 		); err != nil {
-			logger.Error("vpn service failed", zap.String("socket", socket.SocketID), zap.Error(err))
+			logger.Error("vpn service failed", zap.Error(err))
 		}
 	default:
-		if err := border0.Serve(logger, l, socket.Socket.TargetHostname, socket.Socket.TargetPort); err != nil {
-			logger.Error("proxy failed", zap.String("socket", socket.SocketID), zap.Error(err))
+		if err := border0.Serve(logger, l, socket.Socket.TargetHostname, socket.Socket.TargetPort, socket.SocketType, c, socket.Socket); err != nil {
+			logger.Error("proxy failed", zap.Error(err))
 		}
 	}
 }
@@ -896,6 +1305,97 @@ func (c *ConnectorService) handleDiscoveryResult(ctx context.Context) {
 				continue
 			}
 		}
+	}
+}
+
+// getCertRefreshFuncForSocket returns the refresher.RefreshFunc for a given socket with a refreshFactor.
+//
+// The refreshFactor is a float64 value between 0.01 and 0.99 that dictates at what percentage of the certificate's
+// lifetime it should be refreshed. For example, a refreshFactor of 0.666 means that the certificate will be
+// refreshed when 66.6% of its lifetime has elapsed, i.e. with 33.4% of the lifetime remaining e.g. so if a
+// certificate's total lifetime is 90 days, it will be refreshed around the 60th day.
+func (c *ConnectorService) getCertRefreshFuncForSocket(socket *border0.Socket, refreshFactor float64) refresher.RefreshFunc {
+	if refreshFactor < 0.01 {
+		c.logger.Info("certificate refresh factor < 0.01, setting to 0.01 - this definitely a bug, contact support@border0.com", zap.Float64("original_value", refreshFactor))
+		refreshFactor = 0.01
+	}
+	if refreshFactor > 0.99 {
+		c.logger.Info("certificate refresh factor > 0.99, setting to 0.99 - this definitely a bug, contact support@border0.com", zap.Float64("original_value", refreshFactor))
+		refreshFactor = 0.99
+	}
+	return func() (*tls.Certificate, time.Time, error) {
+		orgID, err := c.orgIDFromToken()
+		if err != nil {
+			return nil, time.Time{}, fmt.Errorf("failed to get org id from token: %v", err)
+		}
+
+		// try to get an existing certificate from the file system if available
+		tlsCert, err := b0Util.GetSocketTLSCertificate(orgID, socket.SocketID)
+		if err != nil {
+			c.logger.Info(
+				"no existing TLS certificate found for socket in the filesystem, fetching a new one",
+				zap.String("socket_id", socket.SocketID),
+				zap.Error(err),
+			)
+		}
+		if tlsCert != nil && len(tlsCert.Certificate) > 0 {
+			leaf, err := x509.ParseCertificate(tlsCert.Certificate[0])
+			if err == nil {
+				elapsedLifetime := time.Since(leaf.NotBefore)
+				totalLifetime := leaf.NotAfter.Sub(leaf.NotBefore)
+
+				elapsedLifetimeRefreshThresholdSeconds := float64(totalLifetime.Seconds() * refreshFactor)
+				elapsedLifetimeRefreshThreshold := time.Duration(elapsedLifetimeRefreshThresholdSeconds) * time.Second
+
+				// Certificates are stored by socket id in the filesystem. The certificate for this socket **id**
+				// may still be valid but it may not be for the socket's current dns name (socket name can change).
+				// If the current socket dns name is not a SAN in the certificate, we need to fetch a new one.
+				if slices.Contains(leaf.DNSNames, socket.Socket.Dnsname) {
+					if elapsedLifetime < elapsedLifetimeRefreshThreshold {
+						// Certificate is for the correct name and it is not expired -- return it.
+						nextRefresh := leaf.NotBefore.Add(elapsedLifetimeRefreshThreshold)
+						return tlsCert, nextRefresh, nil
+					}
+					// Fallthrough to fetch a new certificate as the current one is expired
+				}
+				// Fallthrough to fetch a new certificate as the current one has an incorrect dns name
+			} else {
+				c.logger.Info("failed to parse existing certificate as x509 certificate object", zap.String("socket_id", socket.SocketID), zap.Error(err))
+				// fallthrough to fetch a new certificate as we do not know if the current one is expired or not
+			}
+		}
+
+		// fetch and parse a new certificate as either the existing one is due for renewal, or there is no existing one
+		newCertBytes, newCertKeyBytes, err := c.GetTLSCertificateForSocket(socket)
+		if err != nil {
+			return nil, time.Time{}, fmt.Errorf("failed to fetch fresh TLS certificate for socket: %v", err)
+		}
+		newTlsCert, err := tls.X509KeyPair(newCertBytes, newCertKeyBytes)
+		if err != nil {
+			return nil, time.Time{}, fmt.Errorf("failed to parse the new certificate and key: %v", err)
+		}
+
+		// parse certificate pem to determine lifetime details
+		block, rest := pem.Decode(newCertBytes)
+		if block == nil {
+			return nil, time.Time{}, fmt.Errorf("newly retrieved certificate data did not contain a certificate, data: %s", string(rest))
+		}
+		leaf, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, time.Time{}, fmt.Errorf("failed to parse newly retrieved certificate as x509 certiticate object: %v", err)
+		}
+
+		// try to store the new certificate in the filesystem
+		if err := b0Util.StoreConnectorSocketCertificate(newCertKeyBytes, newCertBytes, orgID, socket.SocketID); err != nil {
+			c.logger.Warn("failed to store the new TLS certificate for socket", zap.String("socket_id", socket.SocketID), zap.Error(err))
+		}
+
+		// return the certificate and when it should be next refreshed
+		totalLifetime := leaf.NotAfter.Sub(leaf.NotBefore)
+		elapsedLifetimeRefreshThresholdSeconds := float64(totalLifetime.Seconds() * refreshFactor)
+		elapsedLifetimeRefreshThreshold := time.Duration(elapsedLifetimeRefreshThresholdSeconds) * time.Second
+		nextRefresh := leaf.NotBefore.Add(elapsedLifetimeRefreshThreshold)
+		return &newTlsCert, nextRefresh, nil
 	}
 }
 
@@ -1018,13 +1518,16 @@ func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
 	}
 
 	requestId := uuid.New().String()
-	recChan := make(chan *pb.ControlStreamReponse)
+
+	recChan := make(chan *pb.ControlStreamResponse)
+	defer close(recChan)
+
 	c.requests.Store(requestId, recChan)
 	defer c.requests.Delete(requestId)
 
 	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
-		RequestType: &pb.ControlStreamRequest_CertifcateSignRequest{
-			CertifcateSignRequest: &pb.CertifcateSignRequest{
+		RequestType: &pb.ControlStreamRequest_CertificateSignRequest{
+			CertificateSignRequest: &pb.CertificateSignRequest{
 				RequestId:                 requestId,
 				CertificateSigningRequest: pem.EncodeToMemory(&csrPem),
 			},
@@ -1038,7 +1541,7 @@ func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
 	case <-time.After(5 * time.Second):
 		return nil, fmt.Errorf("timeout waiting for certificate sign response")
 	case r := <-recChan:
-		response := r.GetCertifcateSignResponse()
+		response := r.GetCertificateSignResponse()
 		if response == nil {
 			return nil, fmt.Errorf("invalid response")
 		}
@@ -1047,7 +1550,6 @@ func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
 			return nil, fmt.Errorf("invalid response")
 		}
 
-		c.requests.Delete(response.GetRequestId())
 		certificate = response.GetCertificate()
 	}
 
@@ -1068,9 +1570,106 @@ func (c *ConnectorService) Certificate() (*tls.Certificate, error) {
 
 	c.connectorCertificate = &cert
 
-	if err := b0Util.StoreConnectorCertifcate(pem.EncodeToMemory(privKeyPem), certificate, orgID, connectorID); err != nil {
+	if err := b0Util.StoreConnectorCertificate(pem.EncodeToMemory(privKeyPem), certificate, orgID, connectorID); err != nil {
 		c.logger.Warn("failed to store the end to end encryption certificate", zap.Error(err))
 	}
 
 	return c.connectorCertificate, nil
+}
+
+// GetTLSCertificateForSocket is used to get a fresh TLS certificate for a given socket.
+// The certificate will have the socket DNS name as a SAN and is signed by the org-wide CA.
+func (c *ConnectorService) GetTLSCertificateForSocket(socket *border0.Socket) ([]byte, []byte, error) {
+	// generate private key
+	_, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate private key: %w", err)
+	}
+	privKeyBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	privKeyPem := &pem.Block{Type: "PRIVATE KEY", Bytes: privKeyBytes}
+
+	// build template with socket ids passed in the DNS names of the CSR
+	csrTemplate := x509.CertificateRequest{
+		Subject:            pkix.Name{CommonName: "border0"},
+		SignatureAlgorithm: x509.PureEd25519,
+		DNSNames:           []string{socket.SocketID},
+	}
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, privKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create certificate request: %w", err)
+	}
+	csrPem := pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes}
+
+	// initialize response channel
+	recChan := make(chan *pb.ControlStreamResponse)
+	defer close(recChan)
+
+	// register request id to request router
+	requestId := uuid.New().String()
+	c.requests.Store(requestId, recChan)
+	defer c.requests.Delete(requestId)
+
+	// send request over grpc channel
+	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
+		RequestType: &pb.ControlStreamRequest_CertificateSignRequest{
+			CertificateSignRequest: &pb.CertificateSignRequest{
+				RequestId:                 requestId,
+				CertificateSigningRequest: pem.EncodeToMemory(&csrPem),
+			},
+		},
+	}); err != nil {
+		return nil, nil, fmt.Errorf("failed to send connector certificate sign request: %w", err)
+	}
+
+	// handle response or timeout
+	select {
+	case <-time.After(5 * time.Second):
+		return nil, nil, fmt.Errorf("timeout waiting for certificate sign response")
+	case r := <-recChan:
+		response := r.GetCertificateSignResponse()
+		if response == nil {
+			return nil, nil, fmt.Errorf("invalid response")
+		}
+		if response.GetRequestId() == "" {
+			return nil, nil, fmt.Errorf("invalid response")
+		}
+		return response.GetCertificate(), pem.EncodeToMemory(privKeyPem), nil
+	}
+}
+
+func (c *ConnectorService) announce(discoverable bool, udp4Addr *net.UDPAddr, udp6Addr *net.UDPAddr) error {
+	logOpts := []zapcore.Field{zap.Bool("discoverable", discoverable)}
+
+	udp4 := ""
+	udp6 := ""
+	if discoverable {
+		if udp4Addr != nil {
+			udp4 = udp4Addr.String()
+			logOpts = append(logOpts, zap.String("udp4", udp4))
+		}
+		if udp6Addr != nil {
+			udp6 = udp6Addr.String()
+			logOpts = append(logOpts, zap.String("udp6", udp6))
+		}
+	}
+
+	c.logger.Info("sending discoverability message", logOpts...)
+
+	if err := c.sendControlStreamRequest(&pb.ControlStreamRequest{
+		RequestType: &pb.ControlStreamRequest_DiscoveryDetails{
+			DiscoveryDetails: &common.DiscoveryDetailsMessage{
+				Discoverable:       discoverable,
+				EndpointPublicUdp4: udp4,
+				EndpointPublicUdp6: udp6,
+				PublicKey:          c.deviceState.GetPublicKey().B64(),
+			},
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to send discoverability message: %w", err)
+	}
+
+	return nil
 }

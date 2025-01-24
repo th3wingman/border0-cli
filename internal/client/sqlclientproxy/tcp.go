@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/borderzero/border0-cli/internal/api/models"
@@ -94,37 +95,7 @@ func (p *tcpClientProxy) Listen() error {
 func (p *tcpClientProxy) handleConnection(ctx context.Context, clientConn net.Conn) {
 	defer clientConn.Close()
 
-	// proxyConn, err := server.NewCustomizedConn(clientConn, p.server, &dummyProvider{}, serverHandler)
-	// if err != nil {
-	// 	fmt.Println("failed to accept connection:", err)
-	// 	return
-	// }
-
-	// defer proxyConn.Close()
-
-	// var tlsConfig *tls.Config
-	// if !p.info.EndToEndEncryptionEnabled {
-	// 	tlsConfig = p.tlsConfig
-	// }
-
-	// serverConn, err := mysqlClient.ConnectWithDialer(ctx, "tcp", fmt.Sprintf("%s:%d", p.resource.Hostname(), p.info.Port), proxyConn.GetUser(), "", "", p.Dialer, func(c *mysqlClient.Conn) {
-	// 	c.SetTLSConfig(tlsConfig)
-	// })
-	// if err != nil {
-	// 	fmt.Println("failed to connect to socket:", err)
-	// 	return
-	// }
-
-	// if serverHandler.Database != "" {
-	// 	if err := serverConn.UseDB(serverHandler.Database); err != nil {
-	// 		fmt.Println("failed to use database:", err)
-	// 		return
-	// 	}
-	// }
-
-	// defer serverConn.Close()
-
-	serverConn, err := p.Dialer(ctx, "tcp", fmt.Sprintf("%s:%d", p.resource.Hostname(), p.info.Port))
+	serverConn, err := p.Dialer(ctx, "tcp", net.JoinHostPort(p.resource.Hostname(), strconv.Itoa(p.info.Port)))
 	if err != nil {
 		fmt.Println("failed to connect to socket:", err)
 		return

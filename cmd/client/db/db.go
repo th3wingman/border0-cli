@@ -21,25 +21,26 @@ var (
 )
 
 func AddCommandsTo(client *cobra.Command) {
-	addOneCommandTo(dbCmd, client)
-	addOneCommandTo(mysqlCmd, client)
-	addOneCommandTo(mycliCmd, client)
-	addOneCommandTo(mysqlWorkbenchCmd, client)
-	addOneCommandTo(dbeaverCmd, client)
-	addOneCommandTo(psqlCmd, client)
-	addOneCommandTo(pgcliCmd, client)
-	addOneCommandTo(dataGripCmd, client)
-	addOneCommandTo(sqlcmdCmd, client)
-	addOneCommandTo(ssmsCmd, client)
+	addOneCommandTo(dbCmd, client, true)
+	addOneCommandTo(mysqlCmd, client, false)
+	addOneCommandTo(mycliCmd, client, false)
+	addOneCommandTo(mysqlWorkbenchCmd, client, false)
+	addOneCommandTo(dbeaverCmd, client, false)
+	addOneCommandTo(psqlCmd, client, false)
+	addOneCommandTo(pgcliCmd, client, false)
+	addOneCommandTo(dataGripCmd, client, false)
+	addOneCommandTo(sqlcmdCmd, client, false)
+	addOneCommandTo(ssmsCmd, client, false)
+	addOneCommandTo(tableplusCmd, client, false)
 
 	dbCmd.Flags().BoolVarP(&local, "local", "l", false, "start a local listener")
 	dbCmd.Flags().IntVarP(&port, "port", "p", 0, "local listener port")
 }
 
-func addOneCommandTo(cmdToAdd, cmdAddedTo *cobra.Command) {
+func addOneCommandTo(cmdToAdd, cmdAddedTo *cobra.Command, show bool) {
 	cmdToAdd.Flags().StringVarP(&hostname, "host", "", "", "Socket target host")
 	cmdToAdd.Flags().BoolVarP(&useWsProxy, "wsproxy", "w", false, "Use websocket proxy")
-
+	cmdToAdd.Hidden = !show
 	cmdAddedTo.AddCommand(cmdToAdd)
 }
 
@@ -91,9 +92,16 @@ var dbCmd = &cobra.Command{
 			dbClient            string
 			dbClients           = []string{"local listener"}
 			dbClientsMySQL      = []string{"mysql", "mysqlworkbench", "mycli", "dbeaver", "datagrip"}
-			dbClientsPostgreSQL = []string{"psql", "pgcli", "datagrip"}
+			dbClientsPostgreSQL = []string{"psql", "pgcli", "dbeaver", "datagrip"}
 			dbClientsMssql      = []string{"sqlcmd", "dbeaver", "datagrip"}
 		)
+
+		// we only support tableplus on MacOS
+		switch runtime.GOOS {
+		case "darwin":
+			dbClientsMySQL = append(dbClientsMySQL, "tableplus")
+			dbClientsPostgreSQL = append(dbClientsPostgreSQL, "tableplus")
+		}
 
 		switch pickedHost.DatabaseType {
 		case "mysql":
@@ -134,6 +142,16 @@ var dbCmd = &cobra.Command{
 			return proxy.Listen()
 		}
 
+		// for tableplus we do not prompt for a specific database
+		if dbClient == "tableplus" {
+			cmdToCall := fmt.Sprintf("db:%s", dbClient)
+			foundCmd, _, _ := cmd.Parent().Find([]string{cmdToCall})
+			if foundCmd.Use != cmdToCall || foundCmd.RunE == nil {
+				return fmt.Errorf("couldn't find client subcommand %s", cmdToCall)
+			}
+			return foundCmd.RunE(foundCmd, args)
+		}
+
 		dbName, err = client.EnterDBName(dbName, suggestedDBName)
 		if err != nil {
 			return err
@@ -143,7 +161,7 @@ var dbCmd = &cobra.Command{
 			dbClient = "ssms"
 		}
 
-		cmdToCall := "db:" + dbClient
+		cmdToCall := fmt.Sprintf("db:%s", dbClient)
 		foundCmd, _, _ := cmd.Parent().Find([]string{cmdToCall})
 		if foundCmd.Use != cmdToCall || foundCmd.RunE == nil {
 			return fmt.Errorf("couldn't find client subcommand %s", cmdToCall)
