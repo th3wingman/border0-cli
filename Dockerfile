@@ -1,5 +1,5 @@
 # Use Alpine as the base platform
-FROM --platform=$BUILDPLATFORM alpine
+FROM alpine
 
 # inset the border0 binary
 ARG TARGETOS TARGETARCH
